@@ -92,9 +92,13 @@ describe("help", () => {
     const context = new TestContext(null);
     context.registry().register(HistoryStub);
     context.registry().register(DocumentStub);
-    const headings = help(context).filter(isHeading);
-    expect(headings).toEqual(CATEGORY_ORDER.map((category) => `${category.title()}:`));
-    expect(help(context)[1]).toMatch(/^ {2}zz-document-stub <file> +document stub$/);
+    const output = help(context);
+    expect(output.filter(isHeading)).toEqual(CATEGORY_ORDER.map((category) => `${category.title()}:`));
+    // Registered after the history stub, yet listed in the first group (as its
+    // last line: within a group the registration order is kept).
+    const editHeading = output.indexOf(`${CommandCategory.EDIT.title()}:`);
+    expect(output[editHeading - 1]).toMatch(/^ {2}zz-document-stub <file> +document stub$/);
+    expect(output.at(-1)).toMatch(/^ {2}zz-history-stub +history stub$/);
   });
 
   it("aligns every summary in one column: widest usage + 2", () => {

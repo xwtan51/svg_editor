@@ -118,32 +118,36 @@ describe("CommandParser", () => {
 });
 
 describe("CommandRegistry", () => {
-  // The built-in set is still growing (document and undo / redo commands are
-  // registered in other steps), so these tests pin groups, not the full list.
+  // These tests pin each group of §3 rather than the full list, so that adding
+  // a command only touches its own group.
   const EDIT_COMMANDS = ["create", "delete", "move", "scale", "set", "group", "ungroup", "addto", "front", "back"];
   const DISPLAY_COMMANDS = ["tree", "show", "help"];
+  const DOCUMENT_COMMANDS = ["init", "read", "save", "canvas"];
+  const HISTORY_COMMANDS = ["undo", "redo"];
+  const GROUPS: Array<[CommandCategory, string[]]> = [
+    [CommandCategory.EDIT, EDIT_COMMANDS],
+    [CommandCategory.DISPLAY, DISPLAY_COMMANDS],
+    [CommandCategory.DOCUMENT, DOCUMENT_COMMANDS],
+    [CommandCategory.HISTORY, HISTORY_COMMANDS],
+  ];
 
-  it("registers the edit and display commands of §3 in order and lists added types after them", () => {
+  it("registers the commands of §3 group by group, in order, and lists added types after them", () => {
     const names = registry().commandTypes().map((t) => t.commandName);
-    expect(names.filter((name) => EDIT_COMMANDS.includes(name))).toEqual(EDIT_COMMANDS);
-    expect(names.filter((name) => DISPLAY_COMMANDS.includes(name))).toEqual(DISPLAY_COMMANDS);
+    for (const [, group] of GROUPS) {
+      expect(names.filter((name) => group.includes(name))).toEqual(group);
+    }
     expect(names.indexOf("tree")).toBeGreaterThan(names.indexOf("back"));
     expect(names.slice(-3)).toEqual(["echo", "start", "back-stub"]);
   });
 
-  it("edit commands are in the edit category, tree / show / help in display; only help needs no document", () => {
+  it("each group has the category of spec §3; only init, read and help need no document (R11)", () => {
     const types = new CommandRegistry().commandTypes();
-    const byName = (name: string) => types.find((t) => t.commandName === name);
-    for (const name of EDIT_COMMANDS) {
-      expect(byName(name)?.category).toBe(CommandCategory.EDIT);
-      expect(byName(name)?.requiresDocument).toBe(true);
+    for (const [category, group] of GROUPS) {
+      expect(types.filter((t) => t.category === category).map((t) => t.commandName)).toEqual(group);
     }
-    for (const name of DISPLAY_COMMANDS) {
-      expect(byName(name)?.category).toBe(CommandCategory.DISPLAY);
+    for (const type of types) {
+      expect(type.requiresDocument, type.commandName).toBe(!["init", "read", "help"].includes(type.commandName));
     }
-    expect(byName("tree")?.requiresDocument).toBe(true);
-    expect(byName("show")?.requiresDocument).toBe(true);
-    expect(byName("help")?.requiresDocument).toBe(false);
   });
 
   it("every usage starts with the command name", () => {
