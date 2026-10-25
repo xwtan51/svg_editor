@@ -128,6 +128,11 @@ src/
 
 #### 1.3 模块依赖图
 
+![模块依赖图](diagrams/modules.svg)
+
+<details>
+<summary>PlantUML 源码（modules）</summary>
+
 ```plantuml
 @startuml modules
 skinparam componentStyle rectangle
@@ -179,6 +184,8 @@ io ..> model
 @enduml
 ```
 
+</details>
+
 依赖整体是一个分层 DAG：`cli → app → commands → {view, io} → model`，`model` 不依赖任何模块。
 
 ---
@@ -228,6 +235,11 @@ io ..> model
 
 **关键协作流程（一行输入的一生）**
 
+![一行输入的执行时序](diagrams/command-flow.svg)
+
+<details>
+<summary>PlantUML 源码（command-flow）</summary>
+
 ```plantuml
 @startuml command-flow
 actor User
@@ -264,6 +276,8 @@ Cmd -> Shape : restore(snapshot)
 Editor --> Repl : ["circle#c1 moved back to (100,100)"]
 @enduml
 ```
+
+</details>
 
 `Editor` 是唯一捕获 `EditorError` 的地方：任何阶段抛出即输出 `error: <message>`，并且**不调用** `recordIn`。
 
@@ -387,6 +401,11 @@ create 参数说明（`ParamSpec`）**不**由属性表生成，而是每个类�
 **依赖变更（已执行）**：`package.json` 的 `dependencies`（运行时依赖，不是 devDependencies）加入 `@xmldom/xmldom`，安装时的最新稳定版为 0.9.12（`^0.9.12`），由 `package-lock.json` 锁定。该库自带 TypeScript 类型声明，不需要额外的 `@types` 包。换库时只需重写 `XmlDomAdapter` 一个类。
 
 #### 2.9 类图（图形层次 + 命令层次）
+
+![类图（图形层次 + 命令层次）](diagrams/classes.svg)
+
+<details>
+<summary>PlantUML 源码（classes）</summary>
 
 ```plantuml
 @startuml classes
@@ -726,6 +745,8 @@ TreeCommand ..> TreeRenderer
 ShowCommand ..> ShapeDetailRenderer
 @enduml
 ```
+
+</details>
 
 > 说明：`<<static side>>` 表示该接口由**类的静态成员**满足（TypeScript 结构类型允许把类本身赋给 `ShapeType` / `CommandType` 类型的变量），因此不需要再为每个图形或命令写一个工厂类。
 
