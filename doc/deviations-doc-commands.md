@@ -1,6 +1,6 @@
 # 文档类与撤销重做命令：与方案（README v4）的偏差
 
-本文件记录实现 `init / read / save / canvas / undo / redo`（分支 `feat/doc-commands`）时，与 README v4 不一致、或 README / 规格没有规定而由实现补充的地方。编号接续 `doc/deviations-commands.md` 的阶段 A、B，记为阶段 C。README 本身不改，等 commands 层全部完成后统一修订。
+本文件记录实现 `init / read / save / canvas / undo / redo`（分支 `feat/doc-commands`，已合并 PR #7 之后的 main）时，与 README v4 不一致、或 README / 规格没有规定而由实现补充的地方。编号接续 `doc/deviations-commands.md` 的阶段 A、B，记为阶段 C。README 本身不改，等 commands 层全部完成后统一修订。
 
 ## 阶段 C：文档类与撤销重做命令
 
@@ -15,11 +15,12 @@
 | C7 | `save` 更新默认路径 | F5："`save x.svg` 成功后，x.svg 成为之后无参 `save` 的默认路径" | 只要写入成功就调用 `setFilePath(path)`，无参 `save` 也会调用（写回原值，没有效果）；写入失败时不调用 | 只有一条路径，没有分支；写入失败时路径不变，由测试覆盖 |
 | C8 | `create` 末尾未加引号的 `in`（**取代偏差 B4**） | E2："未加引号的 `in` 出现在倒数第二个 token 时才是子句"；B4 把末尾的 `in` 当作普通值（`create rect q 0 0 1 1 in` 成功，fill 为 `in`） | 最后一个 token 是未加引号的 `in` 时，报该类型的 usage 错误，例如 `usage: create rect <id> <x> <y> <w> <h> [fill] [in <containerId>]`。所有类型都适用：`create text t1 0 0 in` 原来得到内容 `in`，现在报 usage；`create g g1 in in` 原来把 `in` 当作容器 id，现在同样报 usage。带引号的 `"in"` 仍是普通值（R6）。报错位置与参数个数错误相同（偏差 B1：类型之后、id 之前），所以 `create hexagon h1 in` 先报 `unknown shape type` | 按本轮任务要求。末尾的 `in` 几乎一定是漏写了容器 id，静默当作 fill / 内容会掩盖错误；报该类型的 usage 能提示 `in` 后面需要 `<containerId>`。README 的 E2 需要相应补充 |
 | C9 | 测试用 Invoker（`tests/unit/commands/CommandRunner.ts`） | — | 在 `parse` 之前检查 `requiresDocument`，与 `Editor` 的固定流程（R10）一致；构造参数可以传入 `null`（无文档）和 `FileSystem`；`expectRejected` 另外检查文档对象和默认路径都没有变化。`TestContext` 改用 `tests/unit/io/MemoryFileSystem.ts`，删去它自带的重复实现 `MapFileSystem` | `read` 失败时不能替换文档或改路径（F20），原有检查只比较序列化内容，"换成内容相同的新文档"发现不了；`init` / `read` 要从无文档开始测 |
-| C10 | `CommandRegistry` 的注册顺序 | §3 先列文档类、后列编辑类 | 新命令追加在构造函数末尾（编辑类之后）：`init, read, save, canvas, undo, redo` | 按本轮任务要求追加在末尾。`help`（V7）按分类分组，组内保持注册顺序，所以显示顺序不受影响 |
+| C10 | `CommandRegistry` 的注册顺序 | §3 先列文档类、后列编辑类 | 合并 main（PR #7）后构造函数的顺序为：编辑类 10 条 → `tree, show, help` → 本轮的 `init, read, save, canvas, undo, redo`（追加在末尾，两边的注册都保留） | 按本轮任务要求追加在末尾。`help`（V7）按分类分组，组内保持注册顺序，所以显示顺序不受影响 |
+| C11 | 合并 main 时改动的测试 | — | `CommandParser.test.ts` 采用 main 上"按分组检查、不写死完整列表"的写法，补上文档类、撤销重做两组，并检查只有 `init / read / help` 不需要文档（R11）。`HelpCommand.test.ts` 的"按分类而不是注册顺序分组"一条原来断言输出第 1 行就是文档类桩命令，前提是文档类还没有内置命令；现在 `init` 排在最前，改为断言桩命令是文档组的最后一行（组内保持注册顺序），历史桩命令是整个输出的最后一行 | 原断言的意图不变，只去掉"文档组为空"这一前提 |
 
 ### 验证
 
-- `npm test`：44 个测试文件、707 条测试全部通过（本轮之前为 38 个文件、621 条）；`npm run typecheck` 无错误；`architecture.test.ts` 未修改，全部通过。
+- 合并 main 之前：44 个测试文件、707 条测试全部通过（本轮之前为 38 个文件、621 条）。合并 main（含 PR #7 的 tree / show / help）之后：48 个测试文件、742 条测试全部通过；`npm run typecheck` 无错误；`architecture.test.ts` 未修改，全部通过。
 - 人为引入两处错误，确认测试会失败，之后恢复：① `save` 在写文件**之前**更新默认路径（写入失败的 2 条测试失败）；② `read` 把警告行放在汇总行**之后**（read 测试与 §6 场景测试失败）。`in` 修复的新测试在修复前的代码上不成立（原来 `create rect q 0 0 1 1 in` 会成功）。
 
 ## 需要其他层新增的方法

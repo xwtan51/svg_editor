@@ -1,7 +1,6 @@
 import { EditorError } from "../model/EditorError.js";
 import type { Group } from "../model/Group.js";
 import { IdSyntax } from "../model/IdSyntax.js";
-import type { Shape } from "../model/Shape.js";
 import type { SvgDocument } from "../model/SvgDocument.js";
 import { Command } from "./Command.js";
 import { CommandCategory } from "./CommandCategory.js";
@@ -61,15 +60,6 @@ export abstract class EditCommand extends Command {
   /** Warning messages (without prefix) printed before the echo; none by default. */
   protected warnings(): string[] {
     return [];
-  }
-
-  /** The shape with this id; `no such shape: <id>` otherwise (§4.2). */
-  protected findShape(document: SvgDocument, id: string): Shape {
-    const shape = document.findById(id);
-    if (shape === null) {
-      throw new EditorError(`no such shape: ${id}`);
-    }
-    return shape;
   }
 
   /** The container with this id; `no such container` / `not a container` otherwise (§4.2, E24). */
