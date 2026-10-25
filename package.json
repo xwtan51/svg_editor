@@ -9,7 +9,7 @@
   },
   "scripts": {
     "cli": "tsx src/cli/main.ts",
-    "test": "vitest run",
+    "test": "vitest run --dir tests",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

@@ -2,3 +2,10 @@
 
 | 日期 | 问题 | 如何发现/确认 | 如何纠正 |
 |---|---|---|---|
+| 2026-10-25 | 方案 R10 规定"无文档"先于"参数语法"报错，但 §2.1 时序图中参数在 parse 阶段就校验、文档在 run 阶段才检查，实际顺序相反 | 对照约定补充 R10 与命令执行时序图，推演 `move c1 abc 0` 在无文档时的输出 | 把"是否需要文档"移到 CommandType 静态侧，由 Editor 在解析参数前检查 |
+| 2026-10-25 | 方案计划自写 XML 解析器（实体、CDATA 等），工作量和出错风险与本作业的重点不符；起因是我给的"不新增依赖"约束 | 评估 io 模块的工作量，对比现成库 | 改用 @xmldom/xmldom，在 io 内用 Adapter 隔离，规则 P1 加入"只有适配器可以 import 它" |
+| 2026-10-25 | （正面）agent 在实现 canUngroup 钩子时发现，§4.4 中根级 box 的 ungroup 应报 composite 错误而非 top-level 错误，因此检查顺序必须 composite 在前 | 阅读 v2 diff 中的 E20，对照规格 §4.2、§4.4 确认 | 采纳，写入 E20 |
+   | 2026-10-25 | 负数尺寸的报错文案把 -1e-9 显示为 0（"invalid value for width: 0"） | 审查 Extent.validate 时想到小负数会被格式化成 -0，写临时测试复现 | 报错改用原值 String(value)，补回归测试 |
+   | 2026-10-25 | StyleAttributes 用"属性名 → 校验函数"的 Map 加 typeof 判断类型，违反 P2，且与几何属性的设计不一致；架构测试的 P2 检查覆盖不到 | 代码审查，对照 README P2 和 §2.4 | 重构为 StyleProperty 类层次；阶段 C 考虑加强 P2 检查 |
+   | 2026-10-25 | model 层没有防止结构出错：Group 可以插进自己或自己的子孙（形成环，遍历会无限递归）；public 的 detach() 能绕过 ChildList，让父节点指针和子节点列表不一致 | 审查 ChildList 和 Group 后写临时测试复现，三种情况都被接受 | Group.insertAt 加环检测；架构测试限制只有 ChildList 能调用 attachTo/detach |
+   | 2026-10-25 | 架构测试的 P5 没检查 export default，默认导出的类可以绕过"文件名 = 类名" | agent 自己的 27 个违规都通过后，我换了 6 种它没想到的写法独立验证，只有这一种没被发现 | P5 拒绝 default 导出，加合成用例 |
