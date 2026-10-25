@@ -6,5 +6,8 @@
  * it only wires up and starts the application. Every other file under src/ must
  * follow the rule.
  */
+import { Editor } from "../app/Editor.js";
+import { Repl } from "./Repl.js";
 
-console.log("svg-editor 0.1 — type 'help' for commands");
+const repl = new Repl(Editor.createDefault(), process.stdin, process.stdout, process.stderr, process.stdin.isTTY === true);
+process.exitCode = await repl.run();

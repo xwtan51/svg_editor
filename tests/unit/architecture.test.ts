@@ -743,3 +743,13 @@ describe("view (README §1.1, §3.1 D3) applied to src/", () => {
     expect(viewMutationViolations([file("commands/X.ts", "shape.moveBy(1, 2);")])).toEqual([]);
   });
 });
+
+describe("app and cli (README §3.1 D6, D7, §3.2 P1) applied to src/", () => {
+  it("app/ and cli/ are scanned, so D6, D7 and P1 are not satisfied vacuously", () => {
+    const paths = sources.map((file) => file.path);
+    expect(paths).toContain("app/Editor.ts");
+    expect(paths).toContain("app/EditorSession.ts");
+    expect(paths).toContain("cli/Repl.ts");
+    expect(paths).toContain(ENTRY_SCRIPT);
+  });
+});
