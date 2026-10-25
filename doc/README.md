@@ -15,13 +15,13 @@ src/
 ├── app/        应用门面：会话状态 + 一行命令的完整执行流程（Invoker）
 ├── commands/   命令对象层次、命令行解析、命令注册表、undo/redo 历史
 ├── view/       显示类命令的文本排版（tree / show）
-├── io/         SVG 序列化 / 反序列化、最小 XML 解析器、文件系统端口
+├── io/         SVG 序列化 / 反序列化、XML 解析适配器（封装 @xmldom/xmldom）、文件系统端口
 └── model/      领域模型：图形层次（Composite）、文档、属性、快照、图形工厂
 ```
 
 | 模块 | 职责 | 不负责 |
 |---|---|---|
-| `cli` | 启动程序、打印 banner、逐行读 stdin、交互时打印提示符 `svg> `、把 `app` 返回的输出行写到 stdout | 任何命令语义、注释判断以外的解析 |
+| `cli` | 启动程序、打印 banner、逐行读 stdin、交互时打印提示符 `svg> `、把每一行原样交给 `app`、把 `app` 返回的输出行写到 stdout | 任何命令语义与任何输入解析（包括注释、空行的判断，均由 `Editor` 处理） |
 | `app` | 持有当前会话（当前文档、文件路径、历史）；对一行输入执行"解析 → 运行 → 入历史 → 捕获错误 → 产出输出行"；装配具体依赖（如 `NodeFileSystem`） | 具体命令逻辑、终端 IO |
 | `commands` | 把 token 序列变成命令对象；每条命令一个类，封装参数、前置校验、执行、撤销；undo/redo 栈与 io 锁 | 文本排版细节、文件读写细节、图形内部几何 |
 | `view` | 把模型排成 §5 规定的文本（树形连接线、列对齐、属性明细） | 修改模型 |
@@ -42,7 +42,7 @@ src/
 | `LeafShape`（抽象） | 叶子图形的公共实现：持有一组 `GeometryAttribute`，据角色泛化实现平移、缩放、几何属性设置 |
 | `Rect` / `Circle` / `Ellipse` / `Line` | 具体叶子图形：声明自己的几何属性表、可选颜色参数、tree 摘要格式与 move 回显锚点 |
 | `Text` | 文字叶子图形：在几何 `x y` 之外持有文本内容 `content` |
-| `Group` | Composite 的容器（`<g>`）：持有有序子节点，统一操作递归转发给子孙 |
+| `Group` | Composite 的容器（`<g>`）：持有有序子节点，统一操作递归转发给子孙；`canUngroup()` 钩子默认返回 `true`（复合图形子类覆写为 `false`） |
 | `SvgDocument` | 文档根（`<svg>`）：画布尺寸 + 顶层子节点；按 id 查找、文档序遍历、元素计数 |
 | `ShapeContainer`（接口） | `Group` 与 `SvgDocument` 共同的"可容纳子图形"协议：`indexOf / insertAt / remove / childList / containerLabel` |
 | `ChildList` | 有序子节点列表，插入/移除时同步维护子节点的 `parent` 指针；被 `Group`、`SvgDocument` 组合复用 |
@@ -67,9 +67,9 @@ src/
 |---|---|
 | `FileSystem`（接口） | 文件系统端口：`readText(path)` / `writeText(path, text)`，失败抛 `EditorError` |
 | `NodeFileSystem` | `FileSystem` 的 Node 实现，全工程唯一 `import "node:fs"` 处 |
-| `XmlParser` | 无依赖的最小 XML 子集解析器（声明、注释、元素、属性、文本、实体、CDATA；跳过 DOCTYPE） |
-| `XmlElement` | XML 解析结果节点：标签名、有序属性、子元素、字符数据 |
-| `SvgSerializer` | `SvgDocument` → SVG 文本；按 `Shape` 暴露的序列化协议通用遍历，不认识具体图形类 |
+| `XmlDomAdapter` | Adapter：调用 `@xmldom/xmldom` 的 `DOMParser` 解析文本，把库的 DOM 树转换成 io 自有的 `XmlElement` 树；库的解析错误转成 `EditorError`；全工程唯一 `import "@xmldom/xmldom"` 处 |
+| `XmlElement` | io 自有的 XML 节点结构（与第三方库无关）：标签名、有序属性、子元素、字符数据 |
+| `SvgSerializer` | `SvgDocument` → SVG 文本；按 `Shape` 暴露的序列化协议通用遍历，不认识具体图形类；手写字符串拼接，不使用 `@xmldom/xmldom` |
 | `SvgImporter` | `XmlElement` 树 → `SvgDocument` + 警告；元素类型经 `ShapeFactory` 构造 |
 | `IdAllocator` | 读入时为缺 id / 重复 id 的元素按"标签名+序号"分配新 id 并产生警告 |
 | `ImportResult` | 读入结果：文档 + 警告行 |
@@ -85,7 +85,7 @@ src/
 
 | 类 / 接口 | 一句话职责 |
 |---|---|
-| `Command`（抽象） | 所有命令的根：模板方法 `run(ctx)`（检查前置 → `execute` → 产出结果），以及 `recordIn(history)` 多态钩子 |
+| `Command`（抽象） | 所有命令的根：`execute(ctx)` 产出结果，`recordIn(history)` 多态钩子；静态属性 `requiresDocument` 默认 `true`（经类静态侧继承给子类，`InitCommand` / `ReadCommand` / `HelpCommand` 覆写为 `false`） |
 | `EditCommand`（抽象） | 可撤销命令：`prepare`（只读校验+记快照）/ `apply`（不可失败的变更）/ `undo` / `redo` |
 | `DocumentCommand`（抽象） | 文档类命令：成功后在历史上打 io 屏障 |
 | `QueryCommand`（抽象） | 显示类命令：只读，不入历史 |
@@ -95,10 +95,11 @@ src/
 | `ZOrderCommand`（抽象）、`FrontCommand` / `BackCommand` | z-order 命令：父类实现移位与撤销，子类只给出目标下标 |
 | `TreeCommand` / `ShowCommand` / `HelpCommand` / `ShowCanvasCommand` | 显示类具体命令 |
 | `UndoCommand` / `RedoCommand` | 历史控制具体命令 |
-| `CommandType`（接口） | 命令类的"静态侧"契约：`usage`、`summary`、`category`、`parse(args): Command` |
-| `CanvasCommandParser` | `canvas` 的静态侧：无参数产出 `ShowCanvasCommand`，带参数产出 `ResizeCanvasCommand` |
+| `CommandType`（接口） | 命令类的"静态侧"契约：`usage`、`summary`、`category`、`requiresDocument`、`parse(args): Command` |
+| `CanvasCommandParser` | `canvas` 的静态侧：无参数产出 `ShowCanvasCommand`，带参数产出 `ResizeCanvasCommand`；它不是 `Command` 子类，自行声明 `requiresDocument = true` |
 | `CommandRegistry` | **按名字分派②**：命令名 → `CommandType`（待重构，见 4.2）；也为 `help` 提供有序清单 |
-| `CommandParser` | 一行文本 → `Command`：分词、查注册表、委托 `CommandType.parse` |
+| `CommandParser` | 一行文本 → `CommandLine`：分词、查注册表；**不调用** `parse`（由 `Editor` 在检查 `requiresDocument` 之后调用） |
+| `CommandLine` | 值对象：查表得到的 `CommandType` + 剩余参数 `ArgList` |
 | `Tokenizer` / `Token` | 分词（双引号、转义）；`Token` 记录是否带引号（用于识别 `in` 关键字） |
 | `ArgList` | 参数游标：`nextId() / nextNumber() / nextRaw() / remaining() / expectEnd()`，统一产生 usage 错误 |
 | `History` | undo 栈、redo 栈、io 锁标志；`record / markIoBarrier / undo / redo` |
@@ -109,7 +110,7 @@ src/
 
 | 类 | 一句话职责 |
 |---|---|
-| `Editor` | 门面与 Invoker：`executeLine(line): string[]`；跳过注释/空行，解析并运行命令，成功后 `recordIn(history)`，把 `EditorError` 转成 `error: …` 行；`Editor.createDefault()` 装配 `NodeFileSystem` |
+| `Editor` | 门面与 Invoker：`executeLine(line): string[]`；按固定顺序处理一行：跳过注释/空行 → `CommandParser.resolve` → 检查 `CommandType.requiresDocument` → `CommandType.parse` → `execute` → 成功后 `recordIn(history)`；把 `EditorError` 转成 `error: …` 行；`Editor.createDefault()` 装配 `NodeFileSystem` |
 | `EditorSession` | `CommandContext` 的实现：当前文档（可无）、默认保存路径、`History`、`FileSystem`、`CommandRegistry` |
 
 **`src/cli/`**
@@ -147,7 +148,7 @@ package "src/view" as view {
 package "src/io" as io {
   [SvgSerializer]
   [SvgImporter]
-  [XmlParser]
+  [XmlDomAdapter]
   [FileSystem]
   [NodeFileSystem]
 }
@@ -157,6 +158,7 @@ package "src/model" as model {
   [ShapeFactory]
   [ShapeMemento]
 }
+component "@xmldom/xmldom" as xmldom <<external>>
 
 cli ..> app : executeLine()
 app ..> commands : 解析 / 运行 / 入历史
@@ -167,6 +169,7 @@ commands ..> view : tree / show 排版
 commands ..> io : read / save
 view ..> model
 io ..> model
+[XmlDomAdapter] ..> xmldom : 唯一使用者（P1）
 @enduml
 ```
 
@@ -185,8 +188,9 @@ io ..> model
 | 2.3 | **Composite** | §2.1 "容器与叶子统一操作"、§3 delete/move/scale 对容器递归 | `Shape` / `LeafShape` / `Group` |
 | 2.4 | **Strategy** | §3 move 只平移位置、scale 同乘位置与尺寸、§4.1 尺寸类属性的取值约束 | `CoordinateRole` 及三种角色 |
 | 2.5 | **Simple Factory + Registry** | §2.1 "按名字分派只允许两处"：命令名 → 实现、类型名 → 类 | `CommandRegistry`、`ShapeFactory` |
-| 2.6 | **Template Method** | 所有命令共享"前置检查 → 执行 → 记录"流程；编辑命令共享"先校验、后变更" | `Command.run`、`EditCommand.execute`、`ZOrderCommand` |
+| 2.6 | **Template Method** | 编辑命令共享"先校验、后变更"骨架；front/back 只有目标下标不同 | `EditCommand.execute`、`ZOrderCommand` |
 | 2.7 | **Facade** | 同一内核要服务 CLI 以及未来的 agent / 鼠标通道（§2 "为何以 id 定位"） | `Editor.executeLine` |
+| 2.8 | **Adapter** | §3 `read` 要解析外部 SVG（XML）文件；第三方 XML 库的 DOM 接口不应扩散到导入逻辑中 | `XmlDomAdapter`、`XmlElement` |
 
 #### 2.1 Command（必需）
 
@@ -198,8 +202,8 @@ io ..> model
 |---|---|
 | Command | `Command`（抽象）及四个分类抽象类 `EditCommand` / `DocumentCommand` / `QueryCommand` / `HistoryCommand` |
 | ConcreteCommand | `CreateCommand`、`MoveCommand`、`GroupCommand`… 共 20 个具体命令类（见 1.2） |
-| Client（创建命令） | `CommandParser` + `CommandRegistry` + 各命令类的静态 `parse` |
-| Invoker（触发执行） | `Editor` |
+| Client（创建命令） | `CommandParser` + `CommandRegistry`（定位命令类）+ 各命令类的静态 `parse`（由 `Editor` 调用） |
+| Invoker（触发执行） | `Editor`（同时负责在 `parse` 之前检查 `requiresDocument`） |
 | Receiver（被操作者） | `SvgDocument`、`Shape` 及其子类（编辑类）；`EditorSession`（文档类）；`History`（undo/redo） |
 | 历史管理（Caretaker） | `History`（持有 `EditCommand` 对象；命令自身持有 `ShapeMemento` / `TreePosition`） |
 
@@ -229,11 +233,14 @@ participant History
 
 User -> Repl : "move c1 30 0"
 Repl -> Editor : executeLine(line)
-Editor -> CommandParser : parse(line)
+Editor -> Editor : 注释 / 空行？→ 直接返回 []
+Editor -> CommandParser : resolve(line)
 CommandParser -> CommandRegistry : lookup("move")
 CommandRegistry --> CommandParser : MoveCommand (CommandType)
-CommandParser -> Cmd : MoveCommand.parse(args)
-Editor -> Cmd : run(session)
+CommandParser --> Editor : CommandLine(MoveCommand, args)
+Editor -> Editor : MoveCommand.requiresDocument\n为 true 且无文档 → 抛 no document
+Editor -> Cmd : MoveCommand.parse(args)\n参数个数、数字格式
+Editor -> Cmd : execute(session)
 Cmd -> Cmd : prepare(doc)\n解析 id、校验、记 snapshot
 Cmd -> Shape : moveBy(30, 0)
 Cmd --> Editor : CommandResult
@@ -266,7 +273,7 @@ Editor --> Repl : ["circle#c1 moved back to (100,100)"]
 | delete | 目标对象、`TreePosition` | `remove` | 同一对象 `insertAt` 原下标 |
 | move / scale / set | 目标对象、`ShapeMemento` | `moveBy` / `scaleBy` / `setAttribute` | `restore(memento)` |
 | group | 成员（按文档序）及各自 `TreePosition`、新 `Group` 对象及其插入位置 | 摘出成员 → 插入新组 → 成员依次追加 | 移除新组 → 成员按 (容器, 下标) 升序插回 |
-| ungroup | 容器对象、其 `TreePosition`、子节点列表 | 移除容器 → 子节点依次插入原下标处 | 子节点移回容器 → 容器插回原下标 |
+| ungroup | 容器对象（先检查 `canUngroup()`）、其 `TreePosition`、子节点列表 | 移除容器 → 子节点依次插入原下标处 | 子节点移回容器 → 容器插回原下标 |
 | addto | 目标对象、原 `TreePosition` | 摘出 → 追加到目标容器末尾 | 摘出 → 插回原位置 |
 | front / back | 目标对象、原下标 | 移到同级末尾 / 开头 | 移回原下标 |
 
@@ -279,7 +286,7 @@ Editor --> Repl : ["circle#c1 moved back to (100,100)"]
 1. **解析阶段纯函数化**：`CommandType.parse` 只做分词结果的语法检查（参数个数、数字格式），不触碰会话。
 2. **`prepare` 只读**：`EditCommand.execute` 是模板方法，先调 `prepare(doc)` 完成**全部**语义校验（id 存在、类型合法、取值约束、祖先关系、容器类型……）并记录快照/位置；校验失败抛 `EditorError`，此时尚未写任何状态。
 3. **`apply` 不可失败**：`apply` 只做已校验过的内存操作（数组插入删除、数值赋值），不解析、不校验、不做 IO。约束写进代码评审清单，并由"失败原子性"测试覆盖（见 3.3）。
-4. **历史后置**：只有 `run` 正常返回，`Editor` 才调用 `recordIn`；失败命令不入栈、也不解除 io 锁。
+4. **历史后置**：只有 `execute` 正常返回，`Editor` 才调用 `recordIn`；失败命令不入栈、也不解除 io 锁。
 5. **文档类命令先算后提交**：`save` 先把文档序列化成完整字符串，再一次 `writeText`，写成功后才更新默认路径并打屏障；`read` 先完成读文件、XML 解析、构建新 `SvgDocument`、补 id，全部成功后才替换会话中的文档。
 6. **输出后置**：警告行（如 `warning: assigned id rect1 …`）收集在 `CommandResult` 中，只有命令成功才输出；失败时只输出一行 `error:`。
 
@@ -313,7 +320,7 @@ Editor --> Repl : ["circle#c1 moved back to (100,100)"]
 
 **参与者**
 
-- `CommandRegistry`：`Map<string, CommandType>`，在构造函数中硬编码注册 §3 的全部命令；`CommandParser` 是唯一调用方。值是"命令类的静态侧"（类本身满足 `CommandType` 接口：静态 `usage`、`summary`、`category`、`parse`），所以表里放的就是类本身，名副其实的"命令名 → 实现"。
+- `CommandRegistry`：`Map<string, CommandType>`，在构造函数中硬编码注册 §3 的全部命令；`CommandParser` 是唯一调用方。值是"命令类的静态侧"（类本身满足 `CommandType` 接口：静态 `usage`、`summary`、`category`、`requiresDocument`、`parse`），所以表里放的就是类本身，名副其实的"命令名 → 实现"。
 - `ShapeFactory`：`Map<string, ShapeType>`，硬编码注册 `rect / circle / ellipse / line / text / g`。值同样是类本身（静态 `typeName`、`params`、`create`）。调用方有两个：`CreateCommand`（CLI 类型名）和 `SvgImporter`（SVG 标签名）。两条路径共用同一张表，所以"按名字分派"确实只有这一处，而不是 CLI 一处、读文件又一处。未注册名字抛 `unknown shape type: X (is the plugin loaded?)`。
 
 **协作**：`create rect r1 10 20 100 50` → `CreateCommand.prepare` 调 `factory.lookup("rect")` → 得到 `Rect`（`ShapeType`）→ 用 `Rect.params` 把剩余 token 配对成具名原始值 → `Rect.create("r1", params)` 在模型内用属性角色校验并构造。读文件时，`SvgImporter` 用标签名查表，用同一份 `params` 从 XML 属性中取值。
@@ -322,13 +329,14 @@ Editor --> Repl : ["circle#c1 moved back to (100,100)"]
 
 #### 2.6 Template Method
 
-**解决的问题**：所有命令都要先检查"是否已有文档"（§4.2 最后一行），编辑命令都要遵守"先校验后变更"（§2 错误输出），front/back 只有目标下标不同。
+**解决的问题**：编辑命令都要遵守"先校验后变更"（§2 错误输出），front/back 只有目标下标不同。
 
 **参与者与协作**
 
-- `Command.run(ctx)`（final 语义，不覆写）：`requiresDocument()` 钩子默认 `true`，为真且无文档时抛 `no document. use 'init' or 'read' first`；然后调用 `execute(ctx)`。`InitCommand`、`ReadCommand`、`HelpCommand` 覆写钩子返回 `false`。
 - `EditCommand.execute(ctx)`：`prepare(doc)` → `apply()` → `describe()`，子类只实现这三个钩子和 `undo()`。2.1 的失败原子性由这个固定的骨架保证。
 - `ZOrderCommand`：实现"记录原下标 → 移动 → 撤销移回"，子类 `FrontCommand` / `BackCommand` 只覆写 `targetIndex(siblingCount)` 和回显动词。
+
+"是否已有文档"（§4.2 最后一行）**不**放在命令实例的模板方法里：它必须在 `parse` 之前判断（约定补充 R10），而 `parse` 之前还没有命令实例。因此它是类静态侧的声明 `CommandType.requiresDocument`（`Command` 给出默认值 `true`，`InitCommand` / `ReadCommand` / `HelpCommand` 覆写为 `false`），由 `Editor.executeLine` 在固定流程中检查，见 2.1 时序图。
 
 #### 2.7 Facade
 
@@ -336,7 +344,30 @@ Editor --> Repl : ["circle#c1 moved back to (100,100)"]
 
 **参与者**：Facade = `Editor`，对外只有 `executeLine(line): string[]`（以及 `Editor.createDefault()`）；子系统 = 解析器、注册表、命令、历史、会话。`Repl` 只负责读写终端。转录测试可以直接把 §6 的命令逐行喂给 `Editor`，比对输出，不需要启动子进程。
 
-#### 2.8 类图（图形层次 + 命令层次）
+#### 2.8 Adapter
+
+**解决的问题**：§3 `read` 要把外部 SVG 文件读成文档；§2 要求读入时缺 id 自动补齐并警告。XML 解析本身（实体、CDATA、DOCTYPE、命名空间、属性引号等边界情况）不是本项目的考察点，自己写容易出错，因此改用成熟的 `@xmldom/xmldom`。但它的 W3C DOM 接口（`Node`、`NamedNodeMap`、`childNodes` 的 `nodeType` 判断……）不应扩散到 `SvgImporter` 的导入逻辑中，否则导入代码会与库绑定，换库或升级时要改动所有用到 DOM 的地方。
+
+**参与者**
+
+| GoF 角色 | 本工程中的类 |
+|---|---|
+| Target（客户期望的接口） | `XmlElement`：io 自有的节点结构（标签名、有序属性、子元素、字符数据） |
+| Adaptee（被适配者） | `@xmldom/xmldom` 的 `DOMParser` 及其产出的 DOM `Document` / `Element` |
+| Adapter | `XmlDomAdapter`：`parse(text): XmlElement` |
+| Client | `SvgImporter`（只认识 `XmlElement`，不 import 库） |
+
+**协作**：`ReadCommand` → `FileSystem.readText` → `XmlDomAdapter.parse(text)`。适配器内部：
+
+1. 以 `image/svg+xml` 模式调用 `DOMParser.parseFromString`，并安装 `onError` 回调：`error` / `fatalError` 级别一律视为解析失败，抛 `EditorError`，由 `ReadCommand` 报 `cannot parse file`（约定补充 F9）；`warning` 级别忽略。**必须安装回调**，否则库默认会写 `console`，违反 P1。
+2. 递归把 DOM `Element` 转成 `XmlElement`：标签取 `localName`；属性按 `attributes` 的文档顺序逐个复制（F7、F18 的顺序保留依赖于此）；文本与 CDATA 节点拼成字符数据；注释、处理指令丢弃。
+3. 返回根 `XmlElement`。此后 `SvgImporter` 只操作 `XmlElement`，补 id、查 `ShapeFactory`、产生警告等逻辑都与库无关。
+
+**序列化不使用该库**：`SvgSerializer` 仍然手写字符串拼接。约定补充 F18 规定了属性顺序、2 空格缩进、自闭合空容器和统一的数字格式（V3），用库的 `XMLSerializer` 反而难以精确控制这些细节；写出方向的 XML 只需要做转义，不需要库。
+
+**依赖变更（实现阶段执行，本轮只改文档、不执行 `npm install`）**：在 `package.json` 的 `dependencies`（运行时依赖，不是 devDependencies）加入 `@xmldom/xmldom`，版本取安装时的最新稳定版，并由 `package-lock.json` 锁定。该库自带 TypeScript 类型声明，不需要额外的 `@types` 包。换库时只需重写 `XmlDomAdapter` 一个类。
+
+#### 2.9 类图（图形层次 + 命令层次）
 
 ```plantuml
 @startuml classes
@@ -385,6 +416,7 @@ package model {
   class Group {
     -children: ChildList
     +asContainer(): Group
+    +canUngroup(): boolean
   }
   class SvgDocument {
     -size: CanvasSize
@@ -459,13 +491,12 @@ Group ..|> ShapeType
 
 package commands {
   abstract class Command {
-    +run(ctx: CommandContext): CommandResult
-    #requiresDocument(): boolean
-    #{abstract} execute(ctx: CommandContext): CommandResult
+    +{static} requiresDocument: boolean = true
+    +{abstract} execute(ctx: CommandContext): CommandResult
     +{abstract} recordIn(h: History): void
   }
   abstract class EditCommand {
-    #execute(ctx: CommandContext): CommandResult
+    +execute(ctx: CommandContext): CommandResult
     #{abstract} prepare(doc: SvgDocument): void
     #{abstract} apply(): void
     #{abstract} describe(): string
@@ -495,13 +526,19 @@ package commands {
   }
   class FrontCommand
   class BackCommand
-  class InitCommand
-  class ReadCommand
+  class InitCommand {
+    +{static} requiresDocument: boolean = false
+  }
+  class ReadCommand {
+    +{static} requiresDocument: boolean = false
+  }
   class SaveCommand
   class ResizeCanvasCommand
   class TreeCommand
   class ShowCommand
-  class HelpCommand
+  class HelpCommand {
+    +{static} requiresDocument: boolean = false
+  }
   class ShowCanvasCommand
   class UndoCommand
   class RedoCommand
@@ -517,13 +554,20 @@ package commands {
   interface CommandType <<static side>> {
     +usage: string
     +summary: string
+    +requiresDocument: boolean
     +parse(args: ArgList): Command
   }
   class CommandRegistry <<name dispatch #2, to refactor>> {
     -types: Map<string, CommandType>
     +lookup(name: string): CommandType
   }
-  class CommandParser
+  class CommandParser {
+    +resolve(line: string): CommandLine
+  }
+  class CommandLine {
+    -type: CommandType
+    -args: ArgList
+  }
   interface CommandContext
 }
 
@@ -555,6 +599,9 @@ HistoryCommand <|-- RedoCommand
 History o-- "0..*" EditCommand
 CommandRegistry o-- CommandType
 CommandParser --> CommandRegistry
+CommandParser ..> CommandLine : creates
+CommandLine --> CommandType
+Command ..|> CommandType : <<static side>>
 Command ..> CommandContext
 MoveCommand ..> ShapeMemento
 ScaleCommand ..> ShapeMemento
@@ -563,12 +610,13 @@ DeleteCommand ..> TreePosition
 GroupCommand ..> TreePosition
 CreateCommand ..> ShapeFactory
 EditCommand ..> Shape : receiver
+UngroupCommand ..> Group : canUngroup()
 @enduml
 ```
 
 > 说明：`<<static side>>` 表示该接口由**类的静态成员**满足（TypeScript 结构类型允许把类本身赋给 `ShapeType` / `CommandType` 类型的变量），因此不需要再为每个图形或命令写一个工厂类。
 
-#### 2.9 考虑过但没有采用的模式
+#### 2.10 考虑过但没有采用的模式
 
 | 模式 | 设想用途 | 不采用的理由 |
 |---|---|---|
@@ -577,7 +625,7 @@ EditCommand ..> Shape : receiver
 | **整文档快照（粗粒度 Memento）** | 每条编辑命令前克隆整个文档，undo 时整体换回 | 实现最省事、对失败回滚也天然安全，但：①命令的撤销回显（`moved back to …`、`restored into g#markers`）仍需命令级信息；②克隆会破坏对象身份，其他命令持有的引用失效，只能退回按 id 重新查找；③不能体现 Command 自己负责撤销的设计。作为**备选方案**保留：如果 `apply` 不可失败的约束难以守住，可在 `Editor` 加一层整文档快照作为安全网 |
 | **Observer** | 文档变更时通知视图刷新 | CLI 是请求-响应式，每条命令的输出由命令自己产出，没有需要被动刷新的订阅者。等 GUI / 鼠标通道（§2）出现再加，`Editor` 门面是自然的挂载点（见 4.3） |
 | **Singleton** | `CommandRegistry`、`ShapeFactory`、`History` 全局唯一 | 全局状态妨碍测试隔离（每个测试需要干净的历史）；改为由 `Editor.createDefault()` 构造并注入 |
-| **State** | "无文档 / 有文档 / io 锁定"作为编辑器状态对象 | 只有两个布尔维度、规则很少；用 State 会让 20 个命令都面向状态接口分派，过度设计。`requiresDocument()` 钩子加 `History.ioLocked` 已足够 |
+| **State** | "无文档 / 有文档 / io 锁定"作为编辑器状态对象 | 只有两个布尔维度、规则很少；用 State 会让 20 个命令都面向状态接口分派，过度设计。静态属性 `CommandType.requiresDocument` 加 `History.ioLocked` 已足够 |
 | **Interpreter** | 为命令语言建文法与语法树 | 命令语法是扁平的"命令名 + 位置参数 + 可选 `in` 尾缀"，没有嵌套或表达式，分词加 `ArgList` 足够 |
 | **Prototype** | 图形工厂按原型克隆出新实例；或 undo 时克隆子树 | create 参数决定全部状态，克隆原型再改属性不比直接构造省事；undo 采用对象身份保持，不需要克隆 |
 | **Abstract Factory** | 按"产品族"创建图形 | 只有一个产品族（SVG 图形），没有需要成套替换的维度 |
@@ -606,7 +654,7 @@ EditCommand ..> Shape : receiver
 
 | # | 规则 | 理由 |
 |---|---|---|
-| P1 | `import "node:fs"` 只允许出现在 `io/NodeFileSystem.ts`；`node:readline`、`process.stdin/stdout`、`console.*` 只允许出现在 `cli/` | IO 隔离：内核可完全在内存中测试；输出顺序只由 `Editor` 返回值决定 |
+| P1 | `import "node:fs"` 只允许出现在 `io/NodeFileSystem.ts`；`import "@xmldom/xmldom"` 只允许出现在 `io/XmlDomAdapter.ts`；`node:readline`、`process.stdin/stdout`、`console.*` 只允许出现在 `cli/` | IO 隔离：内核可完全在内存中测试；输出顺序只由 `Editor` 返回值决定；第三方 XML 库被限制在适配器内，换库只改一个类（2.8） |
 | P2 | 以字符串为键查找"实现"的 `Map` 只允许出现在 `CommandRegistry` 与 `ShapeFactory` | 规格 §2.1 "按名字分派只允许两处"。按 id 查图形（`SvgDocument.findById`）、按属性名查属性（`LeafShape` 的属性表）查的是**数据**而不是实现，不在此列 |
 | P3 | 全工程禁止对图形类型名或命令名使用 `switch` / `if-else` 链；禁止对 `Shape` 的具体子类用 `instanceof`，改用多态方法（如 `asContainer()`） | 规格 §2.1 禁止"到处 switch(tag)"；新增图形类型时不应修改分散的分支 |
 | P4 | `Shape`、`LeafShape` 不得在运行时 `import` 自己的子类；具体图形类不得 `import ShapeFactory` | 避免 ESM 循环导入导致 "Class extends value undefined"；工厂依赖具体类，反过来不行 |
@@ -616,11 +664,11 @@ EditCommand ..> Shape : receiver
 
 #### 3.3 检查手段
 
-本阶段**不新增依赖**（不改 `package.json`），采用"自写测试脚本 + 编译器 + 人工抽查"：
+检查手段本身**不新增依赖**（运行时依赖 `@xmldom/xmldom` 是 2.8 的解析需要，与检查无关），采用"自写测试脚本 + 编译器 + 人工抽查"：
 
 1. **架构测试 `tests/unit/architecture.test.ts`**（实现阶段编写，使用已有的 vitest 与 `node:fs`）：
    - 递归列出 `src/**/*.ts`，用正则提取 `import … from "…"` 与 `import type`，把相对路径解析成目标模块，逐条断言 D1–D8；
-   - 断言 P1：`node:fs` / `node:readline` / `console.` / `process.std` 只出现在白名单文件；
+   - 断言 P1：`node:fs` / `@xmldom/xmldom` / `node:readline` / `console.` / `process.std` 只出现在白名单文件（`@xmldom/xmldom` 的白名单只有 `io/XmlDomAdapter.ts`）；
    - 断言 P2：`Map<string,` 后接 `ShapeType` / `CommandType` 的声明只出现在两个白名单文件；
    - 断言 P3：`src/` 中不出现 `switch (`，不出现 `instanceof (Rect|Circle|Ellipse|Line|Text|Group)`；
    - 断言 P5：每个文件恰好一个 `export class|interface|abstract class`，且名字与文件名一致。
@@ -629,7 +677,7 @@ EditCommand ..> Shape : receiver
 3. **失败原子性测试**：对 §4.2 每一种错误场景，执行前后各序列化一次文档并比较，同时检查 undo 栈深度不变。
 4. **人工抽查**：每完成一个模块，抽查 2–3 个文件的 import 列表，结果写入「一致性自查」。
 
-**依赖提议（未采纳，仅供讨论）**：`dependency-cruiser`（devDependency）可以用声明式规则更完整地检查依赖与循环，并生成依赖图。本阶段规则只有十余条，自写测试就能覆盖，且不改 `package.json`，所以暂不引入；如果后续模块增多，再提议加入。
+**依赖提议（未采纳，仅供讨论）**：`dependency-cruiser`（devDependency）可以用声明式规则更完整地检查依赖与循环，并生成依赖图。本阶段规则只有十余条，自写测试就能覆盖，无需为检查手段再加依赖，所以暂不引入；如果后续模块增多，再提议加入。
 
 ---
 
@@ -643,11 +691,12 @@ EditCommand ..> Shape : receiver
 - **现状（待重构）**：`ShapeFactory` 在构造函数中硬编码注册六种内置类型，新增类型必须改内核。
 - **已预留**：
   - 工厂的值是 `ShapeType` 接口而不是具体类，`ShapeFactory.register(type)` 已存在（内置类型也通过它注册），插件阶段只需从外部调用它；
-  - 序列化与显示不使用 Visitor，`SvgSerializer`、`TreeRenderer` 对未知子类通用（2.9）；
+  - 序列化与显示不使用 Visitor，`SvgSerializer`、`TreeRenderer` 对未知子类通用（2.10）；
   - `Shape.label()`、`Shape.summary()`、`Shape.setAttribute()` 都是可覆写的虚方法，box 可以输出 `box#n1`、`g#n1 (box)`，并实现"fill 传播到 n1-rect"的 set 语义；
   - `Group` 可被继承（box 是容器）；`asContainer()` 是多态的，`in` / `addto` 对 box 自动可用；
-  - create 参数由 `ShapeType.params` 描述，usage 文本由它生成，插件类型自带参数 schema。
-- **决定暂不预留**：插件发现与加载机制（规格本阶段不要求）；`data-kind` 读回还原（需要 `SvgImporter` 在查标签名前先查 `data-kind`，届时改 `SvgImporter` 一处）；`ungroup` 拒绝复合图形的钩子（届时在 `Group` 上加 `canUngroup()`，一处改动）。理由：这些只有在 box 真正落地时才能确定接口形状，现在预留容易猜错。
+  - create 参数由 `ShapeType.params` 描述，usage 文本由它生成，插件类型自带参数 schema；
+  - `ungroup` 拒绝复合图形的钩子：`Group.canUngroup()` 默认返回 `true`，`UngroupCommand.prepare` 调用它，返回 `false` 时报 `cannot ungroup composite shape: <id>`（§4.2、§4.4）。本阶段内置类型都返回 `true`，所以这条错误不会触发；box 子类只需覆写这一个方法。**这个钩子的成本几乎为零（一个返回常量的方法加一次调用），所以现在就留**，不必等到插件阶段再改 `UngroupCommand`。
+- **决定暂不预留**：插件发现与加载机制（规格本阶段不要求）；`data-kind` 读回还原（需要 `SvgImporter` 在查标签名前先查 `data-kind`，届时改 `SvgImporter` 一处）。理由：这些只有在 box 真正落地时才能确定接口形状，现在预留容易猜错。
 
 #### 4.2 命令集扩展 / 命令由插件提供——**待重构 ②：命令分发**
 
@@ -676,8 +725,8 @@ EditCommand ..> Shape : receiver
 #### 4.6 脚本回放与宏
 
 - **依据**：§2 "`#` 开头为注释（便于把命令序列存成脚本回放）"。
-- **已预留**：`Editor.executeLine` 逐行处理且自己负责跳过注释，任何行来源（stdin、文件、测试）都可以复用。
-- **暂不预留**：`source <file>` 命令、"一个脚本 = 一个 undo 单元"（届时可引入 MacroCommand，见 2.9）。
+- **已预留**：`Editor.executeLine` 逐行处理且自己负责跳过注释和空行（`cli` 不做任何解析），任何行来源（stdin、文件、测试）都可以复用。
+- **暂不预留**：`source <file>` 命令、"一个脚本 = 一个 undo 单元"（届时可引入 MacroCommand，见 2.10）。
 
 #### 4.7 SVG 覆盖面扩大（transform、path、polygon、style、更多属性）
 
@@ -718,15 +767,15 @@ EditCommand ..> Shape : receiver
 | # | 未定义 / 不清之处 | 决策 | 理由 |
 |---|---|---|---|
 | R1 | 非交互（stdin 非 TTY，如管道回放脚本）时是否打印提示符 | 仅当 stdin 是 TTY 时打印 `svg> `；非 TTY 时不打印提示符、不回显输入 | 脚本回放与转录测试的输出只含结果行，便于比对；与现有 smoke test（空输入只输出 banner）一致 |
-| R2 | 注释如何识别 | 去掉行首空白后以 `#` 开头即为注释，整行忽略、无输出；**行内 `#` 不是注释** | 颜色值 `#4a90d9` 以 `#` 开头，行内注释会误伤参数 |
-| R3 | 空行 / 纯空白行 | 忽略，无输出 | 脚本可读性 |
+| R2 | 注释如何识别 | 去掉行首空白后以 `#` 开头即为注释，整行忽略、无输出；**行内 `#` 不是注释**；由 `Editor.executeLine` 判断，`cli` 不做任何解析 | 颜色值 `#4a90d9` 以 `#` 开头，行内注释会误伤参数 |
+| R3 | 空行 / 纯空白行 | 忽略，无输出；同样由 `Editor.executeLine` 判断 | 脚本可读性 |
 | R4 | 命令名大小写 | 区分大小写，只认小写；未知命令报 `error: unknown command: <name>` | 与 id 大小写敏感（§2）一致；规格未给出未知命令的消息，按 §4.2 风格补充 |
 | R5 | 引号规则 | 只有以 `"` 开头的 token 是引号 token，延续到下一个未转义的 `"`；引号内支持 `\"` 与 `\\`；闭合引号后必须是空白或行尾；未闭合报 `error: unterminated quote` | §2 只说"双引号包裹"，需要能表达含引号的文字，同时避免类 shell 拼接的复杂性 |
 | R6 | 引号是否改变 token 含义 | 引号 token 永远是普通值；只有**未加引号**的 `in` 才被识别为 `in` 子句关键字 | 让 `create text t 0 0 "in"` 这类内容可以表达 |
 | R7 | 参数个数不符 | `error: usage: <该命令的语法>`，语法文本与 `help` 中一致（create 按类型给出具体语法） | 规格未定义；复用同一份 usage 文本，避免两处不一致 |
 | R8 | 数字格式 | 接受十进制与科学计数法（如 `-1.5`、`.5`、`1e3`），必须有限；拒绝 `0x10`、`Infinity`、`NaN`、空串；报 `error: invalid number: <token>` | `Number()` 过于宽松；§2 "浮点合法"只说明可以是小数 |
 | R9 | 多余参数 | 一律视为参数个数不符（R7），包括 `help x`、`undo 3`、`tree a b` | 宁严勿宽，防止静默忽略用户输入 |
-| R10 | 同一行有多个错误时报哪一个 | 只报第一个，检查顺序：未知命令 → 无文档 → 参数语法（个数、数字格式） → 语义（按参数从左到右：类型、id 合法性、id 是否已存在/不存在、容器关系、取值约束） | §2 "一行一条"；固定顺序便于测试 |
+| R10 | 同一行有多个错误时报哪一个 | 只报第一个，检查顺序：分词（未闭合引号）→ 未知命令 → 无文档 → 参数语法（个数、数字格式）→ 语义（按参数从左到右：类型、id 合法性、id 是否已存在/不存在、容器关系、取值约束）。实现上与流程一一对应：`CommandParser.resolve` 分词并查表 → `Editor` 检查静态 `CommandType.requiresDocument` → `CommandType.parse` → `execute`（`prepare`），见 2.1 时序图 | §2 "一行一条"；固定顺序便于测试。分词错误排在最前，因为不分词就拿不到命令名 |
 | R11 | 无文档时哪些命令可用 | 只有 `init`、`read`、`help`；其余（包括 `undo`、`redo`、`tree`、`canvas`、`save`）报 `no document` | §4.2 "未 read/init 就执行其他命令"按字面执行 |
 | R12 | 错误与警告写到哪个流 | 全部写 stdout | 保证与正常输出的相对顺序，转录测试只比对一个流 |
 | R13 | 如何退出 | EOF（Ctrl-D）或 Ctrl-C 退出，退出码 0；不新增 `exit` / `quit` 命令 | §3 命令总表没有退出命令，`help` 要显示"全部命令"，不擅自扩充命令集 |
@@ -782,7 +831,7 @@ EditCommand ..> Shape : receiver
 | E17 | group 新容器放在哪里 | 放进"文档序第一个成员"的原父容器，位置为该成员原来的下标（扣除其前面被一起摘走的同级成员） | 规格未定义；这样单父容器的常见情况下视觉层次变化最小 |
 | E18 | group 参数检查 | 至少 1 个成员；成员 id 重复报 `error: duplicate id in arguments: r1`；成员可以来自不同父容器；成员之间有祖先关系时报 `cannot group a container into its own descendant: <祖先 id>`（与 §6 示例一致，报的是容器 id） | §4.2 只覆盖了祖先关系一种 |
 | E19 | group 回显 | `g#markers created with 2 children`（§6）；undo：`g#markers removed, 2 children restored` | 后者规格未给出 |
-| E20 | ungroup 的目标 | 必须是 `g`，否则 `error: not a container: r1`；根级容器按 §4.2 拒绝（即使是刚 `group` 出来的根级容器也只能 undo） | §4.2 按字面执行 |
+| E20 | ungroup 的目标 | 必须是 `g`，否则 `error: not a container: r1`；`canUngroup()` 返回 `false` 时报 `cannot ungroup composite shape`（本阶段不会触发），该检查排在根级检查之前；根级容器按 §4.2 拒绝（即使是刚 `group` 出来的根级容器也只能 undo） | §4.2 按字面执行；§4.4 中根级 box `n1` 的 `ungroup` 期望得到 composite 错误而不是 top-level 错误，所以 composite 检查要排在前面 |
 | E21 | ungroup 容器自身的属性 | 子节点按原顺序插到容器原位置；容器自身的 fill/stroke/透传属性（如 transform）丢弃，若不为空则警告 `warning: attributes of g#g1 discarded: fill, transform` | 子节点外观可能变化，必须告知用户；undo 可完整恢复 |
 | E22 | ungroup 空容器 | 允许，效果为删除该容器 | 没有理由拒绝 |
 | E23 | ungroup 回显 | `g#g1 ungrouped (2 children promoted)`；undo：`g#g1 regrouped with 2 children` | 规格未给出 |
@@ -837,3 +886,4 @@ EditCommand ..> Shape : receiver
 | 版本 | 日期 | 修改内容 | 原因 |
 |---|---|---|---|
 | v1 | 2026-10-25 | 初稿：架构方案（模块划分、设计模式、依赖方向规则、变化点假设）与约定补充 | 依据 `doc/spec/phase_cli_1.md` 完成本阶段架构设计 |
+| v2 | 2026-10-25 | ① `requiresDocument` 从命令实例的模板方法移到 `CommandType` 静态侧，由 `Editor` 在 `parse` 之前检查，新增 `CommandLine`，同步修改时序图、§2.6、类图与 R10；② 注释、空行统一由 `Editor` 处理，`cli` 不做任何解析；③ 放弃自写 `XmlParser`，改用 `@xmldom/xmldom`，新增 `XmlDomAdapter`（Adapter 模式，新增 §2.8，原 §2.8/§2.9 顺延为 §2.9/§2.10），P1 与架构测试限定只有适配器可以 import 该库，序列化仍手写；④ 预留 `Group.canUngroup()` 钩子，由 `UngroupCommand` 调用 | 审查意见：① R10 与时序图的检查顺序矛盾；② cli 职责与 §1.2、§4.6 的描述矛盾；③ 手写 XML 解析器的边界情况多，不是考察点；④ 钩子成本几乎为零，提前预留比日后修改 `UngroupCommand` 更划算 |
