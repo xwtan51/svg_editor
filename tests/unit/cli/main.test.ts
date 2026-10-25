@@ -1,7 +1,11 @@
 import { spawn, spawnSync } from "node:child_process";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { TranscriptRunner } from "../../system/TranscriptRunner.js";
 
 // The real entry point in a child process, fed through a pipe (not a TTY).
 // tsx is resolved from this project's node_modules and launched with the
@@ -13,8 +17,8 @@ const TIMEOUT_MS = 10_000;
 const BANNER = "svg-editor 0.1 — type 'help' for commands";
 const NO_DOCUMENT = "error: no document. use 'init' or 'read' first";
 
-function runMain(input: string) {
-  return spawnSync(process.execPath, [tsxCli, mainTs], { input, encoding: "utf8", timeout: TIMEOUT_MS });
+function runMain(input: string, cwd?: string) {
+  return spawnSync(process.execPath, [tsxCli, mainTs], { input, encoding: "utf8", timeout: TIMEOUT_MS, cwd });
 }
 
 describe("cli/main.ts over a pipe", () => {
@@ -72,6 +76,29 @@ describe("cli/main.ts over a pipe", () => {
       expect(await exited).toEqual({ code: 0, signal: null });
       expect(stdout).toBe(`${BANNER}\n${NO_DOCUMENT}\n`);
       expect(stderr).toBe("");
+    },
+    TIMEOUT_MS + 2_000,
+  );
+
+  it(
+    "plays the whole spec §6 session in a temporary directory and writes demo.svg there",
+    () => {
+      const transcript = TranscriptRunner.load("spec-6.txt");
+      const dir = mkdtempSync(join(tmpdir(), "svg-editor-main-"));
+      try {
+        copyFileSync(new URL("fixtures/other.svg", TranscriptRunner.DIRECTORY), join(dir, "other.svg"));
+        const result = runMain(transcript.inputs().map((line) => `${line}\n`).join(""), dir);
+        expect(result.error).toBeUndefined();
+        expect(result.stderr).toBe("");
+        expect(result.status).toBe(0);
+        expect(result.stdout).toBe([BANNER, ...transcript.outputs()].map((line) => `${line}\n`).join(""));
+        expect(existsSync(join(dir, "demo.svg"))).toBe(true);
+        // The same bytes as the in-memory run of the same transcript saves.
+        transcript.steps.forEach((step) => transcript.run(step));
+        expect(readFileSync(join(dir, "demo.svg"), "utf8")).toBe(transcript.files.readText("demo.svg"));
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
     },
     TIMEOUT_MS + 2_000,
   );

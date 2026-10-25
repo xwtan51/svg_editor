@@ -39,6 +39,18 @@ describe("EditorSession", () => {
     expect(s.filePath()).toBeNull();
   });
 
+  it("replaceDocument(doc, null) clears a default path set by setFilePath, as init after save does (F5)", () => {
+    const s = session();
+    s.replaceDocument(new SvgDocument(), null);
+    s.setFilePath("saved.svg");
+    expect(s.filePath()).toBe("saved.svg");
+
+    const fresh = new SvgDocument();
+    s.replaceDocument(fresh, null);
+    expect(s.document()).toBe(fresh);
+    expect(s.filePath()).toBeNull();
+  });
+
   it("setFilePath changes only the save path", () => {
     const s = session();
     const doc = new SvgDocument();
