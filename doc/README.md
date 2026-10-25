@@ -68,14 +68,14 @@ src/
 
 | 类 / 接口 | 一句话职责 |
 |---|---|
-| `FileSystem`（接口） | 文件系统端口：`readText(path)` / `writeText(path, text)`，失败抛 `EditorError` |
-| `NodeFileSystem` | `FileSystem` 的 Node 实现，全工程唯一 `import "node:fs"` 处 |
-| `XmlDomAdapter` | Adapter：调用 `@xmldom/xmldom` 的 `DOMParser` 解析文本，把库的 DOM 树转换成 io 自有的 `XmlElement` 树；库的解析错误转成 `EditorError`；全工程唯一 `import "@xmldom/xmldom"` 处 |
-| `XmlElement` | io 自有的 XML 节点结构（与第三方库无关）：标签名、有序属性、子元素、字符数据 |
+| `FileSystem`（接口） | 文件系统端口：`readText(path)` / `writeText(path, text)`，**同步**（`Editor.executeLine` 本身是同步的），失败抛 `EditorError`（`cannot read file` / `cannot write file`） |
+| `NodeFileSystem` | `FileSystem` 的 Node 实现（`readFileSync` / `writeFileSync`），全工程唯一 `import "node:fs"` 处 |
+| `XmlDomAdapter` | Adapter：调用 `@xmldom/xmldom` 的 `DOMParser` 解析文本，把库的 DOM 树转换成 io 自有的 `XmlElement` 树；库的解析错误转成 `EditorError("malformed XML: …")`（不含文件路径，由 `SvgImporter` 换成 F9 的消息）；全工程唯一 `import "@xmldom/xmldom"` 处 |
+| `XmlElement` | io 自有的 XML 节点结构（与第三方库无关）：标签名（localName）、有序属性、子元素、整棵子树的字符数据、作用域内的命名空间前缀 |
 | `SvgSerializer` | `SvgDocument` → SVG 文本；按 `Shape` 暴露的序列化协议通用遍历，不认识具体图形类；手写字符串拼接，不使用 `@xmldom/xmldom` |
-| `SvgImporter` | `XmlElement` 树 → `SvgDocument` + 警告；元素类型经 `ShapeFactory` 构造 |
-| `IdAllocator` | 读入时为缺 id / 重复 id 的元素按"标签名+序号"分配新 id 并产生警告 |
-| `ImportResult` | 读入结果：文档 + 警告行 |
+| `SvgImporter` | `read(fs, path): ImportResult`：读文件 → 去掉开头的 BOM → 经 `XmlDomAdapter` 解析 → 构建 `SvgDocument` + 警告，三步都在这里编排（commands 不接触适配器，D5）；元素类型经 `ShapeFactory` 构造，属性按类型的 `params` 与 `StyleAttributes.accepts` 分成 create 参数、样式、透传三类，没有按标签名的分支 |
+| `IdAllocator` | 读入时先保留文件中全部显式 id，再为缺 id / 重复 id 的元素按"标签名+序号"分配新 id 并产生警告（F13、F14） |
+| `ImportResult` | 读入结果：文档 + 警告行；`warning: ` 前缀只在这里添加 |
 
 **`src/view/`**
 
@@ -330,7 +330,7 @@ create 参数说明（`ParamSpec`）**不**由属性表生成，而是每个类�
 - `CommandRegistry`：`Map<string, CommandType>`，在构造函数中硬编码注册 §3 的全部命令；`CommandParser` 是唯一调用方。值是"命令类的静态侧"（类本身满足 `CommandType` 接口：静态 `usage`、`summary`、`category`、`requiresDocument`、`parse`），所以表里放的就是类本身，名副其实的"命令名 → 实现"。
 - `ShapeFactory`：`Map<string, ShapeType>`，硬编码注册 `rect / circle / ellipse / line / text / g`。值同样是类本身（静态 `typeName`、`params`、`create`）。调用方有两个：`CreateCommand`（CLI 类型名）和 `SvgImporter`（SVG 标签名）。两条路径共用同一张表，所以"按名字分派"确实只有这一处，而不是 CLI 一处、读文件又一处。未注册名字抛 `unknown shape type: X (is the plugin loaded?)`。
 
-**协作**：`create rect r1 10 20 100 50` → `CreateCommand.prepare` 调 `factory.lookup("rect")` → 得到 `Rect`（`ShapeType`）→ 用 `Rect.params` 把剩余 token 配对成具名原始值 → `Rect.create("r1", params)` 在模型内用属性角色校验并构造。读文件时，`SvgImporter` 用标签名查表，用同一份 `params` 从 XML 属性中取值。
+**协作**：`create rect r1 10 20 100 50` → `CreateCommand.prepare` 调 `factory.lookup("rect")` → 得到 `Rect`（`ShapeType`）→ 用 `Rect.params` 把剩余 token 配对成具名原始值 → `Rect.create("r1", params)` 在模型内用属性角色校验并构造。读文件时，`SvgImporter` 用标签名查表，用同一份 `params` 从 XML 属性（text 内容取自字符数据）中取值；`params` 之外，`StyleAttributes.accepts` 认可的 `fill` / `stroke` / `stroke-width` 经 `setAttribute` 设置，其余属性透传（F7）。不支持的标签先用 `factory.typeNames()` 判断后跳过（F6），而不是靠捕获 `unknown shape type`。
 
 **待重构标注**：两处的注册列表都写死在内核中，新增类型或命令必须改内核代码。重构目标与预留见 4.1、4.2。
 
@@ -364,15 +364,15 @@ create 参数说明（`ParamSpec`）**不**由属性表生成，而是每个类�
 | Adapter | `XmlDomAdapter`：`parse(text): XmlElement` |
 | Client | `SvgImporter`（只认识 `XmlElement`，不 import 库） |
 
-**协作**：`ReadCommand` → `FileSystem.readText` → `XmlDomAdapter.parse(text)`。适配器内部：
+**协作**：`ReadCommand` 只调用 `SvgImporter.read(fs, path)`；读文件、解析、建模型都由 `SvgImporter` 编排：`FileSystem.readText(path)` → 去掉开头的 UTF-8 BOM（`readFileSync` 不会去掉，xmldom 会把它当作格式错误）→ `XmlDomAdapter.parse(text)` → 检查根元素是 `svg` → 构建文档。这样 commands 对 io 的依赖保持在 D5 的白名单内（`FileSystem`、`SvgImporter`、`SvgSerializer`），不接触适配器。适配器内部：
 
-1. 以 `image/svg+xml` 模式调用 `DOMParser.parseFromString`，并安装 `onError` 回调：`error` / `fatalError` 级别一律视为解析失败，抛 `EditorError`，由 `ReadCommand` 报 `cannot parse file`（约定补充 F9）；`warning` 级别忽略。**必须安装回调**，否则库默认会写 `console`，违反 P1。
-2. 递归把 DOM `Element` 转成 `XmlElement`：标签取 `localName`；属性按 `attributes` 的文档顺序逐个复制（F7、F18 的顺序保留依赖于此）；文本与 CDATA 节点拼成字符数据；注释、处理指令丢弃。
+1. 以 `image/svg+xml` 模式调用 `DOMParser.parseFromString`，并安装 `onError` 回调：`error` / `fatalError` 级别一律视为解析失败，`warning` 级别忽略（例如没加引号的属性值 `a=1` 只是 warning，照常接受）。库会把回调里抛出的**任何**异常包成它自己的 `ParseError`，所以回调里抛普通 `Error` 即可，适配器在 `parseFromString` 外层捕获后转成 `EditorError("malformed XML: …")`；`SvgImporter` 再把它换成不带细节的 `cannot parse file: <path>`（约定补充 F9）。**必须安装回调**：实测不装时，遇到 error 级别的问题库会调用 `console.error` 并继续解析、不抛异常，既违反 P1，又会静默接受坏文件。
+2. 递归把 DOM `Element` 转成 `XmlElement`：标签取 `localName`；属性按 `attributes` 的文档顺序逐个复制（F7、F18 的顺序保留依赖于此），名字取限定名（如 `inkscape:label`）；文本与 CDATA 节点拼成字符数据；注释、处理指令丢弃；同时记下每个元素作用域内的 `xmlns:*` 前缀声明（供 F7 补声明使用）。
 3. 返回根 `XmlElement`。此后 `SvgImporter` 只操作 `XmlElement`，补 id、查 `ShapeFactory`、产生警告等逻辑都与库无关。
 
 **序列化不使用该库**：`SvgSerializer` 仍然手写字符串拼接。约定补充 F18 规定了属性顺序、2 空格缩进、自闭合空容器和统一的数字格式（V3），用库的 `XMLSerializer` 反而难以精确控制这些细节；写出方向的 XML 只需要做转义，不需要库。
 
-**依赖变更（实现阶段执行，本轮只改文档、不执行 `npm install`）**：在 `package.json` 的 `dependencies`（运行时依赖，不是 devDependencies）加入 `@xmldom/xmldom`，版本取安装时的最新稳定版，并由 `package-lock.json` 锁定。该库自带 TypeScript 类型声明，不需要额外的 `@types` 包。换库时只需重写 `XmlDomAdapter` 一个类。
+**依赖变更（已执行）**：`package.json` 的 `dependencies`（运行时依赖，不是 devDependencies）加入 `@xmldom/xmldom`，安装时的最新稳定版为 0.9.12（`^0.9.12`），由 `package-lock.json` 锁定。该库自带 TypeScript 类型声明，不需要额外的 `@types` 包。换库时只需重写 `XmlDomAdapter` 一个类。
 
 #### 2.9 类图（图形层次 + 命令层次）
 
@@ -679,7 +679,7 @@ UngroupCommand ..> Group : canUngroup()
 | D2 | `io` **可以依赖** `model`；**禁止依赖** `commands`、`view`、`app`、`cli` | 序列化只需要知道模型；不依赖命令层，换掉命令层不影响文件格式 |
 | D3 | `view` **可以依赖** `model`；**禁止依赖** `io`、`commands`、`app`、`cli` | 排版是纯函数式的"模型 → 文本"，不应关心命令或文件 |
 | D4 | `commands` **可以依赖** `model`、`view`、`io`；**禁止依赖** `app`、`cli` | 命令是用例，组合领域、排版与 IO；但不能反向知道谁在调用它（Invoker），否则无法被别的通道复用 |
-| D5 | `commands` 对 `io` 只能依赖 `FileSystem` **接口**、`SvgSerializer`、`SvgImporter`；**禁止依赖** `NodeFileSystem` | 命令可以在测试中注入内存文件系统；具体实现只由装配层选择 |
+| D5 | `commands` 对 `io` 只能依赖 `FileSystem` **接口**、`SvgSerializer`、`SvgImporter`；**禁止依赖** `NodeFileSystem`，也不依赖 `XmlDomAdapter` / `XmlElement` 等内部类（读文件、解析、建模型由 `SvgImporter.read(fs, path)` 一并完成，见 2.8） | 命令可以在测试中注入内存文件系统；具体实现只由装配层选择；XML 库的细节不越过 io 边界 |
 | D6 | `app` **可以依赖** `commands`、`model`、`io`；**禁止依赖** `cli`、`view` | `app` 是装配层与 Invoker，需要 `NodeFileSystem` 来装配、需要 `SvgDocument` 类型来持有会话；排版由命令完成，`app` 不直接用 `view` |
 | D7 | `cli` **只可以依赖** `app` | 终端层越薄越好；换成别的前端（测试驱动、agent）时只替换 `cli` |
 | D8 | 模块间依赖必须无环（上面各条已构成 DAG：`cli → app → commands → {view, io} → model`） | 有环就无法分层测试，也说明职责划分有误 |
@@ -709,8 +709,8 @@ UngroupCommand ..> Group : canUngroup()
    - 断言 P4：任何类文件都不得在运行时 `import` 自己的子类（README 要求的 `Shape`、`LeafShape` 是其特例，`import type` 不算）；`Shape` 的子类文件不得 `import ShapeFactory`；
    - 断言 P5：除 `cli/main.ts` 外，每个文件恰好一条 `export`，且是名字与文件名一致的具名 `class` / `interface`（因此也排除了导出的自由函数，覆盖 P6 的一半）；`export default …` 与 `export { X as default }` 一律报错；
    - 断言 P8：`model/ChildList.ts` 以外不出现 `.attachTo(` / `.detach(`；
-   - 尚无代码的目录（`commands/`、`io/`、`app/`、`view/`）没有文件可查，规则自然通过；
-   - 每条规则写成"源文件集合 → 违规列表"的函数，测试文件后半部分用合成的违规源码逐条验证规则确实能报错；此外实现时对每条规则都在 `src/` 下临时放置违规文件跑过一遍，确认只有对应规则失败；
+   - 尚无代码的目录（编写本节时为 `commands/`、`app/`、`view/`）没有文件可查，规则自然通过——这意味着规则在该目录出现代码之前并没有真正起作用，见「过程记录」第 5 条；
+   - 每条规则写成"源文件集合 → 违规列表"的函数，测试文件后半部分用合成的违规源码逐条验证规则确实能报错；此外实现时对每条规则都在 `src/` 下临时放置违规文件跑过一遍，确认只有对应规则失败（io 实现时在 `SvgImporter.ts` 临时加入 `@xmldom/xmldom`、`node:fs`、`../commands/` 三条 import，D2 与 P1 均报错）；
    - 违规即测试失败，`npm test` 会直接暴露"待处理项"。
 2. **TypeScript 严格模式**（`npm run typecheck`，已有 `strict`、`noImplicitOverride` 等）：保证覆写关系与空值检查。
 3. **失败原子性测试**：对 §4.2 每一种错误场景，执行前后各序列化一次文档并比较，同时检查 undo 栈深度不变。
@@ -830,19 +830,19 @@ UngroupCommand ..> Group : canUngroup()
 | F3 | `init` / `canvas` 回显 | `init` → `canvas 800x600 created`（§6）；`canvas` 无参 → `canvas 800x600`；带参 → `canvas resized to 1024x768` | 后两者规格未给出，按 §2 成功反馈风格补充 |
 | F4 | 有未保存修改时 `init` / `read` | 直接替换，不提示、不跟踪"脏"状态 | 规格未要求；CLI 没有确认对话机制 |
 | F5 | `save` 无参数且文档来自 `init`（没有读入路径） | 报 `error: no file path. use 'save <file.svg>'`；`save x.svg` 成功后，x.svg 成为之后无参 `save` 的默认路径 | §3 只说明从 `read` 读入时的情况；补充"另存为后路径跟随"的常见行为 |
-| F6 | 读入不支持的元素（`<path>`、`<polygon>`、`<defs>`、`<title>`、`<use>` 等） | 连同其子树跳过，输出 `warning: skipped unsupported element <path>`；保存时不再写出（**会丢失数据**） | 本阶段只有六种类型，"读入失败"会导致绝大多数真实 SVG 都无法打开；用警告明确告知数据丢失。透传保存需要"不可编辑节点"概念，留到 4.7 |
-| F7 | 已支持元素上的白名单外属性（`transform`、`text-anchor`、`font-size`、`style`、`opacity`、`data-*` 等） | 原样保留（`ExtraAttributes`），保存时按原顺序写回，`show` 中列出，不能 `set` | round-trip 不丢信息；§0.1 示例就包含这类属性 |
+| F6 | 读入不支持的元素（`<path>`、`<polygon>`、`<defs>`、`<title>`、`<use>` 等） | 连同其子树跳过，输出 `warning: skipped unsupported element <path>`（被跳过子树内部的元素不再各自报警告）；保存时不再写出（**会丢失数据**）。**不带文本内容的叶子图形**下的子元素（如 `<rect><title>…</title></rect>`）同样按本条跳过并警告；`<text>` 下的子元素按 F15 拍平 | 本阶段只有六种类型，"读入失败"会导致绝大多数真实 SVG 都无法打开；用警告明确告知数据丢失。透传保存需要"不可编辑节点"概念，留到 4.7。叶子图形没有子节点列表，其子元素只能丢弃，与不支持的元素同样处理 |
+| F7 | 已支持元素上的白名单外属性（`transform`、`text-anchor`、`font-size`、`style`、`opacity`、`data-*`、`inkscape:label` 等） | 原样保留（`ExtraAttributes`），保存时按原顺序写回，`show` 中列出，不能 `set`。带前缀的透传属性（如 `inkscape:label`），若前缀只声明在根 `<svg>` 或被跳过的祖先上，读入时把作用域内的 `xmlns:前缀` 声明作为透传属性补到该图形上（插在第一次使用之前；元素自己已声明则不补；`xml:` 是预定义前缀，不补） | round-trip 不丢信息；§0.1 示例就包含这类属性。根元素的属性不保留（F11），不补声明的话，保存出的 `inkscape:label` 前缀未绑定，再次 `read` 会报 `cannot parse file`（Inkscape 导出的文件普遍如此）。代价是嵌套时可能出现重复声明，文件仍然合法 |
 | F8 | `<g transform>` 与 move / scale 的关系 | `move` / `scale` 一律修改**局部坐标**（容器递归到子孙），不读取、不改写 `transform`；tree / show 显示的是局部坐标 | 理解 transform 需要矩阵运算；§3 "作用于容器时递归到每个子孙"本身就是改子孙坐标的语义 |
-| F9 | 读入时根元素不是 `<svg>`，或 XML 格式错误 | `error: cannot parse file: <path>`，原文档与历史不变 | §4.2 只定义了"不存在 / 不可写"两种消息，按同一风格补充 |
-| F10 | 读入的画布尺寸 | 取 `width` / `height`（允许 `px` 后缀）；缺失时取 `viewBox` 的宽高；都缺失时用 800×600 并警告 `warning: missing canvas size, using 800x600`；`%`、`mm` 等单位报 `cannot parse file` | 本编辑器坐标系就是 px（§2） |
-| F11 | `viewBox` | 保存时总是写 `viewBox="0 0 w h"`，与 width/height 一致；读入的不同 viewBox 不保留 | 模型只有一套 px 坐标系；`canvas` 改尺寸后 viewBox 应随之变化 |
-| F12 | 读入时几何属性缺失或非法 | 缺失按 SVG 默认值 0；非数字或尺寸为负报 `cannot parse file: <path>`（附 `invalid value width="50%" on <rect>`） | 缺失是合法 SVG，非法值说明文件不在支持范围内 |
-| F13 | 自动补 id 的序号规则 | 先收集文件中所有显式 id；再按文档序给缺 id 的元素分配 `标签名+n`，n 从 1 起，跳过已被占用的名字；每个分配产生一条警告，按文档序输出在汇总行之前 | §2 只给出格式；先收集可以避免分配的 id 与后面的显式 id 冲突 |
+| F9 | 读入时根元素不是 `<svg>`，或 XML 格式错误（未闭合标签、多个根、重复属性、未定义实体、根元素之后有多余内容、空文件……） | `error: cannot parse file: <path>`（不附细节），原文档与历史不变；文件开头的 UTF-8 BOM 先去掉再解析，不算格式错误；XML 库只报 warning 级别的问题（如没加引号的属性值）时照常接受；根元素按 localName 判断，`<s:svg xmlns:s=…>` 也接受 | §4.2 只定义了"不存在 / 不可写"两种消息，按同一风格补充。库给出的错误描述面向 XML 专家，对用户意义不大。BOM 是 Windows 工具常见的输出，`readFileSync` 不会去掉它 |
+| F10 | 读入的画布尺寸 | 取 `width` / `height`（允许 `px` 后缀与首尾空白）；**缺哪一维就从 `viewBox`（4 个数，空白或逗号分隔）取哪一维**；补完后仍缺任意一维时，整体用 800×600 并警告 `warning: missing canvas size, using 800x600`；`%`、`mm` 等单位或非法 viewBox 报 `cannot parse file: <path> (invalid value width="50%" on <svg>)`；尺寸为 0 或负数报 `cannot parse file: <path> (canvas size must be positive)` | 本编辑器坐标系就是 px（§2）；只缺一维时拿另一维的默认值拼出的尺寸没有意义，所以整体回退并警告。细节格式与 F12 相同 |
+| F11 | `viewBox` 与根元素的其他属性 | 保存时总是写 `viewBox="0 0 w h"`，与 width/height 一致；读入的不同 viewBox 不保留；根 `<svg>` 上 `width` / `height` / `viewBox` 之外的属性（`version`、`style`、`xmlns:*` 等）读入时丢弃，不警告 | 模型只有一套 px 坐标系；`canvas` 改尺寸后 viewBox 应随之变化。`SvgDocument` 没有透传属性，保留根属性需要改 model；`xmlns` 每个文件都有，警告会成为噪声；带前缀属性的声明由 F7 补救 |
+| F12 | 读入时几何属性或样式属性缺失或非法 | 缺失按 SVG 默认值 0（样式为未设置）；非数字、非有限数、尺寸为负、`stroke-width` 为负、`fill=""` 报 `cannot parse file: <path> (invalid value width="50%" on <rect>)`，括号内给出第一个出错的属性及其原值 | 缺失是合法 SVG，非法值说明文件不在支持范围内；指出出错的属性便于用户定位 |
+| F13 | 自动补 id 的序号规则 | 先收集文件中所有显式 id（**包括被 F6 跳过的元素上的 id**；根 `<svg>` 自己的 id 不算）；再按文档序给缺 id（或 id 为空串）的元素分配 `标签名+n`，n 取从 1 起第一个未被占用的值；每个分配产生一条警告，与其他读入警告一起按文档序输出在汇总行之前 | §2 只给出格式；先收集可以避免分配的 id 与后面的显式 id 冲突。被跳过元素的 id 只影响编号，不会让后面同名的图形被当成重复（F14 只在被导入的元素之间判断） |
 | F14 | 文件内 id 重复 | 第一个保留，后续重复者按 F13 规则重新分配，并警告 `warning: duplicate id r1, reassigned to rect2` | §2 要求唯一；与"自动补 id 并警告"同一处理思路，不因可修复的问题拒绝整个文件 |
-| F15 | 读入 `<text>` 的内容 | 取全部字符数据拼接后去除首尾空白；内部子元素（如 `<tspan>`）被拍平，并警告 `warning: flattened <tspan> in text#t1` | 模型的 text 只有单一内容 |
-| F16 | 读入的 id 字符集 | 读入的 id 不做字符集校验（非空即可）；CLI 新建的 id 必须匹配 `^[A-Za-z_][A-Za-z0-9_.:-]*$`，否则 `error: invalid id: <id>` | 读入要宽容；新建时保证写出的 SVG 合法（XML id 不能以数字开头） |
+| F15 | 读入 `<text>` 的内容 | 取全部字符数据（文本与 CDATA，含子孙元素中的，按文档序）拼接后去除首尾 XML 空白（空格、制表、回车、换行；不含 U+00A0）；内部子元素（如 `<tspan>`）被拍平，每个直接子元素一条警告 `warning: flattened <tspan> in text#t1`。**已知限制**：保存时内容原样写出，首尾空白会在 save → read 后丢失（`"  a  "` 读回为 `"a"`，有专门测试） | 模型的 text 只有单一内容；去除首尾空白是为了兼容其他工具导出的多行格式，SVG 渲染默认也会合并首尾空白 |
+| F16 | 读入的 id 字符集 | 读入的 id 不做字符集校验（非空即可，空串按缺 id 处理）；CLI 新建的 id 必须匹配 `^[A-Za-z_][A-Za-z0-9_.:-]*$`，否则 `error: invalid id: <id>` | 读入要宽容；新建时保证写出的 SVG 合法（XML id 不能以数字开头） |
 | F17 | 元素计数口径（`saved to … (N elements)`） | 统计根 `<svg>` 之外的全部图形元素，包含 `<g>`；被跳过的不支持元素不计 | 与 §6 的 5、7、8 三个数字逐一核对一致 |
-| F18 | 保存格式 | XML 声明 + 2 空格缩进；属性顺序：`id` → 几何属性（按类型属性表顺序）→ `fill` / `stroke` / `stroke-width` → 透传属性；空容器写成自闭合 `<g id="x"/>`；属性值与文本做 XML 转义（`& < > "`） | 与 §0.1 示例格式一致；固定顺序便于比对 |
+| F18 | 保存格式 | XML 声明 + 2 空格缩进；属性顺序：`id` → 几何属性（按类型属性表顺序）→ `fill` / `stroke` / `stroke-width` → 透传属性；**没有子元素、也没有非空文本的元素一律自闭合**：空容器 `<g id="x"/>`、空文档 `<svg …/>`、内容为空串的 `<text id="t" x="1" y="2"/>`（读回仍是空串）；属性值与文本做 XML 转义（`& < > "`）；文件以换行结尾；注释不保留 | 与 §0.1 示例格式一致；固定顺序便于比对；一条统一规则比为每种元素单独规定更简单 |
 | F19 | 保存路径 | 相对路径基于进程当前目录；已存在则覆盖不提示；父目录不存在或无权限 → `cannot write file` | 规格未定义；最小惊讶 |
 | F20 | `read` 失败时的警告 | 不输出任何警告，只输出一行 error | §2 "命令失败不改变任何状态"，警告也属于副作用 |
 | F21 | 保存空文档 | 允许，`saved to a.svg (0 elements)` | 没有理由拒绝 |
@@ -914,11 +914,59 @@ UngroupCommand ..> Group : canUngroup()
 
 ## 过程记录
 
-详见 [process-log.md](process-log.md)。
+下面挑出最有代表性的六件事；完整的逐条记录详见 [process-log.md](process-log.md)。
+
+**1. 方案自相矛盾：R10 的报错顺序与时序图相反。** AI 给出的 v1 方案在约定补充 R10 中规定"无文档"要先于"参数语法"报错，但 §2.1 的时序图里参数在 `parse` 阶段就校验，而"是否已有文档"放在命令实例的模板方法里、`run` 阶段才检查。我没有直接相信文字描述，而是拿 `move c1 abc 0` 在无文档时推演了一遍：按时序图会先报 `invalid number: abc`，与 R10 要求的 `no document` 不符。`parse` 之前还没有命令实例，所以这个判断不能放在实例方法里。v2 把 `requiresDocument` 移到 `CommandType` 的类静态侧，由 `Editor` 在调用 `parse` 之前检查，并新增 `CommandLine`，同步修改了时序图、§2.6、类图与 R10。
+
+**2. 不合理的约束导致的错误方向：自写 XML 解析器。** 我最初给出"不新增依赖"的约束，AI 于是在 v1 中计划自写 `XmlParser`，处理实体、CDATA、DOCTYPE 等。评估 io 的工作量时我意识到，这些边界情况既容易写错，又不是本作业的考察点，问题的根源是我自己给的约束。v2 改用 `@xmldom/xmldom`，在 io 内用 Adapter（§2.8）隔离，并在 P1 中规定只有适配器可以 import 它。到实现阶段这条决定又被验证了一次：AI 实测发现，不装 `onError` 回调时库会往 `console` 打印并静默接受坏文件。这一点写进了 §2.8，也有测试守护。
+
+**3. 模型没有守住自己的结构不变式。** model 层的初版代码功能测试全部通过，但我审查 `ChildList` 和 `Group` 时怀疑两处：`Group` 能不能插进自己的子孙？public 的 `detach()` 能不能绕过 `ChildList`？我写临时测试复现，三种情况都被接受了：把容器插进自己、插进自己的子孙（之后 `allShapes()` 会无限递归）、直接调用 `detach()`（父指针与子节点列表从此不一致）。纠正方法是给 `Group.insertAt` 加环检测（程序错误，抛普通 `Error`），并新增规则 P8：只有 `ChildList` 能调用 `attachTo` / `detach`，由架构测试检查（v3 ⑤⑥）。
+
+**4. 代码绕过了规则，规则的检查也没发现。** AI 实现 `StyleAttributes` 时用了"属性名 → 校验函数"的 `Map` 加 `typeof` 判断，这本质上是按名字分派，违反 P2，而且与几何属性"属性对象自带行为"的设计不一致。架构测试当时只检查 `Map<string, ShapeType | CommandType>`，所以测试是绿的。我是在代码审查中对照 P2 和 §2.4 发现的。纠正分两步：先把代码重构为 `StyleProperty` 类层次；再加强 P2 检查，值为函数的 `Map` / `Record` 也算违规，并在测试注释中列明正则仍查不到的写法（v3 ②⑦）。
+
+**5. 测试本身的漏洞：全绿不等于有效。** AI 为架构测试写了 27 个合成违规用例，全部能报错。我没有就此相信，而是另外写了 6 种它没想到的写法独立验证，结果只有 `export default class Bad {}` 没被发现：默认导出可以绕过"文件名 = 类名"。修正后 P5 拒绝一切 default 导出，并补了合成用例（v3 ⑨）。同类问题后来又出现一次：负责 view 的 agent 实现时发现，D3 在 `view/` 目录为空时"没东西可查所以通过"，规则其实从未起作用。修正方法是追加"view 文件必须被扫描到"的断言。从此，"规则能报错"和"规则真的检查到了目标文件"分开验证。
+
+**6. 只测规格里的样例是不够的：两个往返 bug。** 规格 §6 与 §0.1 的样例全部通过之后又暴露了两个问题。一个是 AI 自测往返时发现的：前缀只声明在根元素上的 `inkscape:label`，save 之后再 read 会报 `cannot parse file`，因为根元素的属性没有保留，前缀成了未绑定。AI 先写临时脚本复现，再把作用域内的 `xmlns:*` 声明补到使用它的图形上（F7）。另一个是我发现的：我另外喂了 6 种测试里没有的文件，只有带 UTF-8 BOM 的文件读入失败，原因是 `readFileSync` 不会去掉 BOM。纠正方法是解析前去掉开头的 `\uFEFF`，并补回归测试：先在没有修复的代码上确认测试失败，再恢复修复。
 
 ## 一致性自查
 
 ## 质量保证手段
+
+> 测试数量等具体数字标为 TODO，全部模块完成后统一填写。
+
+**1. 单元测试分层**（vitest，`npm test`）
+
+| 层 | 位置 | 覆盖内容 |
+|---|---|---|
+| 领域模型 | `tests/unit/model/` | 值对象（`CanvasSize`、`NumberFormat`、`IdSyntax`）、属性与角色（`GeometryAttribute`、`CoordinateRole`、`StyleProperty` / `StyleAttributes`、`ExtraAttributes`）、图形与容器（`LeafShape`、`Group`、`ChildList`、`SvgDocument`）、快照（`ShapeMemento`、`TreePosition`）、`ShapeFactory`；`ShapeFactory.test.ts` 还保证每种类型的 create 参数与几何属性表一致（§2.4） |
+| io | `tests/unit/io/` | 序列化、XML 适配器、id 分配、导入、`NodeFileSystem`（在临时目录里真实读写）；命令与导入测试使用内存版 `FileSystem`（`tests/unit/io/MemoryFileSystem.ts`，只放在 `tests/` 下） |
+| view / commands / app | TODO | TODO（各模块完成后补充），包括 §3.3 第 3 条的失败原子性测试 |
+| 会话（端到端） | `tests/transcripts/` | 把规格 §6、§6.1 的完整会话逐行喂给 `Editor.executeLine`，逐行比对输出；数据文件的格式与相对规格原文的改动见 `tests/transcripts/README.md`；运行器 TODO |
+| 架构 | `tests/unit/architecture.test.ts` | 见下文第 3 条 |
+
+当前规模：TODO 个测试文件、TODO 条测试；`npm run typecheck`（strict、`noUncheckedIndexedAccess`、`noImplicitOverride`）无错误。
+
+**2. 严格相等的快照测试。** 凡是规格给出了文本的地方，期望值都从规格原文复制，用 `toBe` / `toEqual` 整体比较，不用 `toContain` 或正则做部分匹配，也不用 vitest 的 `toMatchSnapshot`：自动生成的快照会把"当前输出"当成正确答案，等于没有测试。例如：
+- 用 model 搭出 §0.1 第一个示例，序列化结果与规格中的 XML 逐字节相同，包括 XML 声明、缩进、属性顺序和末尾换行；
+- 读入 §6 的 `other.svg` 后，7 个图形的 `label` / `summary()` 与 §6 那棵树逐字一致；
+- 错误断言用辅助函数 `errorOf` 同时检查两件事：错误类型是 `EditorError`，消息与 §4.2 / 约定补充完全一致。
+
+**3. 架构测试与"故意违规"验证。** `architecture.test.ts` 扫描 `src/`，逐条断言 §3 的 D1–D8、P1–P5、P8（方法见 §3.3）。一条规则通过，有两种可能：代码合规，或者规则根本没查到问题。为排除后者，规则的有效性分三层验证：
+- 测试文件后半部分为每条规则准备合成的违规源码（TODO 个），断言规则能报错；
+- 实现时在 `src/` 下临时放置违规文件，确认只有对应规则失败。例如 io 完成后，在 `SvgImporter.ts` 临时加入 `@xmldom/xmldom`、`node:fs`、`../commands/` 三条 import，D2 与 P1 均报错，之后恢复；
+- 审查者另写 AI 没想到的违规写法独立验证，由此发现了 `export default` 能绕过 P5 的漏洞（「过程记录」第 5 条）。此外还断言目标目录的文件确实被扫描到，避免空目录让规则空转。
+
+**4. 往返测试。** 读入 → 写出 → 再读入，比较两次得到的结构树与全部属性（标签、`svgAttributes()`、文本内容），并断言第二次写出的文件与第一次逐字节相同、第二次读入没有警告。测试数据覆盖：
+- 全部六种类型、嵌套容器、空容器；
+- 样式属性与透传属性，包括带命名空间前缀的属性；
+- 需要转义的字符、中文、小数、科学计数法；
+- §6 与 §0.1 的两份原文。
+
+已知限制同样写成测试：F15 规定读入时去除首尾空白，所以测试明确断言 `"  a  "` 保存后读回为 `"a"`；往返测试的数据不带首尾空白。
+
+**5. console 静默断言。** P1 规定只有 `cli/` 能写 `console`。XML 库默认会往 `console` 打印，而这类输出既不在 `Editor` 的返回值里，也不会让测试失败。因此在 F9 的每种解析失败场景下，都 spy 了 `console.log/info/warn/error/debug/trace`，断言一次都没有被调用。这条断言确实有效：实测不装 `onError` 回调时，库会调用两次 `console.error`。
+
+**6. 其他。** 发现的 bug 都先复现（临时测试或脚本）再修复，修复后补回归测试，如 BOM、命名空间前缀、`-1e-9` 显示为 `0`、树成环；其中 BOM 的回归测试在未修复的代码上确认过会失败。每完成一个模块都人工抽查依赖，结果写入「一致性自查」（TODO）。
 
 ## 修订记录
 
@@ -927,3 +975,4 @@ UngroupCommand ..> Group : canUngroup()
 | v1 | 2026-10-25 | 初稿：架构方案（模块划分、设计模式、依赖方向规则、变化点假设）与约定补充 | 依据 `doc/spec/phase_cli_1.md` 完成本阶段架构设计 |
 | v2 | 2026-10-25 | ① `requiresDocument` 从命令实例的模板方法移到 `CommandType` 静态侧，由 `Editor` 在 `parse` 之前检查，新增 `CommandLine`，同步修改时序图、§2.6、类图与 R10；② 注释、空行统一由 `Editor` 处理，`cli` 不做任何解析；③ 放弃自写 `XmlParser`，改用 `@xmldom/xmldom`，新增 `XmlDomAdapter`（Adapter 模式，新增 §2.8，原 §2.8/§2.9 顺延为 §2.9/§2.10），P1 与架构测试限定只有适配器可以 import 该库，序列化仍手写；④ 预留 `Group.canUngroup()` 钩子，由 `UngroupCommand` 调用 | 审查意见：① R10 与时序图的检查顺序矛盾；② cli 职责与 §1.2、§4.6 的描述矛盾；③ 手写 XML 解析器的边界情况多，不是考察点；④ 钩子成本几乎为零，提前预留比日后修改 `UngroupCommand` 更划算 |
 | v3 | 2026-10-25 | 同步 `src/model/` 实现中确认的偏差：① `CoordinateRole.validate(v)` 改为 `validate(name, v)`，报错用 `String(value)` 显示原值（§2.4、类图）；② 新增 `StyleProperty`（抽象）、`ColorProperty`、`StrokeWidthProperty`，`StyleAttributes` 改为持有属性对象数组（§1.2、类图）；③ `Shape.moveDescription()` 改为 `moveDescription(dx, dy)`，叶子返回 `to (x,y)`、容器返回 `by (dx,dy)`（类图）；④ 类图类型写准确：`svgAttributes(): Array<[string, string]>`、`asContainer(): Group \| null`、`findById(): Shape \| null`，并补充 `parentContainer / attachTo / detach / geometryEntries / styleEntries / extraEntries / textContent / allShapes`；⑤ `Group.insertAt` 拒绝插入自身或祖先（程序错误，抛普通 `Error`），`ChildList` 的误用同样是程序错误（§1.2、§2.3）；⑥ 新增规则 P8：`attachTo / detach` 只由 `ChildList` 调用；⑦ P2 扩展到值类型为函数的 `Map`；§3.3 按实际的架构测试改写（P3 增加类型名比较，P4 推广到任何类，D8 做环检测，列明正则查不到的写法）；⑧ §2.4 不再说属性表生成 `ParamSpec`：create 参数由各类在静态侧单独声明，由 `ShapeFactory.test.ts` 保证与几何属性表一致（§1.2、§2.4）；⑨ P5 明确禁止 `export default`（§3.2、§3.3） | ①–④ 实现时发现原签名无法产生规格要求的报错/回显文案，或原设计用"名字 → 函数"表违反 P2；⑤ 审查时复现：容器 a 含 b 时把 a 插入 b 会被接受，之后 `allShapes()` 无限递归；⑥ `attachTo / detach` 只能是 `public`，需要用规则约束调用方；⑦ 阶段 A 的 `Map<string, StyleRule>` 写法原 P2 检查发现不了；⑧ 参数表需要属性表没有的信息（显示名 `<w>` ≠ 属性名 `width`、可选的 fill/stroke、text 内容、`g` 没有几何属性），从属性表生成会让几何属性承担 CLI 语法职责，改为单独声明 + 测试保证一致；⑨ 审查时复现：`export default class Bad {}` 未被架构测试发现 |
+| v4 | 2026-10-25 | 同步 `src/io/` 实现中确认的偏差：① F18 的自闭合推广为"没有子元素、也没有非空文本的元素一律自闭合"（空 `<svg/>`、空内容 `<text/>`）；② `FileSystem` 明确为同步接口（§1.2）；③ F15 增加已知限制：text 内容的首尾空白在 save → read 后丢失；④ §2.8 协作流程改为 `ReadCommand` 只调用 `SvgImporter.read(fs, path)`，由它编排读文件、去 BOM、解析、建模型，D5 写明 commands 不接触适配器（§1.2、§2.8、§3.1）；⑤ 适配器在 `parseFromString` 外层捕获库的 `ParseError` 并转成 `EditorError("malformed XML: …")`，`SvgImporter` 再换成 `cannot parse file: <path>`（§2.8、F9）；⑥ F12 的细节格式定为 `cannot parse file: <path> (invalid value width="50%" on <rect>)`，F10 的非法单位 / viewBox / 非正尺寸沿用该格式；⑦ F10 细化：允许 `px` 后缀与首尾空白、按缺失的维度从 viewBox 补、补完仍缺则整体用 800×600；⑧ F13 收集显式 id 时包括被跳过元素上的 id，根元素的 id 不算，空 id 按缺失处理（F16）；⑨ F6 扩展到不带文本内容的叶子图形的子元素，F15 每个直接子元素一条 flattened 警告；⑩ F11 写明根 `<svg>` 的其他属性丢弃且不警告；⑪ F7 新增：带前缀的透传属性补上作用域内的 `xmlns:*` 声明；⑫ §2.8 依赖变更已执行（`@xmldom/xmldom@^0.9.12`），§2.5 写明导入时属性的三分法；⑬ 起草「过程记录」「质量保证手段」两节（具体数字待填） | ①②③ 实现阶段 A / B 时确认的取舍（③ 是有意保留的限制：读入时去除首尾空白以兼容其他工具导出的多行格式）；④ 原流程违反 D5；⑤ 实测 xmldom 0.9 会把 `onError` 中抛出的异常包成 `ParseError`，不装回调时会写 `console` 并静默接受坏文件；⑥–⑩ 规格与 v3 未定义的细节；⑪ 往返自测发现 Inkscape 风格的文件 save 后无法再 read；BOM 处理来自审查者另喂文件时发现的 bug |
