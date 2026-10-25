@@ -118,8 +118,30 @@ describe("CommandParser", () => {
 });
 
 describe("CommandRegistry", () => {
-  it("lists the types in registration order", () => {
-    expect(registry().commandTypes().map((t) => t.commandName)).toEqual(["echo", "start", "back-stub"]);
+  it("registers the edit commands of §3 and lists added types after them, in registration order", () => {
+    expect(registry().commandTypes().map((t) => t.commandName)).toEqual([
+      "create",
+      "delete",
+      "move",
+      "scale",
+      "set",
+      "group",
+      "ungroup",
+      "addto",
+      "front",
+      "back",
+      "echo",
+      "start",
+      "back-stub",
+    ]);
+  });
+
+  it("every registered edit command belongs to the edit category and needs a document", () => {
+    for (const type of new CommandRegistry().commandTypes()) {
+      expect(type.category).toBe(CommandCategory.EDIT);
+      expect(type.requiresDocument).toBe(true);
+      expect(type.usage.startsWith(`${type.commandName} `)).toBe(true);
+    }
   });
 
   it("rejects a second registration of the same name", () => {

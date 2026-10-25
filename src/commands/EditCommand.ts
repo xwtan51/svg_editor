@@ -1,3 +1,7 @@
+import { EditorError } from "../model/EditorError.js";
+import type { Group } from "../model/Group.js";
+import { IdSyntax } from "../model/IdSyntax.js";
+import type { Shape } from "../model/Shape.js";
 import type { SvgDocument } from "../model/SvgDocument.js";
 import { Command } from "./Command.js";
 import { CommandCategory } from "./CommandCategory.js";
@@ -15,7 +19,8 @@ import type { History } from "./History.js";
  * `redo` simply applies again: when a command is redone the document is in
  * exactly the state it was in before the first run (undo restores exactly and
  * the redo stack is cleared by any new edit), so what `prepare` recorded is
- * still valid.
+ * still valid. Subclass fields assigned in `prepare` (declared with `!`) are
+ * therefore always set when `apply`, `undo` and `describe` run.
  */
 export abstract class EditCommand extends Command {
   static readonly category: CommandCategory = CommandCategory.EDIT;
@@ -56,6 +61,36 @@ export abstract class EditCommand extends Command {
   /** Warning messages (without prefix) printed before the echo; none by default. */
   protected warnings(): string[] {
     return [];
+  }
+
+  /** The shape with this id; `no such shape: <id>` otherwise (§4.2). */
+  protected findShape(document: SvgDocument, id: string): Shape {
+    const shape = document.findById(id);
+    if (shape === null) {
+      throw new EditorError(`no such shape: ${id}`);
+    }
+    return shape;
+  }
+
+  /** The container with this id; `no such container` / `not a container` otherwise (§4.2, E24). */
+  protected findContainer(document: SvgDocument, id: string): Group {
+    const shape = document.findById(id);
+    if (shape === null) {
+      throw new EditorError(`no such container: ${id}`);
+    }
+    const container = shape.asContainer();
+    if (container === null) {
+      throw new EditorError(`not a container: ${id}`);
+    }
+    return container;
+  }
+
+  /** An id typed for a new shape: `invalid id` (F16), then `id already exists` (§4.2), as in R10. */
+  protected checkNewId(document: SvgDocument, id: string): void {
+    IdSyntax.validate(id);
+    if (document.findById(id) !== null) {
+      throw new EditorError(`id already exists: ${id}`);
+    }
   }
 
   private result(): CommandResult {
