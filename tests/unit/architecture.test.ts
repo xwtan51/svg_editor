@@ -694,3 +694,52 @@ describe("architecture rules detect synthetic violations", () => {
     expect(parentPointerViolations([file("model/Shape.ts", "attachTo(container: ShapeContainer): void {}")])).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------- view does not modify the model (appended with src/view/)
+
+/**
+ * README §1.1: view lays the model out as text and does not modify it. Checked
+ * as "no call of a mutating model method in view/". NOT detected: the same
+ * gaps as parentPointerViolations, and mutating methods added to the model
+ * later without being listed here.
+ */
+const MUTATING_MODEL_METHODS = [
+  "moveBy",
+  "scaleBy",
+  "setAttribute",
+  "addExtraAttribute",
+  "restore",
+  "insertAt",
+  "remove",
+  "resize",
+  "attachTo",
+  "detach",
+];
+
+function viewMutationViolations(files: SourceFile[]): string[] {
+  const call = new RegExp(String.raw`\.\s*(${MUTATING_MODEL_METHODS.join("|")})\s*\(`, "g");
+  return files
+    .filter((file) => file.module === "view")
+    .flatMap((file) => [...file.bare.matchAll(call)].map((m) => `${file.path} calls .${m[1]}(`));
+}
+
+describe("view (README §1.1, §3.1 D3) applied to src/", () => {
+  it("view/ is scanned, so D3 is not satisfied vacuously", () => {
+    const paths = sources.map((file) => file.path);
+    expect(paths).toContain("view/TreeRenderer.ts");
+    expect(paths).toContain("view/ShapeDetailRenderer.ts");
+  });
+
+  it("view calls no mutating model method", () => {
+    expect(viewMutationViolations(sources)).toEqual([]);
+  });
+
+  it("the rule detects synthetic violations and ignores other modules", () => {
+    expect(viewMutationViolations([file("view/Bad.ts", "shape.moveBy(1, 2); doc.insertAt(s, 0);")])).toEqual([
+      "view/Bad.ts calls .moveBy(",
+      "view/Bad.ts calls .insertAt(",
+    ]);
+    expect(viewMutationViolations([file("view/Ok.ts", "shape.summary(); // shape.moveBy(1, 2)")])).toEqual([]);
+    expect(viewMutationViolations([file("commands/X.ts", "shape.moveBy(1, 2);")])).toEqual([]);
+  });
+});
