@@ -8,3 +8,4 @@
    | 2026-10-25 | 负数尺寸的报错文案把 -1e-9 显示为 0（"invalid value for width: 0"） | 审查 Extent.validate 时想到小负数会被格式化成 -0，写临时测试复现 | 报错改用原值 String(value)，补回归测试 |
    | 2026-10-25 | StyleAttributes 用"属性名 → 校验函数"的 Map 加 typeof 判断类型，违反 P2，且与几何属性的设计不一致；架构测试的 P2 检查覆盖不到 | 代码审查，对照 README P2 和 §2.4 | 重构为 StyleProperty 类层次；阶段 C 考虑加强 P2 检查 |
    | 2026-10-25 | model 层没有防止结构出错：Group 可以插进自己或自己的子孙（形成环，遍历会无限递归）；public 的 detach() 能绕过 ChildList，让父节点指针和子节点列表不一致 | 审查 ChildList 和 Group 后写临时测试复现，三种情况都被接受 | Group.insertAt 加环检测；架构测试限制只有 ChildList 能调用 attachTo/detach |
+   | 2026-10-25 | 架构测试的 P5 没检查 export default，默认导出的类可以绕过"文件名 = 类名" | agent 自己的 27 个违规都通过后，我换了 6 种它没想到的写法独立验证，只有这一种没被发现 | P5 拒绝 default 导出，加合成用例 |

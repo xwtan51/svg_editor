@@ -4,8 +4,18 @@ import { EditorError } from "../../../src/model/EditorError.js";
 import { Group } from "../../../src/model/Group.js";
 import { Line } from "../../../src/model/Line.js";
 import { Rect } from "../../../src/model/Rect.js";
+import { SvgDocument } from "../../../src/model/SvgDocument.js";
 import { Text } from "../../../src/model/Text.js";
 import { build } from "./build.js";
+
+function catchError(action: () => void): unknown {
+  try {
+    action();
+  } catch (error) {
+    return error;
+  }
+  return undefined;
+}
 
 /** outer ⊃ { r, inner ⊃ { c, l } } with stroke-widths everywhere. */
 function nested() {
@@ -152,6 +162,53 @@ describe("Group as a ShapeContainer", () => {
     expect(g.remove(b)).toBe(0);
     expect(b.parentContainer()).toBeNull();
     expect(g.childList()).toEqual([a]);
+  });
+
+  it("inserting a group into itself is a programming error; nothing changes", () => {
+    const doc = new SvgDocument();
+    const a = new Group("a");
+    doc.insertAt(a, 0);
+    // a stays attached: the cycle guard must fire before the "already has a parent" check.
+    const thrown = catchError(() => a.insertAt(a, 0));
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown).not.toBeInstanceOf(EditorError);
+    expect(a.childList()).toEqual([]);
+    expect(a.parentContainer()).toBe(doc);
+    expect(doc.allShapes()).toEqual([a]);
+  });
+
+  it("inserting a detached group into itself is also rejected", () => {
+    const a = new Group("a");
+    const thrown = catchError(() => a.insertAt(a, 0));
+    expect(thrown).toBeInstanceOf(Error);
+    expect(thrown).not.toBeInstanceOf(EditorError);
+    expect(a.childList()).toEqual([]);
+    expect(a.parentContainer()).toBeNull();
+  });
+
+  it("inserting an ancestor into its descendant is a programming error; both lists unchanged", () => {
+    const doc = new SvgDocument();
+    const a = new Group("a");
+    const b = new Group("b");
+    const c = new Group("c");
+    const r = new Rect("r");
+    doc.insertAt(a, 0);
+    a.insertAt(b, 0);
+    a.insertAt(r, 1);
+    b.insertAt(c, 0);
+    // Detach a first so the cycle guard (not the parent check) is what rejects it.
+    doc.remove(a);
+    for (const target of [b, c]) {
+      const thrown = catchError(() => target.insertAt(a, 0));
+      expect(thrown).toBeInstanceOf(Error);
+      expect(thrown).not.toBeInstanceOf(EditorError);
+    }
+    expect(a.childList()).toEqual([b, r]);
+    expect(b.childList()).toEqual([c]);
+    expect(c.childList()).toEqual([]);
+    expect(a.parentContainer()).toBeNull();
+    doc.insertAt(a, 0);
+    expect(doc.allShapes().map((s) => s.getId())).toEqual(["a", "b", "c", "r"]);
   });
 
   it("childList() is a copy", () => {

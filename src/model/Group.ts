@@ -1,5 +1,6 @@
 import { ChildList } from "./ChildList.js";
 import { NumberFormat } from "./NumberFormat.js";
+import { ParamSpec } from "./ParamSpec.js";
 import { Shape } from "./Shape.js";
 import type { ShapeContainer } from "./ShapeContainer.js";
 import type { ShapeMemento } from "./ShapeMemento.js";
@@ -11,6 +12,14 @@ import type { ShapeMemento } from "./ShapeMemento.js";
  * Open for subclassing by composite shape types (e.g. a future `box`).
  */
 export class Group extends Shape implements ShapeContainer {
+  static readonly typeName: string = "g";
+  static readonly params: readonly ParamSpec[] = [];
+
+  /** Static side of `ShapeType`; values are keyed by attribute name. */
+  static create(id: string, values: ReadonlyMap<string, string>): Group {
+    return ParamSpec.apply(new Group(id), Group.params, values);
+  }
+
   private readonly children: ChildList = new ChildList(this);
 
   constructor(id: string) {
@@ -18,7 +27,7 @@ export class Group extends Shape implements ShapeContainer {
   }
 
   tagName(): string {
-    return "g";
+    return Group.typeName;
   }
 
   moveBy(dx: number, dy: number): void {
@@ -84,7 +93,14 @@ export class Group extends Shape implements ShapeContainer {
     return this.children.indexOf(shape);
   }
 
+  /**
+   * Inserting the group into itself or into one of its descendants would make
+   * the tree cyclic; commands validate this first, so it is a programming error here.
+   */
   insertAt(shape: Shape, index: number): void {
+    if (shape === this || shape.isAncestorOf(this)) {
+      throw new Error(`cannot insert ${shape.label()} into ${this.label()}: it would contain itself`);
+    }
     this.children.insertAt(shape, index);
   }
 

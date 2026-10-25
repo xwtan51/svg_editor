@@ -1,11 +1,26 @@
 import { Extent } from "./Extent.js";
 import { GeometryAttribute } from "./GeometryAttribute.js";
 import { LeafShape } from "./LeafShape.js";
+import { ParamSpec } from "./ParamSpec.js";
 import { XCoordinate } from "./XCoordinate.js";
 import { YCoordinate } from "./YCoordinate.js";
 
 /** `<ellipse cx cy rx ry>`. */
 export class Ellipse extends LeafShape {
+  static readonly typeName: string = "ellipse";
+  static readonly params: readonly ParamSpec[] = [
+    ParamSpec.required("cx"),
+    ParamSpec.required("cy"),
+    ParamSpec.required("rx"),
+    ParamSpec.required("ry"),
+    ParamSpec.optionalAttribute("fill"),
+  ];
+
+  /** Static side of `ShapeType`; values are keyed by attribute name. */
+  static create(id: string, values: ReadonlyMap<string, string>): Ellipse {
+    return ParamSpec.apply(new Ellipse(id), Ellipse.params, values);
+  }
+
   constructor(id: string) {
     super(id, [
       new GeometryAttribute("cx", new XCoordinate()),
@@ -16,7 +31,7 @@ export class Ellipse extends LeafShape {
   }
 
   tagName(): string {
-    return "ellipse";
+    return Ellipse.typeName;
   }
 
   /** `cx=1 cy=2 rx=3 ry=4` */

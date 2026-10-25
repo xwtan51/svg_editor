@@ -1,13 +1,26 @@
 import { GeometryAttribute } from "./GeometryAttribute.js";
 import { LeafShape } from "./LeafShape.js";
+import { ParamSpec } from "./ParamSpec.js";
 import type { ShapeMemento } from "./ShapeMemento.js";
 import { XCoordinate } from "./XCoordinate.js";
 import { YCoordinate } from "./YCoordinate.js";
 
 /** `<text x y>content</text>`: besides geometry it holds the text content. */
 export class Text extends LeafShape {
-  /** The `set` attribute name for the content (§4.1). */
+  /** The `set` attribute name for the content (§4.1); declared before `params`, which uses it. */
   private static readonly CONTENT_ATTRIBUTE = "text";
+
+  static readonly typeName: string = "text";
+  static readonly params: readonly ParamSpec[] = [
+    ParamSpec.required("x"),
+    ParamSpec.required("y"),
+    ParamSpec.textContent("content", Text.CONTENT_ATTRIBUTE),
+  ];
+
+  /** Static side of `ShapeType`; values are keyed by attribute name. */
+  static create(id: string, values: ReadonlyMap<string, string>): Text {
+    return ParamSpec.apply(new Text(id), Text.params, values);
+  }
 
   private content = "";
 
@@ -16,7 +29,7 @@ export class Text extends LeafShape {
   }
 
   tagName(): string {
-    return "text";
+    return Text.typeName;
   }
 
   /** Any string is valid content, including the empty string (E3). */

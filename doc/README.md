@@ -42,20 +42,23 @@ src/
 | `LeafShape`（抽象） | 叶子图形的公共实现：持有一组 `GeometryAttribute`，据角色泛化实现平移、缩放、几何属性设置 |
 | `Rect` / `Circle` / `Ellipse` / `Line` | 具体叶子图形：声明自己的几何属性表、可选颜色参数、tree 摘要格式与 move 回显锚点 |
 | `Text` | 文字叶子图形：在几何 `x y` 之外持有文本内容 `content` |
-| `Group` | Composite 的容器（`<g>`）：持有有序子节点，统一操作递归转发给子孙；`canUngroup()` 钩子默认返回 `true`（复合图形子类覆写为 `false`） |
+| `Group` | Composite 的容器（`<g>`）：持有有序子节点，统一操作递归转发给子孙；`canUngroup()` 钩子默认返回 `true`（复合图形子类覆写为 `false`）；`insertAt` 拒绝插入自身或自身的祖先（会使树成环），视为程序错误抛普通 `Error`——命令层必须先校验 |
 | `SvgDocument` | 文档根（`<svg>`）：画布尺寸 + 顶层子节点；按 id 查找、文档序遍历、元素计数 |
 | `ShapeContainer`（接口） | `Group` 与 `SvgDocument` 共同的"可容纳子图形"协议：`indexOf / insertAt / remove / childList / containerLabel` |
-| `ChildList` | 有序子节点列表，插入/移除时同步维护子节点的 `parent` 指针；被 `Group`、`SvgDocument` 组合复用 |
+| `ChildList` | 有序子节点列表，插入/移除时同步维护子节点的 `parent` 指针；被 `Group`、`SvgDocument` 组合复用。插入已有父节点的图形、下标越界、移除非子节点都是程序错误（抛普通 `Error`，不是 `EditorError`）；`Shape.attachTo / detach` 只由它调用（P8） |
 | `CanvasSize` | 画布宽高值对象（正数校验、`800x600` 文本形式） |
 | `GeometryAttribute` | 一个具名数值几何属性（如 `width`），绑定一个 `CoordinateRole` |
 | `CoordinateRole`（接口） | 几何属性"角色"策略：平移时如何变化、缩放时如何变化、取值约束 |
 | `XCoordinate` / `YCoordinate` / `Extent` | 三种角色：x 坐标随 dx 平移、y 坐标随 dy 平移、尺寸不随平移且必须 ≥ 0；三者缩放时都乘 factor |
-| `StyleAttributes` | `fill / stroke / stroke-width` 三个公共可选属性的设置、取消、校验与序列化顺序 |
+| `StyleAttributes` | `fill / stroke / stroke-width` 三个公共可选属性：持有三个 `StyleProperty` 对象组成的有序数组，按 `name()` 查找后交给属性对象校验与保存；数组顺序即序列化与显示顺序；`copy / restoreFrom` 供快照使用（含"未设置"状态） |
+| `StyleProperty`（抽象） | 一个可选样式属性：名字、`assign(raw)`（校验失败时保持原值）、`display()`（未设置为 `undefined`）、`copy()`；"未设置"由属性对象自己表示；不参与 move / scale |
+| `ColorProperty` | `fill`、`stroke` 共用：任意非空字符串，不校验颜色语法（E5、E9） |
+| `StrokeWidthProperty` | `stroke-width`：全精度数值，复用 `Extent` 校验 ≥ 0；不是几何属性，缩放时不变（E12） |
 | `ExtraAttributes` | 读入文件时遇到的、白名单外属性的有序透传存储（只读，保证 round-trip） |
 | `ShapeMemento` | 一个图形（容器则连同全部子孙）属性状态的不透明快照，供 undo 恢复 |
 | `TreePosition` | 值对象：(父容器, 下标)，记录结构性命令的原位置 |
 | `ShapeType`（接口） | 图形类型的"类静态侧"契约：类型名、create 参数说明 `ParamSpec[]`、`create(id, params)` |
-| `ParamSpec` | 一个 create 参数的说明：名字、是否可选、取值来自属性还是文本内容 |
+| `ParamSpec` | 一个 create 参数的说明：显示名、对应的属性名、是否可选、取值来自属性还是文本内容；各图形类在静态侧单独声明，由测试保证与几何属性表一致（见 2.4） |
 | `ShapeFactory` | **按名字分派①**：类型名 → `ShapeType`（待重构，见 4.1） |
 | `IdSyntax` | id 合法性规则（CLI 新建 id 的字符集校验） |
 | `NumberFormat` | 数字的严格解析与统一输出格式（显示与序列化共用） |
@@ -306,13 +309,17 @@ Editor --> Repl : ["circle#c1 moved back to (100,100)"]
 
 **协作**：命令只面向 `Shape` 编程，例如 `MoveCommand` 只调用 `target.moveBy(dx, dy)`：叶子按几何角色平移自己的坐标，`Group` 把调用转发给每个子节点。需要"是否容器"的地方（`in`、`addto`、`ungroup`）调用多态方法 `shape.asContainer()`（叶子返回 `null`，`Group` 返回自身），不用 `instanceof`。
 
+**结构不变式由模型自己守住**：`ChildList` 是唯一修改 `parent` 指针的地方（`Shape.attachTo / detach` 因 TypeScript 没有包级可见性只能是 `public`，由架构测试 P8 保证只有 `ChildList` 调用）；插入已有父节点的图形、把容器插入自身或其子孙（`Group.insertAt` 的环检测）都抛普通 `Error`。这些是**程序错误**而不是用户错误：对应的用户可见报错（如 `cannot group a container into its own descendant`）由命令在 `prepare` 中先行校验并抛 `EditorError`，模型层的检查只是最后一道防线，防止树成环后 `allShapes()` 无限递归。
+
 #### 2.4 Strategy（几何属性角色）
 
 **解决的问题**：§3 move 是增量平移（只影响位置），scale 是"factor 同乘到图形的全部几何属性（位置与尺寸）"，§4.1 `set` 可改各类型的几何属性。若在每个图形类里手写 `moveBy`，5 个叶子类会重复相同的逻辑；若按属性名 `switch`，则违反 §2.1。
 
-**参与者**：Strategy = `CoordinateRole`（`shift(value, dx, dy)`、`scale(value, f)`、`validate(value)`）；ConcreteStrategy = `XCoordinate`（加 dx）、`YCoordinate`（加 dy）、`Extent`（不平移、要求 ≥ 0）；Context = `GeometryAttribute`。
+**参与者**：Strategy = `CoordinateRole`（`shift(value, dx, dy)`、`scale(value, f)`、`validate(name, value)`）；ConcreteStrategy = `XCoordinate`（加 dx）、`YCoordinate`（加 dy）、`Extent`（不平移、要求 ≥ 0）；Context = `GeometryAttribute`。`validate` 带属性名，是因为报错文案 `invalid value for width: -5`（E4）需要它；数值用 `String(value)` 显示原值（`-1e-9` 不会被 V3 格式化成 `0`）。`StrokeWidthProperty` 复用 `Extent` 校验，文案一致。
 
-**协作**：每个叶子类只声明属性表，例如 `Rect` = `[x: X, y: Y, width: Extent, height: Extent]`，`Line` = `[x1: X, y1: Y, x2: X, y2: Y]`。`LeafShape.moveBy` 让每个属性按自己的角色移动；`scaleBy` 统一乘 factor；`setAttribute` 在属性表里按名字找到属性，由角色校验取值。同一张属性表还用来生成 create 参数说明（`ParamSpec`）、`show` 的几何行和序列化的属性顺序，即**单一事实来源**。
+**协作**：每个叶子类只声明属性表，例如 `Rect` = `[x: X, y: Y, width: Extent, height: Extent]`，`Line` = `[x1: X, y1: Y, x2: X, y2: Y]`。`LeafShape.moveBy` 让每个属性按自己的角色移动；`scaleBy` 统一乘 factor；`setAttribute` 在属性表里按名字找到属性，由角色校验取值。同一张属性表还决定 `show` 的几何行和序列化的属性顺序，即这两者的**单一事实来源**。
+
+create 参数说明（`ParamSpec`）**不**由属性表生成，而是每个类在静态侧单独声明（如 `Rect.params` = `<x> <y> <w> <h> [fill]`），由测试保证与属性表一致。理由：参数表需要属性表没有的信息——①显示名与属性名不同（`<w>` 对应 `width`）；②混有非几何参数（可选的 `fill` / `stroke`、text 的 `"content"`），它们的可选性与位置是 create 语法的一部分，而不是属性的性质；③`g` 没有几何属性却有（空的）参数表。若把这些都塞进 `GeometryAttribute`，几何属性就要承担 CLI 语法的职责。一致性由 `ShapeFactory.test.ts` 保证：每种类型的几何参数必须按顺序等于其几何属性表，其余参数只能是 `fill` / `stroke` / `text`；新增类型漏写或写错参数时测试失败。
 
 #### 2.5 Simple Factory + Registry（按名字分派的两处）
 
@@ -390,16 +397,23 @@ package model {
     +getId(): string
     +{abstract} tagName(): string
     +label(): string
+    +parentContainer(): ShapeContainer | null
+    +attachTo(c: ShapeContainer): void  <<ChildList only, P8>>
+    +detach(): void  <<ChildList only, P8>>
     +{abstract} moveBy(dx: number, dy: number): void
     +{abstract} scaleBy(f: number): void
     +setAttribute(name: string, raw: string): void
     +{abstract} summary(): string
-    +{abstract} moveDescription(): string
-    +asContainer(): Group
+    +{abstract} moveDescription(dx: number, dy: number): string
+    +asContainer(): Group | null
     +isAncestorOf(s: Shape): boolean
     +{abstract} snapshot(): ShapeMemento
     +{abstract} restore(m: ShapeMemento): void
-    +{abstract} svgAttributes(): string[][]
+    +geometryEntries(): Array<[string, string]>
+    +styleEntries(): Array<[string, string]>
+    +extraEntries(): Array<[string, string]>
+    +textContent(): string | null
+    +svgAttributes(): Array<[string, string]>
   }
   abstract class LeafShape {
     -geometry: GeometryAttribute[]
@@ -417,16 +431,32 @@ package model {
     -children: ChildList
     +asContainer(): Group
     +canUngroup(): boolean
+    +insertAt(s: Shape, index: number): void  <<rejects self / ancestors>>
   }
   class SvgDocument {
     -size: CanvasSize
     -children: ChildList
-    +findById(id: string): Shape
+    +findById(id: string): Shape | null
+    +allShapes(): Shape[]
     +elementCount(): number
   }
   class ChildList
   class CanvasSize
-  class StyleAttributes
+  class StyleAttributes {
+    -properties: StyleProperty[]
+    +set(name: string, raw: string): void
+    +get(name: string): string | undefined
+    +copy(): StyleAttributes
+    +restoreFrom(s: StyleAttributes): void
+  }
+  abstract class StyleProperty {
+    +name(): string
+    +{abstract} assign(raw: string): void
+    +{abstract} display(): string | undefined
+    +{abstract} copy(): StyleProperty
+  }
+  class ColorProperty
+  class StrokeWidthProperty
   class ExtraAttributes
   class GeometryAttribute {
     -name: string
@@ -436,7 +466,7 @@ package model {
   interface CoordinateRole {
     +shift(v: number, dx: number, dy: number): number
     +scale(v: number, f: number): number
-    +validate(v: number): void
+    +validate(name: string, v: number): void
   }
   class XCoordinate
   class YCoordinate
@@ -473,6 +503,10 @@ SvgDocument *-- CanvasSize
 ChildList o-- "0..*" Shape
 Shape --> ShapeContainer : parent
 Shape *-- StyleAttributes
+StyleAttributes *-- "3" StyleProperty
+StyleProperty <|-- ColorProperty
+StyleProperty <|-- StrokeWidthProperty
+StrokeWidthProperty --> Extent : validate
 Shape *-- ExtraAttributes
 LeafShape *-- "1..*" GeometryAttribute
 GeometryAttribute --> CoordinateRole
@@ -655,23 +689,28 @@ UngroupCommand ..> Group : canUngroup()
 | # | 规则 | 理由 |
 |---|---|---|
 | P1 | `import "node:fs"` 只允许出现在 `io/NodeFileSystem.ts`；`import "@xmldom/xmldom"` 只允许出现在 `io/XmlDomAdapter.ts`；`node:readline`、`process.stdin/stdout`、`console.*` 只允许出现在 `cli/` | IO 隔离：内核可完全在内存中测试；输出顺序只由 `Editor` 返回值决定；第三方 XML 库被限制在适配器内，换库只改一个类（2.8） |
-| P2 | 以字符串为键查找"实现"的 `Map` 只允许出现在 `CommandRegistry` 与 `ShapeFactory` | 规格 §2.1 "按名字分派只允许两处"。按 id 查图形（`SvgDocument.findById`）、按属性名查属性（`LeafShape` 的属性表）查的是**数据**而不是实现，不在此列 |
+| P2 | 以字符串为键查找"实现"的 `Map` 只允许出现在 `CommandRegistry` 与 `ShapeFactory`；其中包括**值类型是函数的 `Map`**（如 `Map<string, (raw: string) => …>`、值为函数类型别名的 `Map`），它同样是"按名字查实现" | 规格 §2.1 "按名字分派只允许两处"。按 id 查图形（`SvgDocument.findById`）、按属性名查属性对象（`LeafShape` 的几何属性表、`StyleAttributes` 的 `StyleProperty` 数组）查的是**数据**——找到的对象自己携带行为（Strategy / 属性对象），不在此列 |
 | P3 | 全工程禁止对图形类型名或命令名使用 `switch` / `if-else` 链；禁止对 `Shape` 的具体子类用 `instanceof`，改用多态方法（如 `asContainer()`） | 规格 §2.1 禁止"到处 switch(tag)"；新增图形类型时不应修改分散的分支 |
-| P4 | `Shape`、`LeafShape` 不得在运行时 `import` 自己的子类；具体图形类不得 `import ShapeFactory` | 避免 ESM 循环导入导致 "Class extends value undefined"；工厂依赖具体类，反过来不行 |
-| P5 | 一个文件只导出一个类或接口，文件名 = 类名（`main.ts` 例外） | 规格 §2.1 |
+| P4 | 任何类（首先是 `Shape`、`LeafShape`，也包括将被 box 继承的 `Group`）不得在运行时 `import` 自己的子类（`import type` 可以）；具体图形类不得 `import ShapeFactory` | 避免 ESM 循环导入导致 "Class extends value undefined"；工厂依赖具体类，反过来不行 |
+| P5 | 一个文件只导出一个类或接口，文件名 = 类名（`main.ts` 例外）；只允许具名导出，禁止任何形式的 `export default` | 规格 §2.1；默认导出在导入方可以取任意名字，"文件名 = 类名"的对应关系就失效了 |
 | P6 | 字段一律 `private` / `protected`，对外只暴露行为与只读访问器；不导出自由函数 | 规格 §2.1 禁止贫血模型与过程式自由函数 |
 | P7 | 抛给用户的错误一律是 `EditorError`；只有 `Editor` 捕获并加 `error:` 前缀 | 错误格式（§2、§4.2）只在一处生成 |
+| P8 | `Shape.attachTo` / `Shape.detach` 只允许由 `model/ChildList.ts` 调用 | 它们必须是 `public`（TypeScript 没有包级可见性），但 `parent` 指针与子节点列表只有在同一处一起修改才不会失去同步（2.3） |
 
 #### 3.3 检查手段
 
 检查手段本身**不新增依赖**（运行时依赖 `@xmldom/xmldom` 是 2.8 的解析需要，与检查无关），采用"自写测试脚本 + 编译器 + 人工抽查"：
 
-1. **架构测试 `tests/unit/architecture.test.ts`**（实现阶段编写，使用已有的 vitest 与 `node:fs`）：
-   - 递归列出 `src/**/*.ts`，用正则提取 `import … from "…"` 与 `import type`，把相对路径解析成目标模块，逐条断言 D1–D8；
-   - 断言 P1：`node:fs` / `@xmldom/xmldom` / `node:readline` / `console.` / `process.std` 只出现在白名单文件（`@xmldom/xmldom` 的白名单只有 `io/XmlDomAdapter.ts`）；
-   - 断言 P2：`Map<string,` 后接 `ShapeType` / `CommandType` 的声明只出现在两个白名单文件；
-   - 断言 P3：`src/` 中不出现 `switch (`，不出现 `instanceof (Rect|Circle|Ellipse|Line|Text|Group)`；
-   - 断言 P5：每个文件恰好一个 `export class|interface|abstract class`，且名字与文件名一致。
+1. **架构测试 `tests/unit/architecture.test.ts`**（使用已有的 vitest 与 `node:fs`）：
+   - 递归列出 `src/**/*.ts`，先去掉注释（代码模式类检查还会抹掉字符串内容），再用正则提取 `import … from` / `export … from` / `import "x"` / `import("x")` / `require("x")`（`import type` 与全部带 `type` 的花括号导入记为仅类型导入），把相对路径解析成目标模块；每个文件必须属于 §1.1 的某个模块；逐条断言 D1–D7，D5 按目标文件白名单检查；D8 在实际的模块依赖图上做环检测；
+   - 断言 P1：`node:fs` / `@xmldom/xmldom` / `node:readline` / `console.` / `process.std*` 只出现在白名单文件（`@xmldom/xmldom` 的白名单只有 `io/XmlDomAdapter.ts`）；
+   - 断言 P2：①`Map<string, ShapeType | CommandType>` 只出现在两个白名单文件；②白名单外不出现值类型为函数的 `Map` / `ReadonlyMap` / `WeakMap` / `Record`（值类型含 `=>`、`Function`，或是本文件内声明的函数类型别名 / 调用签名接口）。查不到的写法在测试注释中列明：未写类型参数、靠推断的 `new Map([["fill", fn]])`；从别的文件导入的函数类型；没有 `Record` 注解的对象字面量分派表；索引签名；按名字查找的数组；
+   - 断言 P3：`src/` 中不出现 `switch (`；不对 `Shape` 的任何子类（内置类 + 从源码中识别出的子类）用 `instanceof`；不与图形类型名字面量做相等比较（`tag === "rect"`，即 if-else 链形式的分派）；
+   - 断言 P4：任何类文件都不得在运行时 `import` 自己的子类（README 要求的 `Shape`、`LeafShape` 是其特例，`import type` 不算）；`Shape` 的子类文件不得 `import ShapeFactory`；
+   - 断言 P5：除 `cli/main.ts` 外，每个文件恰好一条 `export`，且是名字与文件名一致的具名 `class` / `interface`（因此也排除了导出的自由函数，覆盖 P6 的一半）；`export default …` 与 `export { X as default }` 一律报错；
+   - 断言 P8：`model/ChildList.ts` 以外不出现 `.attachTo(` / `.detach(`；
+   - 尚无代码的目录（`commands/`、`io/`、`app/`、`view/`）没有文件可查，规则自然通过；
+   - 每条规则写成"源文件集合 → 违规列表"的函数，测试文件后半部分用合成的违规源码逐条验证规则确实能报错；此外实现时对每条规则都在 `src/` 下临时放置违规文件跑过一遍，确认只有对应规则失败；
    - 违规即测试失败，`npm test` 会直接暴露"待处理项"。
 2. **TypeScript 严格模式**（`npm run typecheck`，已有 `strict`、`noImplicitOverride` 等）：保证覆写关系与空值检查。
 3. **失败原子性测试**：对 §4.2 每一种错误场景，执行前后各序列化一次文档并比较，同时检查 undo 栈深度不变。
@@ -887,3 +926,4 @@ UngroupCommand ..> Group : canUngroup()
 |---|---|---|---|
 | v1 | 2026-10-25 | 初稿：架构方案（模块划分、设计模式、依赖方向规则、变化点假设）与约定补充 | 依据 `doc/spec/phase_cli_1.md` 完成本阶段架构设计 |
 | v2 | 2026-10-25 | ① `requiresDocument` 从命令实例的模板方法移到 `CommandType` 静态侧，由 `Editor` 在 `parse` 之前检查，新增 `CommandLine`，同步修改时序图、§2.6、类图与 R10；② 注释、空行统一由 `Editor` 处理，`cli` 不做任何解析；③ 放弃自写 `XmlParser`，改用 `@xmldom/xmldom`，新增 `XmlDomAdapter`（Adapter 模式，新增 §2.8，原 §2.8/§2.9 顺延为 §2.9/§2.10），P1 与架构测试限定只有适配器可以 import 该库，序列化仍手写；④ 预留 `Group.canUngroup()` 钩子，由 `UngroupCommand` 调用 | 审查意见：① R10 与时序图的检查顺序矛盾；② cli 职责与 §1.2、§4.6 的描述矛盾；③ 手写 XML 解析器的边界情况多，不是考察点；④ 钩子成本几乎为零，提前预留比日后修改 `UngroupCommand` 更划算 |
+| v3 | 2026-10-25 | 同步 `src/model/` 实现中确认的偏差：① `CoordinateRole.validate(v)` 改为 `validate(name, v)`，报错用 `String(value)` 显示原值（§2.4、类图）；② 新增 `StyleProperty`（抽象）、`ColorProperty`、`StrokeWidthProperty`，`StyleAttributes` 改为持有属性对象数组（§1.2、类图）；③ `Shape.moveDescription()` 改为 `moveDescription(dx, dy)`，叶子返回 `to (x,y)`、容器返回 `by (dx,dy)`（类图）；④ 类图类型写准确：`svgAttributes(): Array<[string, string]>`、`asContainer(): Group \| null`、`findById(): Shape \| null`，并补充 `parentContainer / attachTo / detach / geometryEntries / styleEntries / extraEntries / textContent / allShapes`；⑤ `Group.insertAt` 拒绝插入自身或祖先（程序错误，抛普通 `Error`），`ChildList` 的误用同样是程序错误（§1.2、§2.3）；⑥ 新增规则 P8：`attachTo / detach` 只由 `ChildList` 调用；⑦ P2 扩展到值类型为函数的 `Map`；§3.3 按实际的架构测试改写（P3 增加类型名比较，P4 推广到任何类，D8 做环检测，列明正则查不到的写法）；⑧ §2.4 不再说属性表生成 `ParamSpec`：create 参数由各类在静态侧单独声明，由 `ShapeFactory.test.ts` 保证与几何属性表一致（§1.2、§2.4）；⑨ P5 明确禁止 `export default`（§3.2、§3.3） | ①–④ 实现时发现原签名无法产生规格要求的报错/回显文案，或原设计用"名字 → 函数"表违反 P2；⑤ 审查时复现：容器 a 含 b 时把 a 插入 b 会被接受，之后 `allShapes()` 无限递归；⑥ `attachTo / detach` 只能是 `public`，需要用规则约束调用方；⑦ 阶段 A 的 `Map<string, StyleRule>` 写法原 P2 检查发现不了；⑧ 参数表需要属性表没有的信息（显示名 `<w>` ≠ 属性名 `width`、可选的 fill/stroke、text 内容、`g` 没有几何属性），从属性表生成会让几何属性承担 CLI 语法职责，改为单独声明 + 测试保证一致；⑨ 审查时复现：`export default class Bad {}` 未被架构测试发现 |
