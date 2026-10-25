@@ -1,3 +1,6 @@
+import { EditorError } from "../model/EditorError.js";
+import type { Shape } from "../model/Shape.js";
+import type { SvgDocument } from "../model/SvgDocument.js";
 import type { CommandContext } from "./CommandContext.js";
 import type { CommandResult } from "./CommandResult.js";
 import type { History } from "./History.js";
@@ -21,4 +24,13 @@ export abstract class Command {
 
   /** Called by the Invoker only after `execute` returned normally. */
   abstract recordIn(history: History): void;
+
+  /** The shape with this id; `no such shape: <id>` otherwise (§4.2). Shared by edit and display commands. */
+  protected findShape(document: SvgDocument, id: string): Shape {
+    const shape = document.findById(id);
+    if (shape === null) {
+      throw new EditorError(`no such shape: ${id}`);
+    }
+    return shape;
+  }
 }
