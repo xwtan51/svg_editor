@@ -6,9 +6,12 @@ import { CreateCommand } from "./CreateCommand.js";
 import { DeleteCommand } from "./DeleteCommand.js";
 import { FrontCommand } from "./FrontCommand.js";
 import { GroupCommand } from "./GroupCommand.js";
+import { HelpCommand } from "./HelpCommand.js";
 import { MoveCommand } from "./MoveCommand.js";
 import { ScaleCommand } from "./ScaleCommand.js";
 import { SetCommand } from "./SetCommand.js";
+import { ShowCommand } from "./ShowCommand.js";
+import { TreeCommand } from "./TreeCommand.js";
 import { UngroupCommand } from "./UngroupCommand.js";
 
 /**
@@ -17,8 +20,8 @@ import { UngroupCommand } from "./UngroupCommand.js";
  *
  * TO REFACTOR (README §4.2): the commands are hard-wired in the constructor;
  * plugin commands would be added from outside through `register`.
- * So far only the edit commands of §3 are registered; document, display and
- * undo / redo commands follow in later steps.
+ * So far the edit commands and tree / show / help of §3 are registered;
+ * document and undo / redo commands follow in later steps.
  */
 export class CommandRegistry {
   private readonly types = new Map<string, CommandType>();
@@ -34,6 +37,9 @@ export class CommandRegistry {
     this.register(AddToCommand);
     this.register(FrontCommand);
     this.register(BackCommand);
+    this.register(TreeCommand);
+    this.register(ShowCommand);
+    this.register(HelpCommand);
   }
 
   /** Registering the same name twice is a programming error. */

@@ -118,29 +118,37 @@ describe("CommandParser", () => {
 });
 
 describe("CommandRegistry", () => {
-  it("registers the edit commands of §3 and lists added types after them, in registration order", () => {
-    expect(registry().commandTypes().map((t) => t.commandName)).toEqual([
-      "create",
-      "delete",
-      "move",
-      "scale",
-      "set",
-      "group",
-      "ungroup",
-      "addto",
-      "front",
-      "back",
-      "echo",
-      "start",
-      "back-stub",
-    ]);
+  // The built-in set is still growing (document and undo / redo commands are
+  // registered in other steps), so these tests pin groups, not the full list.
+  const EDIT_COMMANDS = ["create", "delete", "move", "scale", "set", "group", "ungroup", "addto", "front", "back"];
+  const DISPLAY_COMMANDS = ["tree", "show", "help"];
+
+  it("registers the edit and display commands of §3 in order and lists added types after them", () => {
+    const names = registry().commandTypes().map((t) => t.commandName);
+    expect(names.filter((name) => EDIT_COMMANDS.includes(name))).toEqual(EDIT_COMMANDS);
+    expect(names.filter((name) => DISPLAY_COMMANDS.includes(name))).toEqual(DISPLAY_COMMANDS);
+    expect(names.indexOf("tree")).toBeGreaterThan(names.indexOf("back"));
+    expect(names.slice(-3)).toEqual(["echo", "start", "back-stub"]);
   });
 
-  it("every registered edit command belongs to the edit category and needs a document", () => {
+  it("edit commands are in the edit category, tree / show / help in display; only help needs no document", () => {
+    const types = new CommandRegistry().commandTypes();
+    const byName = (name: string) => types.find((t) => t.commandName === name);
+    for (const name of EDIT_COMMANDS) {
+      expect(byName(name)?.category).toBe(CommandCategory.EDIT);
+      expect(byName(name)?.requiresDocument).toBe(true);
+    }
+    for (const name of DISPLAY_COMMANDS) {
+      expect(byName(name)?.category).toBe(CommandCategory.DISPLAY);
+    }
+    expect(byName("tree")?.requiresDocument).toBe(true);
+    expect(byName("show")?.requiresDocument).toBe(true);
+    expect(byName("help")?.requiresDocument).toBe(false);
+  });
+
+  it("every usage starts with the command name", () => {
     for (const type of new CommandRegistry().commandTypes()) {
-      expect(type.category).toBe(CommandCategory.EDIT);
-      expect(type.requiresDocument).toBe(true);
-      expect(type.usage.startsWith(`${type.commandName} `)).toBe(true);
+      expect(type.usage === type.commandName || type.usage.startsWith(`${type.commandName} `)).toBe(true);
     }
   });
 
