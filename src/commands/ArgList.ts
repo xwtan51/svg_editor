@@ -101,6 +101,15 @@ export class ArgList {
     return container.text();
   }
 
+  /**
+   * Whether the last remaining token is an unquoted `in`: an `in` clause
+   * without its container id. A quoted `"in"` is a plain value (R6).
+   */
+  endsWithInKeyword(): boolean {
+    const last = this.tokens[this.tokens.length - 1];
+    return this.remaining() > 0 && last !== undefined && last.isKeyword(ArgList.IN_KEYWORD);
+  }
+
   /** `usage: <syntax>`, for checks the command makes itself. */
   usageError(): EditorError {
     return new EditorError(`usage: ${this.usageText}`);

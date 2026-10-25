@@ -112,5 +112,16 @@ describe("ArgList", () => {
       expect(args("in").takeInClause()).toBeNull();
       expect(args("").takeInClause()).toBeNull();
     });
+
+    it("endsWithInKeyword: an unquoted in as the last token, without consuming it", () => {
+      const list = args("rect q 0 0 1 1 in");
+      expect(list.endsWithInKeyword()).toBe(true);
+      expect(list.remaining()).toBe(7);
+      expect(args("in").endsWithInKeyword()).toBe(true);
+      expect(args('rect q 0 0 1 1 "in"').endsWithInKeyword()).toBe(false);
+      expect(args("rect q 0 0 1 1 in g1").endsWithInKeyword()).toBe(false);
+      expect(args("rect q 0 0 1 1 IN").endsWithInKeyword()).toBe(false);
+      expect(args("").endsWithInKeyword()).toBe(false);
+    });
   });
 });

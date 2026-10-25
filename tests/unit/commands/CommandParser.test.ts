@@ -118,7 +118,7 @@ describe("CommandParser", () => {
 });
 
 describe("CommandRegistry", () => {
-  it("registers the edit commands of §3 and lists added types after them, in registration order", () => {
+  it("registers the commands of §3 and lists added types after them, in registration order", () => {
     expect(registry().commandTypes().map((t) => t.commandName)).toEqual([
       "create",
       "delete",
@@ -130,17 +130,39 @@ describe("CommandRegistry", () => {
       "addto",
       "front",
       "back",
+      "init",
+      "read",
+      "save",
+      "canvas",
+      "undo",
+      "redo",
       "echo",
       "start",
       "back-stub",
     ]);
   });
 
-  it("every registered edit command belongs to the edit category and needs a document", () => {
-    for (const type of new CommandRegistry().commandTypes()) {
-      expect(type.category).toBe(CommandCategory.EDIT);
-      expect(type.requiresDocument).toBe(true);
-      expect(type.usage.startsWith(`${type.commandName} `)).toBe(true);
+  it("each registered command has the category of spec §3; only init and read work without a document (R11)", () => {
+    const types = new CommandRegistry().commandTypes();
+    const byCategory = (category: CommandCategory) =>
+      types.filter((t) => t.category === category).map((t) => t.commandName);
+    expect(byCategory(CommandCategory.EDIT)).toEqual([
+      "create",
+      "delete",
+      "move",
+      "scale",
+      "set",
+      "group",
+      "ungroup",
+      "addto",
+      "front",
+      "back",
+    ]);
+    expect(byCategory(CommandCategory.DOCUMENT)).toEqual(["init", "read", "save", "canvas"]);
+    expect(byCategory(CommandCategory.HISTORY)).toEqual(["undo", "redo"]);
+    for (const type of types) {
+      expect(type.requiresDocument).toBe(!["init", "read"].includes(type.commandName));
+      expect(type.usage === type.commandName || type.usage.startsWith(`${type.commandName} `)).toBe(true);
     }
   });
 

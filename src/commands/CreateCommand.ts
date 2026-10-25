@@ -24,29 +24,39 @@ export class CreateCommand extends EditCommand {
   private static readonly IN_CLAUSE = "[in <containerId>]";
 
   static parse(args: ArgList): CreateCommand {
+    const danglingIn = args.endsWithInKeyword();
     const containerId = args.takeInClause();
     args.expectAtLeast(2);
     const typeName = args.nextRaw();
     const id = args.nextId();
-    return new CreateCommand(typeName, id, args.rest(), containerId);
+    return new CreateCommand(typeName, id, args.rest(), containerId, danglingIn);
   }
 
   private readonly typeName: string;
   private readonly id: string;
   private readonly params: readonly string[];
   private readonly containerId: string | null;
+  /** The line ended with an unquoted `in` but no container id; reported once the type is known. */
+  private readonly danglingIn: boolean;
 
   private document!: SvgDocument;
   private container!: ShapeContainer;
   private shape!: Shape;
   private index!: number;
 
-  constructor(typeName: string, id: string, params: readonly string[], containerId: string | null) {
+  constructor(
+    typeName: string,
+    id: string,
+    params: readonly string[],
+    containerId: string | null,
+    danglingIn: boolean = false,
+  ) {
     super();
     this.typeName = typeName;
     this.id = id;
     this.params = [...params];
     this.containerId = containerId;
+    this.danglingIn = danglingIn;
   }
 
   undo(): CommandResult {
@@ -75,10 +85,14 @@ export class CreateCommand extends EditCommand {
     return `${this.shape.label()} created${where}`;
   }
 
-  /** Pairs the parameter tokens with the type's `ParamSpec`s (keyed by attribute name). */
+  /**
+   * Pairs the parameter tokens with the type's `ParamSpec`s (keyed by attribute
+   * name). A trailing unquoted `in` without a container id is the type's usage
+   * error, like a wrong count, even where it would fit as an optional value.
+   */
   private matchParams(type: ShapeType): Map<string, string> {
     const required = type.params.filter((spec) => !spec.isOptional()).length;
-    if (this.params.length < required || this.params.length > type.params.length) {
+    if (this.danglingIn || this.params.length < required || this.params.length > type.params.length) {
       throw new EditorError(`usage: ${CreateCommand.usageOf(type)}`);
     }
     const values = new Map<string, string>();

@@ -71,9 +71,9 @@ describe("create", () => {
       expect(runner.shape("t1").textContent()).toBe("in");
     });
 
-    it("an unquoted in as the last token is content", () => {
+    it('a quoted "in" as the last token is content', () => {
       const runner = new CommandRunner();
-      expect(runner.run("create text t1 0 0 in")).toEqual(["text#t1 created"]);
+      expect(runner.run('create text t1 0 0 "in"')).toEqual(["text#t1 created"]);
       expect(runner.shape("t1").textContent()).toBe("in");
     });
 
@@ -174,11 +174,29 @@ describe("create", () => {
         runner().expectRejected("create g g9 in g9", "no such container: g9");
       });
 
-      it("in without a container id is not a clause (E2): an ordinary value, so the count decides", () => {
-        runner().expectRejected("create rect r1 0 0 1 1 red in", "usage: create rect <id> <x> <y> <w> <h> [fill] [in <containerId>]");
+      it.each([
+        ["create rect q 0 0 1 1 in", "usage: create rect <id> <x> <y> <w> <h> [fill] [in <containerId>]"],
+        ["create rect r1 0 0 1 1 red in", "usage: create rect <id> <x> <y> <w> <h> [fill] [in <containerId>]"],
+        ["create circle c1 0 0 1 in", "usage: create circle <id> <cx> <cy> <r> [fill] [in <containerId>]"],
+        ["create line l1 0 0 1 1 in", "usage: create line <id> <x1> <y1> <x2> <y2> [stroke] [in <containerId>]"],
+        ["create text t1 0 0 in", 'usage: create text <id> <x> <y> "content" [in <containerId>]'],
+        ["create g g1 in", "usage: create g <id> [in <containerId>]"],
+        ["create g g1 in in", "usage: create g <id> [in <containerId>]"],
+      ])("an unquoted in as the last token is a clause without container id: %s", (line, message) => {
+        runner().expectRejected(line, message);
+      });
+
+      it("the dangling in is reported after the type and before the id (R10, as for a wrong count)", () => {
+        runner().expectRejected("create hexagon h1 in", "unknown shape type: hexagon (is the plugin loaded?)");
+        runner().expectRejected("create rect start 0 0 1 1 in", "usage: create rect <id> <x> <y> <w> <h> [fill] [in <containerId>]");
+      });
+
+      it('a quoted "in" stays an ordinary value, also as the last token', () => {
         const r = runner();
-        expect(r.run("create rect r1 0 0 1 1 in")).toEqual(["rect#r1 created"]);
+        expect(r.run('create rect r1 0 0 1 1 "in"')).toEqual(["rect#r1 created"]);
         expect(r.shape("r1").styleEntries()).toEqual([["fill", "in"]]);
+        expect(r.run('create rect r2 0 0 1 1 "in" in node1')).toEqual(["rect#r2 created in g#node1"]);
+        expect(r.shape("r2").styleEntries()).toEqual([["fill", "in"]]);
       });
 
       it("id errors come before container errors (R10)", () => {

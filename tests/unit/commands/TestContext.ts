@@ -2,38 +2,25 @@ import type { FileSystem } from "../../../src/io/FileSystem.js";
 import { CommandRegistry } from "../../../src/commands/CommandRegistry.js";
 import type { CommandContext } from "../../../src/commands/CommandContext.js";
 import { History } from "../../../src/commands/History.js";
-import { EditorError } from "../../../src/model/EditorError.js";
 import { ShapeFactory } from "../../../src/model/ShapeFactory.js";
 import type { SvgDocument } from "../../../src/model/SvgDocument.js";
+import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 
-/** In-memory files; enough for commands that never touch the disk. */
-class MapFileSystem implements FileSystem {
-  private readonly files = new Map<string, string>();
-
-  readText(path: string): string {
-    const text = this.files.get(path);
-    if (text === undefined) {
-      throw new EditorError(`cannot read file: ${path}`);
-    }
-    return text;
-  }
-
-  writeText(path: string, text: string): void {
-    this.files.set(path, text);
-  }
-}
-
-/** Test double of `EditorSession`: a session around a given document (or none). */
+/**
+ * Test double of `EditorSession`: a session around a given document (or none)
+ * and a file system, in memory unless the test passes its own.
+ */
 export class TestContext implements CommandContext {
   private doc: SvgDocument | null;
   private path: string | null = null;
-  private readonly files: FileSystem = new MapFileSystem();
+  private readonly files: FileSystem;
   private readonly log = new History();
   private readonly commands = new CommandRegistry();
   private readonly factory = new ShapeFactory();
 
-  constructor(document: SvgDocument | null = null) {
+  constructor(document: SvgDocument | null = null, fileSystem: FileSystem = new MemoryFileSystem()) {
     this.doc = document;
+    this.files = fileSystem;
   }
 
   document(): SvgDocument {
