@@ -16,7 +16,7 @@
  *   specifiers are not seen. An import counts as type-only when written
  *   `import type` / `export type`, or when every braced specifier has `type`.
  * - Module = first directory under src/. Directories without .ts files (empty
- *   or missing, e.g. view/ today) simply contribute no files, so their rules pass.
+ *   or missing) contribute no files, so their rules pass; see the "is scanned" tests.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
