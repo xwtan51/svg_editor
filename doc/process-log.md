@@ -9,3 +9,6 @@
    | 2026-10-25 | StyleAttributes 用"属性名 → 校验函数"的 Map 加 typeof 判断类型，违反 P2，且与几何属性的设计不一致；架构测试的 P2 检查覆盖不到 | 代码审查，对照 README P2 和 §2.4 | 重构为 StyleProperty 类层次；阶段 C 考虑加强 P2 检查 |
    | 2026-10-25 | model 层没有防止结构出错：Group 可以插进自己或自己的子孙（形成环，遍历会无限递归）；public 的 detach() 能绕过 ChildList，让父节点指针和子节点列表不一致 | 审查 ChildList 和 Group 后写临时测试复现，三种情况都被接受 | Group.insertAt 加环检测；架构测试限制只有 ChildList 能调用 attachTo/detach |
    | 2026-10-25 | 架构测试的 P5 没检查 export default，默认导出的类可以绕过"文件名 = 类名" | agent 自己的 27 个违规都通过后，我换了 6 种它没想到的写法独立验证，只有这一种没被发现 | P5 拒绝 default 导出，加合成用例 |
+   | 2026-10-25 | README §2.8 写的流程是 ReadCommand 直接调用 XmlDomAdapter，与依赖规则 D5（commands 只能依赖 FileSystem 接口和 SvgImporter）矛盾 | agent 实现 io 时发现 | 改为由 SvgImporter.read(fs, path) 完成读文件、解析、建模型，README 待更新 |
+| 2026-10-25 | 只在根元素上声明的命名空间前缀（如 inkscape:）在读入时被丢掉，save 后再 read 会报 cannot parse file | agent 自测往返时发现 | 导入时把用到的命名空间声明补到使用它的图形上 |
+| 2026-10-25 | 带 UTF-8 BOM 的 SVG 文件读入失败 | 我另外喂了 6 种测试里没有的文件，只有 BOM 这一种失败 | 解析前去掉开头的 \uFEFF，补回归测试 |
