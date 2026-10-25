@@ -1,6 +1,7 @@
 /**
- * Architecture rules of doc/README.md §3 (D1–D8, P1–P5, plus the rule that only
- * ChildList may call Shape.attachTo / detach), checked by scanning src/.
+ * Architecture rules of doc/README.md §3 (D1–D8, P1–P5, P8: only ChildList may
+ * call Shape.attachTo / detach, P9: view calls no mutating model method),
+ * checked by scanning src/.
  *
  * Every rule is a function `(files) => violations` so that the bottom of this
  * file can feed it synthetic sources and prove that it really detects a breach.
@@ -16,7 +17,9 @@
  *   specifiers are not seen. An import counts as type-only when written
  *   `import type` / `export type`, or when every braced specifier has `type`.
  * - Module = first directory under src/. Directories without .ts files (empty
- *   or missing) contribute no files, so their rules pass; see the "is scanned" tests.
+ *   or missing) contribute no files, so their rules pass vacuously. Guard against
+ *   that: the "is scanned" tests assert that named files of every module (model,
+ *   io, view, commands, app, cli) are actually found.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
@@ -751,5 +754,16 @@ describe("app and cli (README §3.1 D6, D7, §3.2 P1) applied to src/", () => {
     expect(paths).toContain("app/EditorSession.ts");
     expect(paths).toContain("cli/Repl.ts");
     expect(paths).toContain(ENTRY_SCRIPT);
+  });
+});
+
+describe("commands and io (README §3.1 D2, D4, D5, §3.2 P1) applied to src/", () => {
+  it("commands/ and io/ are scanned, so D2, D4, D5 and P1 are not satisfied vacuously", () => {
+    const paths = sources.map((file) => file.path);
+    expect(paths).toContain("commands/CommandRegistry.ts");
+    expect(paths).toContain("commands/ReadCommand.ts");
+    expect(paths).toContain("io/SvgImporter.ts");
+    expect(paths).toContain("io/NodeFileSystem.ts");
+    expect(paths).toContain("io/XmlDomAdapter.ts");
   });
 });

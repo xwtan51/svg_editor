@@ -14,7 +14,7 @@ import { QueryCommand } from "./QueryCommand.js";
  * Available without a document (R11).
  *
  * The layout lives here only because the view layer has no renderer for it
- * yet (doc/deviations-query-commands.md Q3).
+ * yet (doc/README.md §5 K3).
  */
 export class HelpCommand extends QueryCommand {
   static override readonly requiresDocument = false;
