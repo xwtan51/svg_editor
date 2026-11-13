@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- An ordinary XML file: same language ID (xml) as .svg, but not an SVG.
+     This extension must not give it an outline (README, VA14). -->
+<catalog>
+  <item id="first">one</item>
+  <item id="second">two</item>
+</catalog>

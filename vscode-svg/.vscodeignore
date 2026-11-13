@@ -6,6 +6,8 @@ samples/**
 doc/**
 node_modules/**
 dist/**/*.map
+dist-test/**
+.vscode-test/**
 tsconfig.json
 vitest.config.mts
 .gitignore

@@ -11,6 +11,8 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["tests/**/*.test.ts"],
+    // Unit tests only. The integration tests (tests/integration/) need a real
+    // VSCode and run with `npm run test:integration`.
+    include: ["tests/unit/**/*.test.ts"],
   },
 });

@@ -2,3 +2,6 @@
 samples/link-to-file.svg
 samples/link-to-dir.svg
 samples/dangling.svg
+# Integration tests (README "集成测试"): bundled test code and downloaded VSCode builds.
+dist-test/
+.vscode-test/
