@@ -38,11 +38,18 @@ describe("architecture", () => {
   const all = sources("");
 
   it("scans the expected files", () => {
-    expect(all.map((f) => basename(f)).sort()).toEqual([
-      "Badge.ts", "FileTypeMask.ts", "ResourceKind.ts", "ResourcePath.ts", "SchemeFilter.ts",
-      "SvgBadgeRule.ts", "SvgFileDecorationProvider.ts", "SvgResourceWatcher.ts",
-      "VscodeResourceKindReader.ts", "extension.ts",
-    ]);
+    expect(all.filter((f) => f.startsWith("core")).map((f) => basename(f)).sort()).toEqual([
+      // A.1 file badge
+      "Badge.ts", "FileTypeMask.ts", "ResourceKind.ts", "ResourcePath.ts", "SchemeFilter.ts", "SvgBadgeRule.ts",
+      // A.2 outline
+      "OpenElement.ts", "OutlineNode.ts", "OutlineRole.ts", "OutlineTreeBuilder.ts", "SourceSpan.ts",
+      "SvgOutline.ts", "SvgOutlineParser.ts",
+      "XmlAttributeDecoder.ts", "XmlEndTag.ts", "XmlStartTag.ts", "XmlSyntaxError.ts", "XmlTokenizer.ts",
+    ].sort());
+    expect(all.filter((f) => f.startsWith("host")).map((f) => basename(f)).sort()).toEqual([
+      "SvgFileDecorationProvider.ts", "SvgResourceWatcher.ts", "VscodeResourceKindReader.ts",
+    ].sort());
+    expect(all.filter((f) => !f.startsWith("core") && !f.startsWith("host"))).toEqual([ENTRY]);
   });
 
   it("one exported class per file, named after the file; no default export", () => {
