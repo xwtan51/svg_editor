@@ -3,11 +3,14 @@
  * - one exported class per file, file name = class name, named exports only
  *   (extension.ts is the entry module required by VSCode — exempt, like cli/main.ts);
  * - src/core/ never imports `vscode` in any form;
- * - VscodeResourceKindReader imports `vscode` for types only.
+ * - VscodeResourceKindReader imports `vscode` for types only;
+ * - nothing under src/ imports a Node built-in module, and the type library stays
+ *   at ES2022, so the bundle runs on the Node 18 of VSCode 1.85's extension host (VA10).
  *
  * Simple text scanning after removing comments — enough for this small tree.
  */
 import { readdirSync, readFileSync } from "node:fs";
+import { builtinModules } from "node:module";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -27,6 +30,7 @@ function code(relative: string): string {
     .replace(/^\s*\/\/.*$/gm, "");
 }
 
+const importSpecifier = /(?:\bfrom|\bimport|\brequire\()\s*["']([^"']+)["']/g;
 const vscodeImport = /(?:from|import|require\()\s*["']vscode["']/;
 const runtimeVscodeImport = /^\s*import\s+(?!type\b)[^;]*["']vscode["']/m;
 
@@ -69,7 +73,23 @@ describe("architecture", () => {
     expect(text).not.toMatch(runtimeVscodeImport);
   });
 
+  it("VA10: src/ imports no Node built-in module (the extension host may be Node 18)", () => {
+    const builtins = new Set(builtinModules);
+    for (const file of all) {
+      for (const [, specifier] of code(file).matchAll(importSpecifier)) {
+        expect(specifier!.startsWith("node:") || builtins.has(specifier!), `${file}: ${specifier}`).toBe(false);
+      }
+    }
+  });
+
+  it("VA10: type-checks against the ES2022 library, which Node 18 implements in full", () => {
+    const tsconfig = readFileSync(new URL("../../tsconfig.json", import.meta.url), "utf8");
+    expect(tsconfig).toMatch(/"lib":\s*\["ES2022"\]/);
+  });
+
   it("the detectors themselves work", () => {
+    expect([...'import { a } from "node:fs"; import "./x.js"; require("path");'.matchAll(importSpecifier)].map((m) => m[1]))
+      .toEqual(["node:fs", "./x.js", "path"]);
     expect('import { window } from "vscode";').toMatch(runtimeVscodeImport);
     expect('import type { Uri } from "vscode";').not.toMatch(runtimeVscodeImport);
     expect('const v = require("vscode");').toMatch(vscodeImport);

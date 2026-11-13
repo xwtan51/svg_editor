@@ -9,7 +9,7 @@
 
 ## 命令
 
-需要 Node.js 22 或更高版本，以及 VSCode 1.146.0 或更高版本（见 VA10）。以下命令都在 `vscode-svg/` 下执行。
+扩展本身支持 **VSCode 1.85.0 及以上**（见 VA10）。开发工具链（vitest、esbuild、类型检查）需要 Node.js 22 或更高版本；这只是开发机的要求，与扩展运行时用的 Node 无关，后者由 VSCode 自带。以下命令都在 `vscode-svg/` 下执行。
 
 ```bash
 npm ci
@@ -38,6 +38,13 @@ npm run typecheck
 3. 按 F5，或在“运行和调试”里选 **Run SVG Badge on samples/**。VSCode 会先执行 `npm: build` 任务，再启动 Extension Development Host（标题栏带“[扩展开发宿主]”），并直接打开 `samples/`。
    - 这个配置带 `--disable-extensions`，只加载本扩展，以免其他扩展的标记或图标干扰判断。如果想连同自己安装的扩展一起看，选第二个配置 **(keep my other extensions)**。
 4. 在新窗口的 Explorer 中按下面的清单逐项确认。
+
+### 用文本编辑器打开 SVG
+
+VSCode 默认用内置的**图片预览**（Image Preview）打开 `.svg`。图片预览不是文本编辑器，所以大纲视图只会显示 `The active editor cannot provide outline information.`（观察表第 4 项）。
+
+- **F5 窗口**：`samples/.vscode/settings.json` 已设置 `"workbench.editorAssociations": { "*.svg": "default" }`，`.svg` 直接用文本编辑器打开。这个模式不区分大小写，`LOGO.SVG`、`Mixed.Svg` 同样适用（集成测试检查）。
+- **普通窗口**（例如装了 `.vsix` 以后）：在已打开的预览上执行命令面板中的 **Reopen Editor With…**（中文界面为“重新打开编辑器的方式…”），选 **Text Editor**（“文本编辑器”）；也可以在 Explorer 中右键文件，选 **Open With…** → **Text Editor**。想一直这样打开，可以在自己的设置里加上同样的 `workbench.editorAssociations`。
 
 ### 符号链接（手动创建，不入库）
 
@@ -109,6 +116,20 @@ code --install-extension svg-badge-0.1.0.vsix
 - 卸载：`code --uninstall-extension xwtan51.svg-badge`。
 - 不想安装到自己的 VSCode 里，可以加 `--extensions-dir /tmp/vsce-ext`，装进临时目录试一试。
 
+## API 清单（VA10 的依据）
+
+本扩展在运行时用到的全部 VSCode 接口和清单字段如下。`vscode.d.ts` 中的接口由“`@types/vscode` 1.85.0 下类型检查通过”证明存在；清单字段、设置和激活事件不在类型里，由 1.85.0 上的集成测试证明有效。
+
+| 接口 / 字段 | 用在哪里 |
+|---|---|
+| `window.registerFileDecorationProvider`、`FileDecorationProvider`、`FileDecoration` | 文件标记（A.1） |
+| `workspace.fs.stat`、`FileType`（位掩码） | 判断资源类型（VA5） |
+| `workspace.createFileSystemWatcher`（字符串 glob）、`FileSystemWatcher.onDidCreate/onDidChange/onDidDelete` | 刷新（VA7） |
+| `EventEmitter`、`Event`、`Disposable`、`Uri`、`CancellationToken`、`ExtensionContext.subscriptions` | 通用 |
+| `activationEvents: onStartupFinished` | 激活（VA1） |
+| `capabilities.untrustedWorkspaces` | 受限模式（VA12） |
+| `workbench.editorAssociations`（对象形式，只用于 `samples/`） | 用文本编辑器打开 SVG |
+
 ## 结构
 
 | 类 | 职责 | 依赖 `vscode` |
@@ -139,8 +160,9 @@ code --install-extension svg-badge-0.1.0.vsix
 | VA7 | **实现** `onDidChangeFileDecorations`：`SvgResourceWatcher` 监听 `**/*.[sS][vV][gG]` 的创建、修改、删除，并把相应的 URI 重新广播出去 | 见下文“刷新” |
 | VA8 | `stat` 失败（文件刚被删除、没有权限、该 scheme 没有文件系统提供者）时返回 `undefined`，同步抛出的异常也一样；请求已被取消时返回 `undefined`；名字不符合的资源不调用 `stat` | 不让异常或未处理的 Promise 拒绝进入扩展宿主。provider 一旦 reject，扩展宿主会把错误写进日志（`extHostDecorations.ts` 中的 `this._logService.error(err)`），主线程则丢弃该条缓存，下次渲染时重新询问（`_fetchData` 的 catch）。刚删除的文件每次都这样，就会反复报错。Explorer 每显示一行都会询问一次，名字预检可以让绝大多数资源连一次 I/O 都不做 |
 | VA9 | `extension.ts` 不遵守一类一文件，导出两个函数 `activate` / `deactivate` | VSCode 的扩展约定要求入口模块导出这两个函数，与 Phase 1 的 `cli/main.ts` 是同一类例外。它只组装和注册，不含逻辑；architecture test 限制它只能导出这两个名字 |
-| VA10 | TypeScript 7.0.2，只用于类型检查（`tsc --noEmit`）；esbuild 0.28.2 负责打包成 CJS；`engines.vscode` 为 `^1.146.0`，`@types/vscode` 为 `1.146.0` | TS 版本与根目录 CLI 相同，两边的类型检查行为一致。本工程不调用 TS Compiler API，不受 TS 7 只有 `unstable/*` 接口的影响；编译由 esbuild 完成，所以采用 `module: preserve` 加 `moduleResolution: bundler`，并开启 `verbatimModuleSyntax`，保证 `import type` 在打包时被擦除（`VscodeResourceKindReader` 运行时不加载 `vscode`）。VSCode 1.146.0 来自本机 `code --version`；`manifest.test.ts` 检查两个版本一致且不高于 1.146 |
+| VA10 | TypeScript 7.0.2，只用于类型检查（`tsc --noEmit`）；esbuild 0.28.2 负责打包成 CJS，目标 `node18`；`engines.vscode` 为 `^1.85.0`，`@types/vscode` 为 `1.85.0`；`engines.node` 保留 `>=22` | TS 版本与根目录 CLI 相同，两边的类型检查行为一致。本工程不调用 TS Compiler API，不受 TS 7 只有 `unstable/*` 接口的影响；编译由 esbuild 完成，所以采用 `module: preserve` 加 `moduleResolution: bundler`，并开启 `verbatimModuleSyntax`，保证 `import type` 在打包时被擦除（`VscodeResourceKindReader` 运行时不加载 `vscode`）。**最低版本**：S1 写的是本机的 1.146.0，S1 独立验收指出这会让任何更旧的 VSCode 拒绝安装。现在降到 1.85.0（2023 年 11 月，比 1.146 早约三年）：下文“API 清单”中的每一项在 1.85 都已存在，证据有两条，一是 `@types/vscode` 换成 1.85.0 后类型检查通过（该版本的 `vscode.d.ts` 只声明 1.85 已有的 API），二是集成测试在下载的 1.85.0 上实际通过（`VSCODE_TEST_VERSION=1.85.0`）。清单里的 API 大多在 1.85 之前很久就有了，再往下降收益很小，而每降一个版本都要实测。**构建目标**：1.85 自带 Electron 25.9.7，扩展宿主是 Node 18.15（集成测试打印 `process.versions.node` 确认），所以 esbuild 目标降为 `node18`。esbuild 只转换语法、不补 API，所以另有两条保证：`src/` 不导入任何 Node 内置模块（architecture test 检查），类型库停在 Node 18 完整实现的 ES2022（同上）；最终由 1.85 上的集成测试证明。**`engines.node`**：VSCode 不读这个字段，扩展宿主的 Node 由 VSCode 版本决定；它约束的是开发工具链（vitest 5.1.0 要求 Node `^22.12.0`、`^24` 或 `>=26`，`@vscode/test-electron` 3.1.0 要求 `>=22`），所以保留。`manifest.test.ts` 检查：两个版本一致、不高于 1.146、最低版本为 1.85.0、构建目标为 `node18` |
 | VA11 | 不加 LICENSE 文件，`package.json` 不写 `license` 字段；vsce 打包时只给警告 | 用什么许可证是作者的决定，仓库根目录也没有 LICENSE。vsce 4.1.1 实测：缺 LICENSE 只报 WARNING，照常生成 `.vsix`；`repository` 字段已补上 |
+| VA12 | 声明 `"capabilities": { "untrustedWorkspaces": { "supported": true } }`：受限模式（工作区未受信任）下照常激活 | 没有声明这一项的**已安装**扩展，在受限模式下会被 VSCode 禁用；开发模式（F5、集成测试）加载的扩展不受这条规则约束，所以 F5 看不出来（S1 独立验收发现：截图中的测试窗口正处于受限模式）。也就是说，助教装上 `.vsix` 后打开一个还没信任的文件夹，可能什么效果都看不到。受限模式要防的是“打开别人的仓库时自动执行其中的代码”（任务、调试配置、语言服务器、工作区里的可执行文件）。本扩展只做三件事：用 `workspace.fs.stat` 读文件类型；用文件监听得到 `*.svg` 的路径；在内存里解析 VSCode 已经读入的文本。它不执行、不加载工作区中的任何东西，也不读任何设置，所以可以无条件支持。`manifest.test.ts` 检查这一项；实际效果用 `npm run test:restricted` 验证（见“集成测试”） |
 
 ### 刷新（VA7）的依据
 
@@ -148,6 +170,7 @@ code --install-extension svg-badge-0.1.0.vsix
 - 因此：
   - **`a.txt` 重命名为 `a.svg`**：`a.svg` 是一个新 URI，缓存中没有它的结果，VSCode 会询问 provider，标记会正确出现，**不需要**刷新事件。新建 `x.svg` 目录同理，询问时 `stat` 得到目录，不会加标记。
   - 但**同一个 URI 换了类型**时（删掉文件 `x.svg` 再 `mkdir x.svg`，或者反过来），缓存中的旧结果会一直留着，**需要**刷新事件。同样的情况还有：某次询问恰好赶上文件正在创建，`stat` 失败，“无标记”也被缓存下来。
-- 只监听创建和删除还不够：VSCode 的文件监听会把**同一路径的“删除后紧跟创建”合并成一次“修改”**（`src/vs/platform/files/common/watcher.ts` 的 `EventCoalescer`：“Flatten DELETE followed by CREATE into CHANGE”）。所以修改事件也要转发，代价是每次保存 SVG 文件时多一次 `stat`。
+- 只监听创建和删除还不够：VSCode 的文件监听会把同一路径“删除后紧跟创建”的**事件类型**合并成“修改”（`src/vs/platform/files/common/watcher.ts` 的 `EventCoalescer`：“Flatten DELETE followed by CREATE into CHANGE”）。所以修改事件也要转发，代价是每次保存 SVG 文件时多一次 `stat`。
+- 但**事件的数量不保证是一次**。S1 独立验收在真实的 VSCode 1.146.0（macOS）上实测：类型确实被合并成 `change`，但每一次文件操作都会收到两次相同的事件，间隔约 100 ms，创建和删除也一样，原因未查明。重复转发是无害的：VSCode 只是对同一个 URI 再询问一次，代价是多一次 `stat`，结果不变。所以实现不去重，也不依赖事件的次数。
 - 仍然覆盖不到的情况（已知限制）：符号链接的**目标**变了而链接本身没变（例如 `link.svg` 指向的文件被删除），事件只会落在目标路径上，链接的标记不会更新，要等重新加载窗口。
 - 实测：F5 清单中的 R1–R5。

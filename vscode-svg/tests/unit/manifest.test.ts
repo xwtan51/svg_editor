@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 
 interface Manifest {
   main: string;
-  engines: { vscode: string };
+  engines: { vscode: string; node: string };
   activationEvents: string[];
+  capabilities?: { untrustedWorkspaces?: { supported?: boolean | string } };
+  scripts: Record<string, string>;
   devDependencies: Record<string, string>;
   type?: string;
 }
@@ -31,6 +33,23 @@ describe("package.json (extension manifest)", () => {
     const [major, minor] = manifest.engines.vscode.replace(/^\^/, "").split(".").map(Number);
     expect(major).toBe(1);
     expect(minor).toBeLessThanOrEqual(146);
+  });
+
+  it("VA10: the minimum is VSCode 1.85.0, a caret range, so any later 1.x installs too", () => {
+    expect(manifest.engines.vscode).toBe("^1.85.0");
+  });
+
+  it("VA10: the bundle targets the extension host's Node of the minimum VSCode (1.85 → Electron 25 → Node 18)", () => {
+    const targets = [...manifest.scripts["build"]!.matchAll(/--target=(\S+)/g)].map((m) => m[1]);
+    expect(targets).toEqual(["node18"]);
+  });
+
+  it("VA10: engines.node constrains the development tool chain only, not the extension host", () => {
+    expect(manifest.engines.node).toBe(">=22");
+  });
+
+  it("VA12: declares support for untrusted workspaces, so Restricted Mode does not disable it", () => {
+    expect(manifest.capabilities?.untrustedWorkspaces?.supported).toBe(true);
   });
 
   it("the entry is the CommonJS bundle (no \"type\": \"module\")", () => {
