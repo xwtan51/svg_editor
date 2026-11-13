@@ -1,0 +1,39 @@
+{
+  "name": "svg-badge",
+  "displayName": "SVG Badge",
+  "description": "Marks .svg files in the Explorer with a [] badge (course project, Lab1 Phase 2 A.1).",
+  "version": "0.1.0",
+  "publisher": "xwtan51",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xwtan51/svg_editor.git",
+    "directory": "vscode-svg"
+  },
+  "engines": {
+    "vscode": "^1.146.0",
+    "node": ">=22"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {},
+  "scripts": {
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node22 --external:vscode --sourcemap --outfile=dist/extension.js",
+    "watch": "npm run build -- --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "vscode:prepublish": "npm run typecheck && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/vscode": "1.146.0",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  }
+}

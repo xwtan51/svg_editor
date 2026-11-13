@@ -1,0 +1,12 @@
+# Only dist/extension.js, package.json and README.md go into the .vsix.
+.vscode/**
+src/**
+tests/**
+samples/**
+doc/**
+node_modules/**
+dist/**/*.map
+tsconfig.json
+vitest.config.mts
+.gitignore
+*.vsix
