@@ -1,0 +1,165 @@
+# 回归补充会话：固定 final 的 help、usage、报错与回显文案（见 doc/transcript/README.md）
+# --- 无文档 ---
+help
+init 1
+init 0 10
+init abc 10
+canvas
+save out.svg
+create rect a 0 0 1 1
+delete a
+move a 1 1
+scale a 2
+set a fill red
+group g a b
+ungroup g
+addto g a
+front a
+back a
+tree
+show a
+undo
+redo
+frobnicate
+read
+read missing.svg
+read broken.svg
+# --- 文档命令 ---
+init
+help
+undo
+canvas
+canvas 500
+canvas -1 2
+canvas 400 300
+canvas
+save
+# --- create：六种图形与报错 ---
+create
+create star s1 1 2
+create rect r1 1 2 3
+create rect 1bad 1 1 1 1
+create rect r1 10 20 30 40
+create rect r1 1 1 1 1
+create circle c1 50 50 10 red
+create ellipse e1 100 60 30 15 #00ff00
+create line l1 0 0 100 50 black
+create text t1 20 280 "hello world"
+create text t2 1 1 "x" blue
+create g grp
+create g sub in grp
+create rect inner 1 1 2 2 #123456 in sub
+create circle dot 3 3 1 in sub
+create rect x2 1 1 2 2 in nowhere
+create rect x3 1 1 2 2 in r1
+create rect x4 1 1 2 2 in
+# --- 编辑命令：成功、报错与撤销 ---
+move
+move nope 1 1
+move abc
+move r1 5 -5
+move grp 10 10
+undo
+move c1 1 1
+move e1 5 5
+move l1 1 2
+move t1 0 -10
+move inner 2 2
+scale r1
+scale r1 0
+scale r1 abc
+scale c1 2
+undo
+redo
+scale r1 0.5
+scale e1 0.5
+scale l1 2
+scale t1 3
+scale grp 2
+undo
+set r1
+set r1 bogus 1
+set r1 width -3
+set r1 fill #abcdef
+set r1 width 35
+set t1 text "bye"
+set c1 stroke blue
+set c1 stroke-width 2
+set l1 x2 120
+undo
+set c1 r 25
+set e1 rx 40
+set t1 x 30
+set inner fill none
+group
+group grp2 nope
+group grp r1
+group grp2 r1 c1
+group bad grp sub
+undo
+redo
+addto
+addto r1 c1
+addto grp nope
+addto sub grp
+addto grp e1
+undo
+ungroup
+ungroup r1
+ungroup nope
+ungroup grp2
+ungroup sub
+undo
+front
+front nope
+front r1
+back
+back nope
+back t1
+undo
+undo
+delete
+delete nope
+delete sub
+undo
+# --- 显示命令 ---
+show
+show nope
+show a b
+show r1
+show t1
+show c1
+show e1
+show l1
+show grp
+show sub
+tree a b
+tree nope
+tree sub
+tree grp
+tree
+help extra
+undo x
+redo x
+delete l1
+redo
+# --- save 与 io 锁 ---
+save a b
+save no/such/dir/x.svg
+save out.svg
+undo
+redo
+create circle late 1 1 1
+undo
+save
+# --- read：自动分配 id 与警告，再 save/read 往返 ---
+read mixed.svg
+tree
+show g1
+save roundtrip.svg
+read roundtrip.svg
+tree
+set rect1 fill #ff0000
+save
+read out.svg
+tree

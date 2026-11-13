@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
+  <g id="grp2">
+    <rect id="r1" x="7.5" y="7.5" width="35" height="20" fill="#abcdef"/>
+    <circle id="c1" cx="102" cy="102" r="25" fill="red" stroke="blue" stroke-width="2"/>
+  </g>
+  <ellipse id="e1" cx="52.5" cy="32.5" rx="40" ry="7.5" fill="#00ff00"/>
+  <text id="t1" x="30" y="810">bye</text>
+  <g id="grp">
+    <g id="sub">
+      <rect id="inner" x="3" y="3" width="2" height="2" fill="none"/>
+      <circle id="dot" cx="3" cy="3" r="1"/>
+    </g>
+  </g>
+</svg>

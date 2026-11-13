@@ -10,7 +10,9 @@
   "scripts": {
     "cli": "tsx src/cli/main.ts",
     "test": "vitest run --dir tests",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "baseline": "tsx scripts/baseline/main.ts",
+    "typecheck:scripts": "tsc --noEmit -p scripts"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
