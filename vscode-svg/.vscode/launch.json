@@ -1,0 +1,34 @@
+{
+  // F5 builds the bundle (preLaunchTask), then starts an Extension Development
+  // Host that loads this folder as an extension and opens samples/ as workspace.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run SVG Badge on samples/",
+      "type": "extensionHost",
+      "request": "launch",
+      // --disable-extensions: only this extension runs, so nothing else can add
+      // badges or icons that would blur the A.1 check.
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--disable-extensions",
+        "${workspaceFolder}/samples"
+      ],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "sourceMaps": true,
+      "preLaunchTask": "npm: build"
+    },
+    {
+      "name": "Run SVG Badge on samples/ (keep my other extensions)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "${workspaceFolder}/samples"
+      ],
+      "outFiles": ["${workspaceFolder}/dist/**/*.js"],
+      "sourceMaps": true,
+      "preLaunchTask": "npm: build"
+    }
+  ]
+}
