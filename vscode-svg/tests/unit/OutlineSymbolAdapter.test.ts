@@ -96,11 +96,15 @@ describe("OutlineSymbolAdapter", () => {
     }
   });
 
-  it("converts 100 000 nesting levels without overflowing the call stack", () => {
+  it("converts 100 000 nesting levels without overflowing its own call stack", () => {
+    // Built by hand: the parser would stop at 256 levels (VA22).
     const depth = 100_000;
-    const text = "<g>".repeat(depth) + "</g>".repeat(depth);
+    let node = new OutlineNode("g", undefined, OutlineRole.LEAF, new SourceSpan(0, 4), new SourceSpan(1, 2), []);
+    for (let i = 1; i < depth; i += 1) {
+      node = new OutlineNode("g", undefined, OutlineRole.CONTAINER, new SourceSpan(0, 4), new SourceSpan(1, 2), [node]);
+    }
     let levels = 0;
-    for (let level = convert(text); level.length > 0; level = level[0]!.children) levels += 1;
+    for (let level = adapter.toSymbols([node], new FakeTextDocument("<g/>") as never); level.length > 0; level = level[0]!.children) levels += 1;
     expect(levels).toBe(depth);
   });
 

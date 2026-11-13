@@ -23,6 +23,11 @@ export class OpenElement {
     return this.tag.name();
   }
 
+  /** Whether this element is shown in an outline limited to `levels` levels (depth 0 is level 1). */
+  isWithin(levels: number): boolean {
+    return this.depth < levels;
+  }
+
   adopt(child: OutlineNode): void {
     this.finished.push(child);
   }

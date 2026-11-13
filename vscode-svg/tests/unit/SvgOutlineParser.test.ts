@@ -281,13 +281,25 @@ describe("never throws (VA22)", () => {
     expect(elapsed).toBeLessThan(1000);
   });
 
-  it("very deep nesting (100 000 levels) does not overflow the call stack", () => {
+  it("very deep nesting (100 000 levels): no stack overflow; the outline stops at 256 levels", () => {
     const depth = 100_000;
     const text = "<g>".repeat(depth) + "</g>".repeat(depth);
     const outline = parser.parse(text);
     expect(outline.isComplete()).toBe(true);
     let levels = 0;
-    for (let nodes = outline.roots(); nodes.length > 0; nodes = nodes[0]!.children()) levels += 1;
-    expect(levels).toBe(depth);
+    let deepest: OutlineNode | undefined;
+    for (let nodes = outline.roots(); nodes.length > 0; nodes = nodes[0]!.children()) {
+      levels += 1;
+      deepest = nodes[0];
+    }
+    expect(levels).toBe(256);
+    expect(deepest?.role()).toBe(OutlineRole.LEAF);
+  });
+
+  it("too deep elements are still checked: a mismatched tag below level 256 is a syntax error", () => {
+    const text = "<g>".repeat(300) + "</x>" + "</g>".repeat(300);
+    const outline = parser.parse(text);
+    expect(outline.error()?.message).toMatch(/expected <\/g> but found <\/x>/);
+    expectInvariants(text, outline);
   });
 });
