@@ -1,7 +1,7 @@
 {
   "name": "svg-badge",
   "displayName": "SVG Badge",
-  "description": "Marks .svg files in the Explorer with a [] badge (course project, Lab1 Phase 2 A.1).",
+  "description": "Marks .svg files in the Explorer with a [] badge and shows the element tree of SVG files in the Outline view (course project, Lab1 Phase 2 A.1, A.2).",
   "version": "0.1.0",
   "publisher": "xwtan51",
   "private": true,
@@ -18,7 +18,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onLanguage:xml"
   ],
   "main": "./dist/extension.js",
   "capabilities": {

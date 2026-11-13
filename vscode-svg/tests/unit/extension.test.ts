@@ -5,6 +5,8 @@ import { EventEmitter } from "../stubs/vscode.js";
 const registered: unknown[] = [];
 const watcherArgs: unknown[][] = [];
 const registration = { dispose: vi.fn() };
+const symbolRegistrations: unknown[][] = [];
+const symbolRegistration = { dispose: vi.fn() };
 
 vi.mock("vscode", async (importOriginal) => {
   const stub = await importOriginal<typeof import("../stubs/vscode.js")>();
@@ -14,6 +16,12 @@ vi.mock("vscode", async (importOriginal) => {
       registerFileDecorationProvider: (provider: unknown) => {
         registered.push(provider);
         return registration;
+      },
+    },
+    languages: {
+      registerDocumentSymbolProvider: (...args: unknown[]) => {
+        symbolRegistrations.push(args);
+        return symbolRegistration;
       },
     },
     workspace: {
@@ -30,11 +38,13 @@ vi.mock("vscode", async (importOriginal) => {
 const { activate, deactivate } = await import("../../src/extension.js");
 const { SvgFileDecorationProvider } = await import("../../src/host/SvgFileDecorationProvider.js");
 const { SvgResourceWatcher } = await import("../../src/host/SvgResourceWatcher.js");
+const { SvgDocumentSymbolProvider } = await import("../../src/host/SvgDocumentSymbolProvider.js");
 
 describe("extension entry", () => {
   beforeEach(() => {
     registered.length = 0;
     watcherArgs.length = 0;
+    symbolRegistrations.length = 0;
   });
 
   it("registers one SvgFileDecorationProvider via window.registerFileDecorationProvider", () => {
@@ -54,6 +64,17 @@ describe("extension entry", () => {
   it("watches *.svg in any letter case, with all event kinds enabled", () => {
     activate({ subscriptions: [] } as unknown as ExtensionContext);
     expect(watcherArgs).toEqual([["**/*.[sS][vV][gG]"]]);
+  });
+
+  it("registers one SvgDocumentSymbolProvider for XML documents named *.svg in any case (VA14)", () => {
+    const context = { subscriptions: [] as { dispose(): unknown }[] } as unknown as ExtensionContext;
+    activate(context);
+    expect(symbolRegistrations).toHaveLength(1);
+    const [selector, provider, metadata] = symbolRegistrations[0]!;
+    expect(selector).toEqual({ language: "xml", pattern: "**/?*.[sS][vV][gG]" });
+    expect(provider).toBeInstanceOf(SvgDocumentSymbolProvider);
+    expect(metadata).toEqual({ label: "SVG" });
+    expect(context.subscriptions).toContain(symbolRegistration);
   });
 
   it("deactivate does nothing and does not throw", () => {

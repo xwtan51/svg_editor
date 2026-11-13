@@ -3,7 +3,7 @@
  * - one exported class per file, file name = class name, named exports only
  *   (extension.ts is the entry module required by VSCode — exempt, like cli/main.ts);
  * - src/core/ never imports `vscode` in any form;
- * - VscodeResourceKindReader imports `vscode` for types only;
+ * - VscodeResourceKindReader and SvgDocumentSymbolProvider import `vscode` for types only;
  * - nothing under src/ imports a Node built-in module, and the type library stays
  *   at ES2022, so the bundle runs on the Node 18 of VSCode 1.85's extension host (VA10).
  *
@@ -43,11 +43,12 @@ describe("architecture", () => {
       "Badge.ts", "FileTypeMask.ts", "ResourceKind.ts", "ResourcePath.ts", "SchemeFilter.ts", "SvgBadgeRule.ts",
       // A.2 outline
       "OpenElement.ts", "OutlineNode.ts", "OutlineRole.ts", "OutlineTreeBuilder.ts", "SourceSpan.ts",
-      "SvgOutline.ts", "SvgOutlineParser.ts",
+      "SvgOutline.ts", "SvgOutlineParser.ts", "SvgOutlineScope.ts",
       "XmlAttributeDecoder.ts", "XmlEndTag.ts", "XmlStartTag.ts", "XmlSyntaxError.ts", "XmlTokenizer.ts",
     ].sort());
     expect(all.filter((f) => f.startsWith("host")).map((f) => basename(f)).sort()).toEqual([
       "SvgFileDecorationProvider.ts", "SvgResourceWatcher.ts", "VscodeResourceKindReader.ts",
+      "OutlineSymbolAdapter.ts", "SvgDocumentSymbolProvider.ts",
     ].sort());
     expect(all.filter((f) => !f.startsWith("core") && !f.startsWith("host"))).toEqual([ENTRY]);
   });
@@ -74,10 +75,12 @@ describe("architecture", () => {
     }
   });
 
-  it("the type adapter imports vscode for types only", () => {
-    const text = code(join("host", "VscodeResourceKindReader.ts"));
-    expect(text).toMatch(vscodeImport);
-    expect(text).not.toMatch(runtimeVscodeImport);
+  it("the type adapter and the outline provider import vscode for types only", () => {
+    for (const file of ["VscodeResourceKindReader.ts", "SvgDocumentSymbolProvider.ts"]) {
+      const text = code(join("host", file));
+      expect(text, file).toMatch(vscodeImport);
+      expect(text, file).not.toMatch(runtimeVscodeImport);
+    }
   });
 
   it("VA10: src/ imports no Node built-in module (the extension host may be Node 18)", () => {

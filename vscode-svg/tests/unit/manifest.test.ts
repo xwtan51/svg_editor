@@ -18,8 +18,8 @@ function readJson<T>(relative: string): T {
 const manifest = readJson<Manifest>("../../package.json");
 
 describe("package.json (extension manifest)", () => {
-  it("VA1: activates on onStartupFinished — file decorations have no contribution point", () => {
-    expect(manifest.activationEvents).toEqual(["onStartupFinished"]);
+  it("VA1: onStartupFinished for the badge (no contribution point), onLanguage:xml for the outline", () => {
+    expect(manifest.activationEvents).toEqual(["onStartupFinished", "onLanguage:xml"]);
   });
 
   it("engines.vscode and @types/vscode name the same version", () => {
