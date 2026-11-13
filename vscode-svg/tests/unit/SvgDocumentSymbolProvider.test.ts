@@ -46,8 +46,12 @@ describe("SvgDocumentSymbolProvider", () => {
       ["a very large file", `<svg>${'<rect x="1"/>'.repeat(200_000)}</svg>`],
     ];
 
-    it.each(inputs)("%s → an array", (_title, text) => {
+    it.each(inputs)("%s → an array, without going through the error path", (_title, text) => {
+      // An empty result from a swallowed exception would look the same as a
+      // correct empty outline; the log call tells them apart.
+      const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
       expect(Array.isArray(provider().provideDocumentSymbols(documentOf(text), live))).toBe(true);
+      expect(log).not.toHaveBeenCalled();
     });
 
     it("incomplete XML → the part before the error, not an exception (VA16)", () => {

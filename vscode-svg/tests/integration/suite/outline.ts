@@ -8,7 +8,7 @@
  * checklist in the README.
  */
 import * as assert from "node:assert/strict";
-import { commands, ConfigurationTarget, extensions, Range, SymbolKind, TabInputCustom, TabInputText, Uri, version, window, workspace, WorkspaceEdit } from "vscode";
+import { commands, ConfigurationTarget, extensions, Range, SymbolKind, TabInputCustom, TabInputText, version, window, workspace, WorkspaceEdit } from "vscode";
 import type { TextDocument } from "vscode";
 import { IntegrationRunner } from "./IntegrationRunner.js";
 import { OutlineProbe } from "./OutlineProbe.js";
@@ -20,15 +20,19 @@ export async function run(): Promise<void> {
   const probe = new OutlineProbe();
   const runner = new IntegrationRunner(`SVG outline — VSCode ${version}`);
 
-  // Anything the extension logs as an unexpected failure ends up here (VA22).
-  const extensionErrors: string[] = [];
-  const consoleError = console.error.bind(console);
-  console.error = (...args: unknown[]) => {
-    if (String(args[0]).startsWith("[svg-badge]")) extensionErrors.push(args.map(String).join(" "));
-    consoleError(...args);
-  };
+  // What the extension logs as an unexpected failure (VA22) cannot be caught
+  // in here: the extension host redefines console.error and
+  // process.stderr.write as accessors whose setters do nothing
+  // (ExtHostConsoleForwarder). It does copy every message to VSCode's own
+  // output, which the launcher reads: it fails the run on any
+  // "[svg-badge] SVG outline failed" line, and requires the self-test line
+  // below so that a broken capture cannot pass silently.
   const rejections: unknown[] = [];
   process.on("unhandledRejection", (reason) => rejections.push(reason));
+
+  runner.test("extension log messages reach the launcher (self-test of its log check)", async () => {
+    console.error("[svg-badge] log-capture self-test");
+  });
 
   async function open(name: string): Promise<TextDocument> {
     const document = await workspace.openTextDocument(probe.uri(name));
@@ -211,14 +215,9 @@ export async function run(): Promise<void> {
     }
   });
 
-  runner.test("no unexpected failure was logged by the extension, no unhandled rejection (VA22)", async () => {
-    assert.deepEqual(extensionErrors, []);
+  runner.test("no unhandled promise rejection (VA22; logged failures are checked by the launcher)", async () => {
     assert.deepEqual(rejections, []);
   });
 
-  try {
-    await runner.run();
-  } finally {
-    console.error = consoleError;
-  }
+  await runner.run();
 }

@@ -55,19 +55,28 @@ export class IntegrationLauncher {
     this.version = version;
   }
 
-  /** The A.2 outline suite, with this project loaded as development extension. */
+  /**
+   * The A.2 outline suite, with this project loaded as development extension.
+   * Also fails when the extension logged an unexpected provider failure (VA22):
+   * such a failure still yields an empty outline, which some cases cannot tell
+   * apart from a correct empty one, and the extension host does not let the
+   * suite intercept the log itself.
+   */
   async runOutlineSuite(): Promise<number> {
     const executable = await this.download();
     const sandbox = this.createSandbox("outline");
     try {
-      return await this.launch(executable, [
+      const output: string[] = [];
+      const code = await this.launch(executable, [
         sandbox.workspace,
         "--disable-extensions",
         ...sandbox.isolation,
         "--disable-workspace-trust",
         `--extensionDevelopmentPath=${this.project}`,
         `--extensionTestsPath=${join(this.project, "dist-test", "suite", "outline.js")}`,
-      ], { HOME: sandbox.home });
+      ], { HOME: sandbox.home }, output);
+      const log = this.checkExtensionLog(output.join(""));
+      return code !== 0 ? code : log;
     } finally {
       rmSync(sandbox.root, { recursive: true, force: true });
     }
@@ -170,10 +179,22 @@ export class IntegrationLauncher {
     return directory;
   }
 
-  private launch(executable: string, args: string[], extra: Record<string, string>): Promise<number> {
+  /** 0 if the self-test line is there and no unexpected failure was logged; 1 otherwise. */
+  private checkExtensionLog(output: string): number {
+    const failures = output.split("\n").filter((line) => line.includes("[svg-badge] SVG outline failed"));
+    const selfTest = output.includes("[svg-badge] log-capture self-test");
+    console.log(`Extension log check: self-test line ${selfTest ? "seen" : "MISSING"}, ${failures.length} unexpected outline failure(s)`);
+    for (const line of failures) console.log(`    ${line}`);
+    return selfTest && failures.length === 0 ? 0 : 1;
+  }
+
+  private launch(executable: string, args: string[], extra: Record<string, string>, output: string[] = []): Promise<number> {
     const all = [...args, ...IntegrationLauncher.QUIET];
     console.log(`$ ${executable}\n    ${all.join("\n    ")}`);
     const child = spawn(executable, all, { env: this.environment({ SVG_BADGE_IT_VERSION: this.version, ...extra }) });
+    for (const stream of [child.stdout, child.stderr]) {
+      stream.on("data", (chunk: Buffer) => output.push(chunk.toString()));
+    }
     child.stdout.pipe(process.stdout);
     child.stderr.pipe(process.stderr);
     return new Promise((resolve, reject) => {
