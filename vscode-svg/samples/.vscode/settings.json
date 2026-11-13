@@ -1,0 +1,4 @@
+{
+  // Make sure no user setting hides the badge while demonstrating A.1.
+  "explorer.decorations.badges": true
+}

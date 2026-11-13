@@ -1,0 +1,4 @@
+# Symbolic links created by hand for the F5 check (README "符号链接"); never committed.
+samples/link-to-file.svg
+samples/link-to-dir.svg
+samples/dangling.svg

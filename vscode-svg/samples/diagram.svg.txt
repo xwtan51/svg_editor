@@ -1,0 +1,1 @@
+Ends in .txt, not .svg: must NOT show the [] badge although ".svg" appears in the name.

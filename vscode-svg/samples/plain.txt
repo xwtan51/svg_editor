@@ -1,0 +1,1 @@
+A plain text file: it must NOT show the [] badge.
