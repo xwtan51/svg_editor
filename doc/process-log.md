@@ -21,3 +21,8 @@
 | 2026-10-26 | 需要确认 doc-commands、app、cli 三条线的测试真能发现错误 | 各线故意破坏：save 先改路径、read 警告后置；Editor 先 parse 后查文档、注释不去行首空白；Repl 去掉 SIGINT 处理（退出码 130） | 对应测试均失败后恢复，写进质量保证手段 |
 | 2026-10-26 | 防空转断言只覆盖了 view、app、cli，commands/ 与 io/ 没有"文件被扫描到"的断言 | 写 README v5 一致性自查时列出全部 toContain 断言 | 记为待办（本次只改文档），README「一致性自查」② |
 | 2026-10-26 | 需要确认系统测试能发现输出格式错误 | 故意把 tree 输出的属性列前空格从 2 改成 3，只跑 tests/system | 3 个会话中的 tree 用例失败，恢复后全部通过 |
+| 2026-11-13 | S0：动代码之前需要固定 `final` 的 CLI 行为基线 | 建 `doc/transcript/` 三个会话：§6 → `cli-1.txt`、§6.1A → `cli-1-1a.txt`（由 `tests/transcripts/` 的 `svg> ` 行转换），以及 165 行的回归补充 `regression.txt`（19 条命令各至少一次成功和一种报错、六种图形、`read` 自动分配 id 的警告、`save` 后 `read` 往返）；`scripts/baseline` 在新建临时目录里直接用 tsx 运行入口，`--update` 保存 stdout、退出码和目录里的全部文件，要求 stderr 为空 | 基线入库；以后每步 `npm run baseline`；`--update` 未经同意禁止使用，已写进 `CLAUDE.md` |
+| 2026-11-13 | 基线是在分支提交 `e1911f3` 上生成的，不是字面上的 `7311723` | `git diff --stat 7311723 HEAD -- src tests` 为空（该提交只新增了 `doc/spec/`）；另在 `final` 的独立 worktree 中放入同一份脚本和会话，比对模式 3 个会话 0 差异 | 无需重新生成；生成记录写进 `doc/transcript/README.md` |
+| 2026-11-13 | 需要证明基线本身是对的 | 交叉核对：`cli-1`、`cli-1-1a` 的输入与 `spec-6.txt`、`spec-6-1.txt` 的 `svg> ` 行一致，stdout 去掉 banner 后与其期望输出逐行一致（32 行、22 行，0 处不符） | 无需纠正；核对命令写进 `doc/transcript/README.md` |
+| 2026-11-13 | 需要确认比对脚本真能发现错误 | 故意改坏三次：`TreeRenderer` 列间距 2→3，三个会话都报 FAIL，分别指向 stdout 第 9、14、189 行；`z-order restored` 改一个字母，只有 `regression` 报 FAIL（第 159 行）；序列化器把 `/>` 改成 ` />`，stdout 全部一致，4 个产出 SVG 报 FAIL | 每次恢复后 0 差异；改坏的代码未提交 |
+| 2026-11-13 | `npm run typecheck` 只检查 `src/`、`tests/`，`scripts/` 的 TS 不在检查范围内，而 S0 不允许改根 `tsconfig.json` | 往 `scripts/` 放一个类型错误，`npm run typecheck` 不报错 | 新增 `scripts/tsconfig.json`（继承根配置）和 `typecheck:scripts` 脚本；S14 接入 CI 时一并检查 |
