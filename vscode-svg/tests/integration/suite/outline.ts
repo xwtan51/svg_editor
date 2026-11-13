@@ -64,7 +64,7 @@ export async function run(): Promise<void> {
     console.log(`      active before opening: ${extensions.getExtension(EXTENSION_ID)?.isActive ?? "not found"}`);
     const document = await open("example.svg");
     assert.equal(document.languageId, "xml");
-    await IntegrationRunner.waitFor("activation", () => extensions.getExtension(EXTENSION_ID)?.isActive === true, 30_000);
+    await IntegrationRunner.waitFor("activation", () => extensions.getExtension(EXTENSION_ID)?.isActive === true, 60_000);
   });
 
   runner.test("example.svg: the outline of figure A.2, rect#start on line 3", async () => {

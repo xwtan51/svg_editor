@@ -44,8 +44,11 @@ export async function run(): Promise<void> {
 
   if (expect === "active") {
     runner.test("opening example.svg: the extension activates and provides the outline", async () => {
+      // Generous: VSCode 1.146.0's built-in chat features make network requests
+      // at startup (up to a 20 s fetch timeout offline), which once delayed this
+      // step by ~29 s. The extension itself is not involved.
       await window.showTextDocument(await workspace.openTextDocument(probe.uri("example.svg")));
-      await IntegrationRunner.waitFor("activation", () => extensions.getExtension(EXTENSION_ID)?.isActive === true, 30_000);
+      await IntegrationRunner.waitFor("activation", () => extensions.getExtension(EXTENSION_ID)?.isActive === true, 60_000);
       await IntegrationRunner.waitFor("the outline", async () => (await probe.shape(probe.uri("example.svg"))) !== "(none)");
       assert.equal(await probe.shape(probe.uri("example.svg")), "svg[g#flow[rect#start, g#nested[text]]]");
     });
