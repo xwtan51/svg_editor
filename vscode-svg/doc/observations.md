@@ -63,16 +63,18 @@ wayou.vscode-icons-mac@7.25.3
 
 | # | 观察项 | 操作 | 观察结果 |
 |---|---|---|---|
-| 1 | `.svg` 文件的语言模式 | 打开 `example.svg`，看窗口右下角状态栏的语言名 | |
-| 2 | `.svg` 文件的语言 ID | 点右下角的语言名，弹出列表中当前项括号里的 ID（预期 `xml`） | |
-| 3 | 大写扩展名的语言模式 | 打开 `LOGO.SVG`、`Mixed.Svg`，看右下角（S2 的大纲选择器要与 VA3 一致） | |
-| 4 | 不装本扩展时 `.svg` 的 Outline | 打开 `example.svg`，在资源管理器底部展开“大纲”（Outline） | |
-| 5 | `.md` 的 Outline：层级 | 打开仓库根目录的 `README.md`（或任意含多级标题的 `.md`），看大纲是否按标题嵌套 | |
+| 1 | `.svg` 文件的语言模式 | 打开 `example.svg`，看窗口右下角状态栏的语言名 | 语言模式为 XML（内置 `vscode.xml` 的别名为 `XML`，API 读取的 `languageId` 为 `xml`）。（自动：VSCode 1.146.0 下载版，`--disable-extensions`） |
+| 2 | `.svg` 文件的语言 ID | 点右下角的语言名，弹出列表中当前项括号里的 ID（预期 `xml`） | `example.svg` 的 `languageId` = `xml`。（自动：VSCode 1.146.0 下载版，`--disable-extensions`） |
+| 3 | 大写扩展名的语言模式 | 打开 `LOGO.SVG`、`Mixed.Svg`，看右下角（S2 的大纲选择器要与 VA3 一致） | `LOGO.SVG`、`Mixed.Svg` 的 `languageId` 均为 `xml`，对应 XML 语言模式。（自动：VSCode 1.146.0 下载版，`--disable-extensions`） |
+| 4 | 不装本扩展时 `.svg` 的 Outline | 打开 `example.svg`，在资源管理器底部展开“大纲”（Outline） | 对 `example.svg` 执行 `vscode.executeDocumentSymbolProvider` 返回 `undefined`，未提供 SVG 符号树。（自动：VSCode 1.146.0 下载版，`--disable-extensions`） |
+| 5 | `.md` 的 Outline：层级 | 打开仓库根目录的 `README.md`（或任意含多级标题的 `.md`），看大纲是否按标题嵌套 | 按标题嵌套，共两层：第 1 层 `# svg_editor`，第 2 层 `## 运行`、`## 文档`；没有第 3 层。三个节点的 API kind 均为 `String(14)`。（自动：VSCode 1.146.0 下载版，`--disable-extensions`） |
 | 6 | `.md` 的 Outline：点击跳转 | 点击大纲中的某个节点，编辑器是否滚动到该处，选中的是整段还是标题行 | |
 | 7 | `.md` 的 Outline：光标跟随 | 在编辑器中移动光标，大纲中的高亮是否跟着变化（大纲视图 `…` 菜单中的“跟随光标”） | |
 | 8 | `.md` 的 Outline：编辑后刷新 | 新增或删除一个标题，大纲多久更新一次；输入过程中是否闪烁或清空 | |
-| 9 | `.json` 的 Outline（对照） | 打开 `vscode-svg/package.json`，看层级、节点名（键名）和图标；重复第 6–8 项 | |
+| 9 | `.json` 的 Outline（对照） | 打开 `vscode-svg/package.json`，看层级、节点名（键名）和图标；重复第 6–8 项 | 两层，无第 3 层。第 1 层：`name`、`displayName`、`description`、`version`、`publisher`、`main` 为 `String(14)`；`private` 为 `Boolean(16)`；`repository`、`engines`、`contributes`、`scripts`、`devDependencies` 为 `Module(1)`；`categories`、`activationEvents` 为 `Array(17)`。第 2 层：`repository` → `type`、`url`、`directory`；`engines` → `vscode`、`node`；`categories`、`activationEvents` 各有节点 `0`；`scripts` → `build`、`watch`、`typecheck`、`test`、`vscode:prepublish`；`devDependencies` → `@types/node`、`@types/vscode`、`esbuild`、`typescript`、`vitest`；这些子节点均为 `String(14)`。（自动：VSCode 1.146.0 下载版，`--disable-extensions`） |
 | 10 | 编辑器标签页上的 `[]` | 用 F5 启动 Extension Development Host，打开 `example.svg`，看标签页标题右侧是否也有 `[]` | |
 | 11 | 标签页标记的开关 | 在第 10 项的窗口中把设置 `workbench.editor.decorations.badges` 改为 `false`，标签页上的 `[]` 是否消失（Explorer 中应仍然显示） | |
+
+待人工填写。
 
 填写说明：第 4 项如果为空，大纲面板会显示类似“活动编辑器无法提供大纲信息”的提示，请照抄原文。可以附截图，放在 `vscode-svg/doc/images/`，S3 会用到。
