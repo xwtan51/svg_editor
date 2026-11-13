@@ -1,0 +1,263 @@
+svg-editor 0.1 — type 'help' for commands
+Document:
+  init [w] [h]                                     create an empty canvas (default 800x600)
+  read <file.svg>                                  read an SVG file as the current document
+  save [file.svg]                                  save the current document (default: the path it was read from)
+  canvas [w] [h]                                   show the canvas size, or change it
+Shape editing:
+  create <type> <id> [params…] [in <containerId>]  create a shape, at the root or inside a container
+  delete <id>                                      delete a shape (a container with all its descendants)
+  move <id> <dx> <dy>                              translate a shape by (dx, dy)
+  scale <id> <factor>                              scale all geometry of a shape by factor
+  set <id> <attr> <value>                          set fill, stroke, stroke-width, a geometry attribute or the text
+  group <newGid> <id1> <id2>…                      make a new container holding the given shapes
+  ungroup <gid>                                    dissolve a container; its children take its place
+  addto <gid> <id>                                 move a shape into a container, as its last child
+  front <id>                                       bring a shape to the front of its siblings
+  back <id>                                        send a shape to the back of its siblings
+Display:
+  tree [id]                                        show the structure tree (of the document, or of one shape)
+  show <id>                                        show all attributes of one shape
+  help                                             list all commands and their syntax
+Undo / redo:
+  undo                                             undo the latest edit command
+  redo                                             redo the latest undone edit command
+error: usage: init [w] [h]
+error: canvas size must be positive
+error: invalid number: abc
+error: no document. use 'init' or 'read' first
+error: no document. use 'init' or 'read' first
+error: no document. use 'init' or 'read' first
+error: no document. use 'init' or 'read' first
+error: no document. use 'init' or 'read' first
+error: no document. use 'init' or 'read' first
+error: no document. use 'init' or 'read' first
+error: no document. use 'init' or 'read' first
+error: no document. use 'init' or 'read' first
+error: no document. use 'init' or 'read' first
+error: no document. use 'init' or 'read' first
+error: no document. use 'init' or 'read' first
+error: no document. use 'init' or 'read' first
+error: no document. use 'init' or 'read' first
+error: no document. use 'init' or 'read' first
+error: no document. use 'init' or 'read' first
+error: unknown command: frobnicate
+error: usage: read <file.svg>
+error: cannot read file: missing.svg
+error: cannot parse file: broken.svg
+canvas 800x600 created
+Document:
+  init [w] [h]                                     create an empty canvas (default 800x600)
+  read <file.svg>                                  read an SVG file as the current document
+  save [file.svg]                                  save the current document (default: the path it was read from)
+  canvas [w] [h]                                   show the canvas size, or change it
+Shape editing:
+  create <type> <id> [params…] [in <containerId>]  create a shape, at the root or inside a container
+  delete <id>                                      delete a shape (a container with all its descendants)
+  move <id> <dx> <dy>                              translate a shape by (dx, dy)
+  scale <id> <factor>                              scale all geometry of a shape by factor
+  set <id> <attr> <value>                          set fill, stroke, stroke-width, a geometry attribute or the text
+  group <newGid> <id1> <id2>…                      make a new container holding the given shapes
+  ungroup <gid>                                    dissolve a container; its children take its place
+  addto <gid> <id>                                 move a shape into a container, as its last child
+  front <id>                                       bring a shape to the front of its siblings
+  back <id>                                        send a shape to the back of its siblings
+Display:
+  tree [id]                                        show the structure tree (of the document, or of one shape)
+  show <id>                                        show all attributes of one shape
+  help                                             list all commands and their syntax
+Undo / redo:
+  undo                                             undo the latest edit command
+  redo                                             redo the latest undone edit command
+error: undo not allowed after io command
+canvas 800x600
+error: usage: canvas [w] [h]
+error: canvas size must be positive
+canvas resized to 400x300
+canvas 400x300
+error: no file path. use 'save <file.svg>'
+error: usage: create <type> <id> [params…] [in <containerId>]
+error: unknown shape type: star (is the plugin loaded?)
+error: usage: create rect <id> <x> <y> <w> <h> [fill] [in <containerId>]
+error: invalid id: 1bad
+rect#r1 created
+error: id already exists: r1
+circle#c1 created
+ellipse#e1 created
+line#l1 created
+text#t1 created
+error: usage: create text <id> <x> <y> "content" [in <containerId>]
+g#grp created
+g#sub created in g#grp
+rect#inner created in g#sub
+circle#dot created in g#sub
+error: no such container: nowhere
+error: not a container: r1
+error: usage: create rect <id> <x> <y> <w> <h> [fill] [in <containerId>]
+error: usage: move <id> <dx> <dy>
+error: no such shape: nope
+error: usage: move <id> <dx> <dy>
+rect#r1 moved to (15,15)
+g#grp moved by (10,10)
+g#grp moved back by (-10,-10)
+circle#c1 moved to (51,51)
+ellipse#e1 moved to (105,65)
+line#l1 moved to (1,2)
+text#t1 moved to (20,270)
+rect#inner moved to (3,3)
+error: usage: scale <id> <factor>
+error: scale factor must be positive
+error: invalid number: abc
+circle#c1 scaled by 2
+circle#c1 scaled back by 0.5
+circle#c1 scaled by 2
+rect#r1 scaled by 0.5
+ellipse#e1 scaled by 0.5
+line#l1 scaled by 2
+text#t1 scaled by 3
+g#grp scaled by 2
+g#grp scaled back by 0.5
+error: usage: set <id> <attr> <value>
+error: unknown attribute: bogus
+error: invalid value for width: -3
+rect#r1 updated: fill=#abcdef
+rect#r1 updated: width=35
+text#t1 updated: text="bye"
+circle#c1 updated: stroke=blue
+circle#c1 updated: stroke-width=2
+line#l1 updated: x2=120
+line#l1 updated: x2=202
+circle#c1 updated: r=25
+ellipse#e1 updated: rx=40
+text#t1 updated: x=30
+rect#inner updated: fill=none
+error: usage: group <newGid> <id1> <id2>…
+error: no such shape: nope
+error: id already exists: grp
+g#grp2 created with 2 children
+error: cannot group a container into its own descendant: grp
+g#grp2 removed, 2 children restored
+g#grp2 created with 2 children
+error: usage: addto <gid> <id>
+error: not a container: r1
+error: no such shape: nope
+error: cannot group a container into its own descendant: grp
+ellipse#e1 added to g#grp
+ellipse#e1 moved back into svg
+error: usage: ungroup <gid>
+error: not a container: r1
+error: no such shape: nope
+error: cannot ungroup top-level container: grp2
+g#sub ungrouped (2 children promoted)
+g#sub regrouped with 2 children
+error: usage: front <id>
+error: no such shape: nope
+rect#r1 brought to front
+error: usage: back <id>
+error: no such shape: nope
+text#t1 sent to back
+text#t1 z-order restored
+rect#r1 z-order restored
+error: usage: delete <id>
+error: no such shape: nope
+g#sub deleted
+g#sub restored into g#grp
+error: usage: show <id>
+error: no such shape: nope
+error: usage: show <id>
+rect#r1  parent=g#grp2
+  x=7.5 y=7.5 width=35 height=20
+  fill=#abcdef
+text#t1  parent=svg
+  x=30 y=810 text="bye"
+circle#c1  parent=g#grp2
+  cx=102 cy=102 r=25
+  fill=red stroke=blue stroke-width=2
+ellipse#e1  parent=svg
+  cx=52.5 cy=32.5 rx=40 ry=7.5
+  fill=#00ff00
+line#l1  parent=svg
+  x1=2 y1=4 x2=202 y2=104
+  stroke=black
+g#grp  parent=svg
+  children: sub
+g#sub  parent=g#grp
+  children: inner, dot
+error: usage: tree [id]
+error: no such shape: nope
+g#sub
+├── rect#inner  x=3 y=3 w=2 h=2 fill=none
+└── circle#dot  cx=3 cy=3 r=1
+g#grp
+└── g#sub
+    ├── rect#inner  x=3 y=3 w=2 h=2 fill=none
+    └── circle#dot  cx=3 cy=3 r=1
+svg (400x300)
+├── g#grp2
+│   ├── rect#r1         x=7.5 y=7.5 w=35 h=20 fill=#abcdef
+│   └── circle#c1       cx=102 cy=102 r=25 fill=red
+├── ellipse#e1          cx=52.5 cy=32.5 rx=40 ry=7.5 fill=#00ff00
+├── line#l1             (2,4) -> (202,104)
+├── text#t1             (30,810) "bye"
+└── g#grp
+    └── g#sub
+        ├── rect#inner  x=3 y=3 w=2 h=2 fill=none
+        └── circle#dot  cx=3 cy=3 r=1
+error: usage: help
+error: usage: undo
+error: usage: redo
+line#l1 deleted
+error: nothing to redo
+error: usage: save [file.svg]
+error: cannot write file: no/such/dir/x.svg
+saved to out.svg (9 elements)
+error: undo not allowed after io command
+error: undo not allowed after io command
+circle#late created
+circle#late removed
+saved to out.svg (9 elements)
+warning: skipped unsupported element <title>
+warning: assigned id rect2 to unnamed <rect>
+warning: assigned id g1 to unnamed <g>
+warning: assigned id circle1 to unnamed <circle>
+warning: assigned id ellipse1 to unnamed <ellipse>
+warning: assigned id line1 to unnamed <line>
+warning: skipped unsupported element <path>
+warning: assigned id text1 to unnamed <text>
+warning: skipped unsupported element <polygon>
+read mixed.svg (8 elements)
+svg (300x200)
+├── rect#rect2                x=0 y=0 w=300 h=200 fill=#eeeeee
+├── rect#rect1                x=5 y=5 w=10 h=10
+├── g#g1
+│   ├── circle#circle1        cx=40 cy=40 r=8
+│   └── g#inner
+│       ├── ellipse#ellipse1  cx=60 cy=60 rx=6 ry=3
+│       └── line#line1        (0,0) -> (20,20)
+└── text#text1                (10,190) "caption"
+g#g1  parent=svg
+  children: circle1, inner
+saved to roundtrip.svg (8 elements)
+read roundtrip.svg (8 elements)
+svg (300x200)
+├── rect#rect2                x=0 y=0 w=300 h=200 fill=#eeeeee
+├── rect#rect1                x=5 y=5 w=10 h=10
+├── g#g1
+│   ├── circle#circle1        cx=40 cy=40 r=8
+│   └── g#inner
+│       ├── ellipse#ellipse1  cx=60 cy=60 rx=6 ry=3
+│       └── line#line1        (0,0) -> (20,20)
+└── text#text1                (10,190) "caption"
+rect#rect1 updated: fill=#ff0000
+saved to roundtrip.svg (8 elements)
+read out.svg (9 elements)
+svg (400x300)
+├── g#grp2
+│   ├── rect#r1         x=7.5 y=7.5 w=35 h=20 fill=#abcdef
+│   └── circle#c1       cx=102 cy=102 r=25 fill=red
+├── ellipse#e1          cx=52.5 cy=32.5 rx=40 ry=7.5 fill=#00ff00
+├── text#t1             (30,810) "bye"
+└── g#grp
+    └── g#sub
+        ├── rect#inner  x=3 y=3 w=2 h=2 fill=none
+        └── circle#dot  cx=3 cy=3 r=1
