@@ -12,10 +12,12 @@ import type { Disposable, Event, FileSystemWatcher, Uri } from "vscode";
  * would stay forever. Re-announcing the URI makes VSCode ask again.
  *
  * All three event kinds are forwarded, including "changed": VSCode's watcher
- * coalesces a DELETE followed by a CREATE of the same path into one CHANGE
+ * turns a DELETE followed by a CREATE of the same path into a CHANGE
  * (`EventCoalescer` in `src/vs/platform/files/common/watcher.ts`), which is
  * exactly the file → directory case. The cost is one extra `stat` per save of an
- * SVG file.
+ * SVG file. The *number* of events is not guaranteed (VSCode 1.146.0 on macOS
+ * delivers each one twice, ~100 ms apart); forwarding a duplicate only makes
+ * VSCode ask once more, so nothing is de-duplicated here.
  */
 export class SvgResourceWatcher implements Disposable {
   private readonly emitter = new EventEmitter<Uri>();

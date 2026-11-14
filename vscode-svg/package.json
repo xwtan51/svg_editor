@@ -1,7 +1,7 @@
 {
   "name": "svg-badge",
   "displayName": "SVG Badge",
-  "description": "Marks .svg files in the Explorer with a [] badge (course project, Lab1 Phase 2 A.1).",
+  "description": "Marks .svg files in the Explorer with a [] badge and shows the element tree of SVG files in the Outline view (course project, Lab1 Phase 2 A.1, A.2).",
   "version": "0.1.0",
   "publisher": "xwtan51",
   "private": true,
@@ -11,27 +11,37 @@
     "directory": "vscode-svg"
   },
   "engines": {
-    "vscode": "^1.146.0",
+    "vscode": "^1.85.0",
     "node": ">=22"
   },
   "categories": [
     "Other"
   ],
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onLanguage:xml"
   ],
   "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    }
+  },
   "contributes": {},
   "scripts": {
-    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node22 --external:vscode --sourcemap --outfile=dist/extension.js",
+    "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node18 --external:vscode --sourcemap --outfile=dist/extension.js",
     "watch": "npm run build -- --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "build:integration": "esbuild tests/integration/suite/outline.ts tests/integration/suite/restricted.ts --bundle --platform=node --format=cjs --target=node18 --external:vscode --outdir=dist-test/suite && esbuild tests/integration/run.ts --bundle --platform=node --format=cjs --target=node22 --packages=external --outfile=dist-test/run.js",
+    "test:integration": "npm run build && npm run build:integration && node dist-test/run.js",
+    "test:restricted": "npm run build:integration && node dist-test/run.js --restricted",
     "vscode:prepublish": "npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {
     "@types/node": "22.20.5",
-    "@types/vscode": "1.146.0",
+    "@types/vscode": "1.85.0",
+    "@vscode/test-electron": "3.1.0",
     "esbuild": "0.28.2",
     "typescript": "7.0.2",
     "vitest": "5.1.0"

@@ -3,8 +3,12 @@
  *
  * It mirrors only what src/host and src/extension.ts touch at run time. It is a
  * test double, not a VSCode emulator: the real host's behaviour (badge
- * validation, decoration caching, file watching) is not reproduced here and is
- * verified manually with F5 (README) and, from S2 on, by integration tests.
+ * validation, decoration caching, file watching, outline refresh) is not
+ * reproduced here and is verified by the integration tests and manually (README).
+ *
+ * One exception: `DocumentSymbol` copies the two checks VSCode's own
+ * constructor performs (`validate` in `extHostTypes.ts`, identical in 1.85.0
+ * and 1.146.0), so a unit test fails exactly where the real host would throw.
  */
 export class FileDecoration {
   badge?: string;
@@ -13,6 +17,62 @@ export class FileDecoration {
   constructor(badge?: string, tooltip?: string) {
     this.badge = badge;
     this.tooltip = tooltip;
+  }
+}
+
+export class Position {
+  readonly line: number;
+  readonly character: number;
+
+  constructor(line: number, character: number) {
+    this.line = line;
+    this.character = character;
+  }
+
+  isBeforeOrEqual(other: Position): boolean {
+    return this.line < other.line || (this.line === other.line && this.character <= other.character);
+  }
+}
+
+export class Range {
+  readonly start: Position;
+  readonly end: Position;
+
+  constructor(start: Position, end: Position) {
+    this.start = start;
+    this.end = end;
+  }
+
+  contains(other: Range): boolean {
+    return this.start.isBeforeOrEqual(other.start) && other.end.isBeforeOrEqual(this.end);
+  }
+}
+
+/** Same numeric values as `vscode.SymbolKind`. */
+export enum SymbolKind {
+  File = 0,
+  Module = 1,
+  Namespace = 2,
+  Field = 7,
+  String = 14,
+}
+
+export class DocumentSymbol {
+  name: string;
+  detail: string;
+  kind: SymbolKind;
+  range: Range;
+  selectionRange: Range;
+  children: DocumentSymbol[] = [];
+
+  constructor(name: string, detail: string, kind: SymbolKind, range: Range, selectionRange: Range) {
+    this.name = name;
+    this.detail = detail;
+    this.kind = kind;
+    this.range = range;
+    this.selectionRange = selectionRange;
+    if (!name) throw new Error("name must not be falsy");
+    if (!range.contains(selectionRange)) throw new Error("selectionRange must be contained in fullRange");
   }
 }
 
@@ -44,6 +104,12 @@ export class EventEmitter<T> {
 export const window = {
   registerFileDecorationProvider(_provider: unknown): { dispose(): void } {
     throw new Error("stub: mock window.registerFileDecorationProvider in the test");
+  },
+};
+
+export const languages = {
+  registerDocumentSymbolProvider(..._args: unknown[]): { dispose(): void } {
+    throw new Error("stub: mock languages.registerDocumentSymbolProvider in the test");
   },
 };
 

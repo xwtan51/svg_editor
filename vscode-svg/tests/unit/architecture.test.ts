@@ -3,11 +3,14 @@
  * - one exported class per file, file name = class name, named exports only
  *   (extension.ts is the entry module required by VSCode — exempt, like cli/main.ts);
  * - src/core/ never imports `vscode` in any form;
- * - VscodeResourceKindReader imports `vscode` for types only.
+ * - VscodeResourceKindReader and SvgDocumentSymbolProvider import `vscode` for types only;
+ * - nothing under src/ imports a Node built-in module, and the type library stays
+ *   at ES2022, so the bundle runs on the Node 18 of VSCode 1.85's extension host (VA10).
  *
  * Simple text scanning after removing comments — enough for this small tree.
  */
 import { readdirSync, readFileSync } from "node:fs";
+import { builtinModules } from "node:module";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -27,6 +30,7 @@ function code(relative: string): string {
     .replace(/^\s*\/\/.*$/gm, "");
 }
 
+const importSpecifier = /(?:\bfrom|\bimport|\brequire\()\s*["']([^"']+)["']/g;
 const vscodeImport = /(?:from|import|require\()\s*["']vscode["']/;
 const runtimeVscodeImport = /^\s*import\s+(?!type\b)[^;]*["']vscode["']/m;
 
@@ -34,11 +38,19 @@ describe("architecture", () => {
   const all = sources("");
 
   it("scans the expected files", () => {
-    expect(all.map((f) => basename(f)).sort()).toEqual([
-      "Badge.ts", "FileTypeMask.ts", "ResourceKind.ts", "ResourcePath.ts", "SchemeFilter.ts",
-      "SvgBadgeRule.ts", "SvgFileDecorationProvider.ts", "SvgResourceWatcher.ts",
-      "VscodeResourceKindReader.ts", "extension.ts",
-    ]);
+    expect(all.filter((f) => f.startsWith("core")).map((f) => basename(f)).sort()).toEqual([
+      // A.1 file badge
+      "Badge.ts", "FileTypeMask.ts", "ResourceKind.ts", "ResourcePath.ts", "SchemeFilter.ts", "SvgBadgeRule.ts",
+      // A.2 outline
+      "OpenElement.ts", "OutlineNode.ts", "OutlineRole.ts", "OutlineTreeBuilder.ts", "SourceSpan.ts",
+      "SvgOutline.ts", "SvgOutlineParser.ts", "SvgOutlineScope.ts",
+      "XmlAttributeDecoder.ts", "XmlEndTag.ts", "XmlStartTag.ts", "XmlSyntaxError.ts", "XmlTokenizer.ts",
+    ].sort());
+    expect(all.filter((f) => f.startsWith("host")).map((f) => basename(f)).sort()).toEqual([
+      "SvgFileDecorationProvider.ts", "SvgResourceWatcher.ts", "VscodeResourceKindReader.ts",
+      "OutlineSymbolAdapter.ts", "SvgDocumentSymbolProvider.ts",
+    ].sort());
+    expect(all.filter((f) => !f.startsWith("core") && !f.startsWith("host"))).toEqual([ENTRY]);
   });
 
   it("one exported class per file, named after the file; no default export", () => {
@@ -63,13 +75,31 @@ describe("architecture", () => {
     }
   });
 
-  it("the type adapter imports vscode for types only", () => {
-    const text = code(join("host", "VscodeResourceKindReader.ts"));
-    expect(text).toMatch(vscodeImport);
-    expect(text).not.toMatch(runtimeVscodeImport);
+  it("the type adapter and the outline provider import vscode for types only", () => {
+    for (const file of ["VscodeResourceKindReader.ts", "SvgDocumentSymbolProvider.ts"]) {
+      const text = code(join("host", file));
+      expect(text, file).toMatch(vscodeImport);
+      expect(text, file).not.toMatch(runtimeVscodeImport);
+    }
+  });
+
+  it("VA10: src/ imports no Node built-in module (the extension host may be Node 18)", () => {
+    const builtins = new Set(builtinModules);
+    for (const file of all) {
+      for (const [, specifier] of code(file).matchAll(importSpecifier)) {
+        expect(specifier!.startsWith("node:") || builtins.has(specifier!), `${file}: ${specifier}`).toBe(false);
+      }
+    }
+  });
+
+  it("VA10: type-checks against the ES2022 library, which Node 18 implements in full", () => {
+    const tsconfig = readFileSync(new URL("../../tsconfig.json", import.meta.url), "utf8");
+    expect(tsconfig).toMatch(/"lib":\s*\["ES2022"\]/);
   });
 
   it("the detectors themselves work", () => {
+    expect([...'import { a } from "node:fs"; import "./x.js"; require("path");'.matchAll(importSpecifier)].map((m) => m[1]))
+      .toEqual(["node:fs", "./x.js", "path"]);
     expect('import { window } from "vscode";').toMatch(runtimeVscodeImport);
     expect('import type { Uri } from "vscode";').not.toMatch(runtimeVscodeImport);
     expect('const v = require("vscode");').toMatch(vscodeImport);

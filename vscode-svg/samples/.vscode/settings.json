@@ -1,4 +1,11 @@
 {
   // Make sure no user setting hides the badge while demonstrating A.1.
-  "explorer.decorations.badges": true
+  "explorer.decorations.badges": true,
+  // VSCode opens .svg in the built-in Image Preview by default, and an image
+  // preview has no outline (observations.md item 4). Open SVG as text here so
+  // the A.2 outline shows up. The pattern is matched case-insensitively, so it
+  // also covers LOGO.SVG and Mixed.Svg (checked by the integration tests).
+  "workbench.editorAssociations": {
+    "*.svg": "default"
+  }
 }
