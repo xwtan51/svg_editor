@@ -1528,6 +1528,8 @@ canvas 800x600 created
 
 CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文件 URL)` 同样生效（实验 2 的 `@svgframe/plugin-command-stats` 用例）。
 
+动态 `import()` 返回 `Promise`，所以 `PluginLoader.candidates` 与 `EditorAssembler.assemble` 是异步的；`src/cli/main.ts` 已经用顶层 `await`（`process.exitCode = await repl.run()`），在启动 REPL 之前 `await` 装配即可。**只有启动是异步的**，命令接口仍然同步（决策 X19）：装配完成之后才读第一行输入。
+
 ### 4.7 会话与装配配置的对照矩阵
 
 | # | 运行 | 会话 | 方式 A 的参数 | 方式 B 的参数 | 插件集合 | 比较对象 | 新插件要改代码吗 |
