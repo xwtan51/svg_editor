@@ -19,8 +19,8 @@ Phase 1 已在 tag `final` 交付；Phase 2 按 `doc/spec/phase2-plan.md`（下�
 ## 常用命令
 
 ```bash
-npm run typecheck   # src/ 与 tests/ 的类型检查
-npm test            # 全部测试（final 时为 889 个）
+npm run typecheck   # src/、tests/、packages/*、plugins/* 与 vitest.config.ts 的类型检查（tsconfig.json 的 include）
+npm test            # 全部测试，范围由 vitest.config.ts 的 include 决定（final 时为 889 个）
 npm run baseline    # 基线比对：doc/transcript/ 全部会话与 final 逐字节一致时退出码 0
 ```
 
@@ -33,9 +33,10 @@ npm run baseline    # 基线比对：doc/transcript/ 全部会话与 final 逐�
 
 ## 技术注意事项
 
+- 目录（设计 §1.1）：内核在 `packages/kernel`（`@svgframe/kernel`），内置与可选插件在 `plugins/*`，装配处（CLI 入口、适配器）在根包的 `src/`；三者都是 npm workspaces（`packages/*`、`plugins/*`）。`vscode-svg/` 不在 workspaces、tsconfig、vitest 的范围里。
 - Node ≥ 22，ESM（`"type": "module"`，`module`/`moduleResolution` 为 NodeNext，相对 import 写 `.js` 后缀）。
 - TypeScript 是 7.x：`typescript` 包只有 `unstable/*` 接口，没有 5.x 的 Compiler API。需要解析 TS 源码时，先验证可行再选方案。
-- Phase 1 的范式约束由 `tests/unit/architecture.test.ts` 强制执行（`doc/README.md` §3 的 P2、P3、P5 等）：一类一文件、文件名 = 类名、不用 default export、不按名字 `switch`。
+- Phase 1 的范式约束由 `tests/unit/architecture.test.ts` 强制执行（`doc/README.md` §3 的 P2、P3、P5 等；扫描 `packages/kernel/src`、`src`、`plugins/*/src`，见设计 §1.2.3）：一类一文件、文件名 = 类名、不用 default export、不按名字 `switch`。
 
 ## 禁止事项
 
