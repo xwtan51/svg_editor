@@ -1303,6 +1303,397 @@ end
 
 ---
 
+## 4 两种装配与加载器
+
+### 4.1 一条路径
+
+规格 §6 示例里的 `shapeBox.activate(ctx)` 只是示意。按“加载契约”第 1 条，方式 A 与方式 B 都必须经过同一条注册与校验路径，不能绕过回滚。本设计里两种方式只在**怎样得到 `PluginCandidate`** 上不同，之后都交给同一个 `PluginInstaller.install`（3.3）：
+
+| | 方式 A（组合根） | 方式 B（加载器） |
+|---|---|---|
+| 谁决定装哪些 | `CompositionRoot.optional()` 中的列表（代码） | `plugins.config.json` 的 `plugins` 数组（配置） |
+| 谁得到插件类 | 静态 `import XxxPlugin from "@svgframe/plugin-xxx"` | `ModuleLocator` 解析 → `import(文件 URL)` → `default` |
+| 谁得到清单 | 静态 `import manifest from "@svgframe/plugin-xxx/package.json" with { type: "json" }` | `ModuleLocator` 读同一个 `package.json` |
+| options | 组合根里写 `PluginOptions.of({...})` | 配置项的 `options` |
+| `<label>` | 组合根传入的包名字面量 | 配置项的 `module` 字符串 |
+| 之后 | `PluginInstaller.install(candidate)`：构造 → 激活 → 查重 → 清单比对 → 提交 | **同左** |
+
+**两种方式读的是同一份 `package.json`**：方式 A 经 JSON import（tsx 与 `tsc` 7 均可用，附录 B 实验 2；需要 `resolveJsonModule`，S6 加），方式 B 经 `ModuleLocator` 读文件。所以 `contributes` 只写一次。
+
+```plantuml
+@startuml p2-assembly-paths
+autonumber
+participant "cli/main.ts" as Main
+participant CliArguments
+participant EditorAssembler
+participant CompositionRoot
+participant PluginLoader
+participant ModuleLocator
+participant PluginInstaller
+participant StagingContext
+participant ExtensionRegistry
+
+Main -> CliArguments : parse(argv)
+CliArguments --> Main : AssemblyProfile
+Main -> EditorAssembler : assemble(profile)
+EditorAssembler -> CompositionRoot : builtins()
+loop 内置插件（先图形后命令）
+  EditorAssembler -> PluginInstaller : install(candidate)
+  note right : 失败 = 程序错误
+end
+alt 方式 A（无参数 / --only）
+  EditorAssembler -> CompositionRoot : optional()
+  CompositionRoot --> EditorAssembler : PluginCandidate[]（静态 import 的类 + JSON 清单）
+else 方式 B（--config <file>）
+  EditorAssembler -> PluginLoader : candidates(configFile)
+  PluginLoader -> PluginLoader : PluginConfig.parse（非法 → invalid plugin config，返回空）
+  loop 每个 enabled 项（数组顺序）
+    PluginLoader -> ModuleLocator : locate(module, configDir)
+    note right : 失败 → plugin not found
+    PluginLoader -> PluginLoader : import(entry URL)
+    note right : 抛错 → plugin failed to load\n无 default → plugin has no default export
+  end
+  PluginLoader --> EditorAssembler : PluginCandidate[] + 失败消息
+end
+loop 每个候选（同一条路径）
+  EditorAssembler -> PluginInstaller : install(candidate)
+  PluginInstaller -> StagingContext : new StagingContext；new Plugin(options)；activate(staging)
+  PluginInstaller -> PluginInstaller : 查重 → 清单比对
+  alt 全部通过
+    PluginInstaller -> ExtensionRegistry : commit(staging)
+  else 任一步失败
+    PluginInstaller -> StagingContext : 丢弃（回滚）
+    PluginInstaller --> EditorAssembler : InstallOutcome.failure(一行)
+  end
+end
+EditorAssembler --> Main : AssemblyResult(Editor, 启动消息)
+@enduml
+```
+
+### 4.2 组合根（方式 A）
+
+```ts
+// src/assembly/CompositionRoot.ts（新，S6 只有 builtins；S10 起每接入一个插件，optional() 加一项、文件头加两行 import）
+import BuiltinShapesPlugin from "@svgframe/plugin-builtin-shapes";
+import builtinShapesManifest from "@svgframe/plugin-builtin-shapes/package.json" with { type: "json" };
+import BuiltinCommandsPlugin from "@svgframe/plugin-builtin-commands";
+import builtinCommandsManifest from "@svgframe/plugin-builtin-commands/package.json" with { type: "json" };
+import { PluginCandidate } from "@svgframe/kernel/host";
+import { PluginOptions } from "@svgframe/kernel";
+
+/** 方式 A：用代码列出要装的插件。接入新插件只改本文件（L4）。 */
+export class CompositionRoot {
+  /** 每一种装配配置都先装的内置插件；顺序固定：先图形，后命令（3.5）。 */
+  builtins(): PluginCandidate[] {
+    return [
+      new PluginCandidate("@svgframe/plugin-builtin-shapes", BuiltinShapesPlugin, builtinShapesManifest, PluginOptions.EMPTY),
+      new PluginCandidate("@svgframe/plugin-builtin-commands", BuiltinCommandsPlugin, builtinCommandsManifest, PluginOptions.EMPTY),
+    ];
+  }
+  /** 方式 A 的可选插件，按安装顺序。 */
+  optional(): PluginCandidate[] {
+    return [];
+  }
+}
+```
+
+`CompositionRoot` 只是一张表，不含任何逻辑；“按装配配置挑选、安装、造 `Editor`”在 `EditorAssembler`（新）里，接入插件时不改它。
+
+### 4.3 三种装配配置
+
+`--config` 必须表示“**内置能力 + 配置里的插件**”，不能是“完整组合根 + 配置”：否则主线在 S12 把 box 同时加进组合根和配置之后，带 `--config` 启动时 box 会被安装两次，第二次报 `duplicate registration: shapes/box`。
+
+| 装配配置（`AssemblyProfile`） | 命令行 | 安装的插件（按顺序） | 用途 |
+|---|---|---|---|
+| **bare** | `--bare` | 内置图形、内置命令 | 基线对照（与 `final` 逐字节相同）；规格 §1“禁用任何插件框架仍能启动，默认装配继续提供 Phase 1 的内置命令和六种图形”（约定补充 N14） |
+| **full**（方式 A） | 不带参数 | 内置 + `CompositionRoot.optional()` 全部 | 日常使用；规格 §6 示例 `<启动入口> < cli-1.txt  # 方式 A` |
+| **only**（方式 A 的子集） | `--only <包名>`（可重复） | 内置 + `optional()` 中 `name` 在给定集合里的（顺序仍按 `optional()`） | 需要“部分可选插件”的方式 A 运行，例如 §6.1B 要 box 但不要 `modified-star`（4.7） |
+| **config**（方式 B） | `--config <file>` | 内置 + 配置中 `enabled` 不为 `false` 的项（按数组顺序） | 方式 B；`--config` 指向空列表时等价于 bare |
+
+- **不带参数启动 = full**（规格 §6 判据的写法）。
+- 三个选项互斥；出现多个、出现未知参数、`--config` / `--only` 缺少值时：stderr 输出 `usage: svg-editor [--bare | --only <plugin>… | --config <file>]`，退出码 2，不打印 banner（这是用户敲错了命令行，不是插件加载失败）。`--only` 给了 `optional()` 里没有的包名：stderr `error: --only: no such plugin in the code assembly: <name>`，退出码 2。
+- **配置非法时“以默认内置能力启动”，指 bare**：打印 `error: invalid plugin config` 之后，不装配置里的任何插件，也不退回 full（`--config` 的含义里本来就没有组合根的可选插件）。
+
+### 4.4 配置文件格式
+
+```json
+{
+  "plugins": [
+    { "module": "@svgframe/plugin-shape-box" },
+    { "module": "./plugins/tree-star" },
+    { "module": "@svgframe/plugin-shape-diamond", "options": { "fill": "#f5a623" } },
+    { "module": "@svgframe/plugin-export-png", "enabled": false }
+  ]
+}
+```
+
+`PluginConfig.parse`（新）的规则（严格校验，决策 X29）：
+
+| 项 | 规则 | 违反时 |
+|---|---|---|
+| 文件 | 能读取 | `error: cannot read plugin config: <path>`（`<path>` 为命令行原样给出的字符串），以 bare 启动 |
+| 语法 | 合法 JSON | `error: invalid plugin config`，以 bare 启动 |
+| 顶层 | 对象，**只有** `plugins` 一个键，值是数组 | 同上 |
+| 每一项 | 对象，键只能是 `module`、`enabled`、`options`；`module` 是非空字符串；`enabled` 若有必须是布尔；`options` 若有必须是对象（不是数组、不是 null） | 同上：**任何一项不合法，整个配置都不用**（不做“部分加载”，否则同一份坏配置在不同位置坏掉会得到难以预料的插件集合） |
+| 顺序 | 按数组顺序加载与安装 | — |
+| `enabled: false` | 完全跳过：不解析、不导入、不输出任何内容 | — |
+| 重复的 `module` | 不在配置层检查；第二次安装时由查重报 `duplicate registration`（与内置能力冲突同理） | — |
+
+options 的传递：`options` 对象（缺省为 `{}`）深拷贝并冻结后包成 `PluginOptions`，作为插件类构造函数的唯一参数（3.1）。方式 A 在组合根里用 `PluginOptions.of({...})` 构造同一种对象，所以两种方式下插件收到的 options 完全相同。
+
+### 4.5 失败文案
+
+全部写到 **stdout**，每条一行，以 `error: ` 开头（P7 的推广：`error:` 前缀由 `Editor`（命令）和 `EditorAssembler`（启动）两处添加，安装器与加载器只产出不带前缀的消息）；位置是 **banner 之后、第一条命令的输出之前**，按配置数组顺序（方式 A 按 `optional()` 顺序），每个插件至多一行。出错后**继续启动**，进程最终的退出码不受影响（输入正常结束时为 0）。
+
+| # | 情况 | 文案 | 来源 | 规格 |
+|---|---|---|---|---|
+| 1 | 模块找不到（解析阶段失败） | `error: plugin not found: <module>` | `PluginLoader` | 规格给出 |
+| 2 | 没有默认导出（`default` 不存在或为 `undefined`） | `error: plugin has no default export: <module>` | `PluginLoader` | 规格给出 |
+| 3 | 模块存在，但导入时求值失败（含插件自身的依赖缺失），或默认导出不是函数 | `error: plugin failed to load: <module> (<reason>)` | `PluginLoader` | **规格未给格式**，本文决定（决策 X14） |
+| 4 | 清单不合法 | `error: invalid plugin manifest: <module> (<reason>)` | `PluginInstaller` 第 0 步 | 本文决定 |
+| 5 | 构造或 `activate` 抛错 | `error: plugin failed to activate: <name> (<reason>)` | 第 1 步 | 规格给出 |
+| 6 | 重复注册 | `error: duplicate registration: <category>/<name>` | 第 2 步 | 规格给出 |
+| 7 | 清单与注册不一致 | `error: plugin manifest mismatch: <name> (declared: …, registered: …)` | 第 3 步 | 规格给出（列表格式本文决定，3.3.1） |
+| 8 | 配置语法或结构不合法 | `error: invalid plugin config` | `PluginConfig` | 规格给出 |
+| 9 | `--config` 指向的文件不存在或不可读 | `error: cannot read plugin config: <path>` | `PluginConfig` | 本文决定（与 §4.2 的 `cannot read file:` 同一风格） |
+| — | 命令行用法错误 | stderr `usage: …`，退出码 2，无 banner | `CliArguments` | 本文决定 |
+| — | 内置插件安装失败 | stderr `internal error: …`，退出码 1 | `EditorAssembler` 抛 `Error` | 程序错误 |
+
+示例（配置里依次是一个找不到的包、一个正常的 box）：
+
+```text
+svg-editor 0.1 — type 'help' for commands
+error: plugin not found: @svgframe/plugin-nope
+canvas 800x600 created
+```
+
+### 4.6 模块名解析：先解析，后导入
+
+“模块不存在”与“模块存在但它自己的依赖缺失”在 Node 中**抛同一个错误码** `ERR_MODULE_NOT_FOUND`（附录 B 实验 3），只看错误分不开。所以加载分两个阶段，**阶段决定文案**：
+
+| 阶段 | 做什么 | 这一阶段的任何失败报 |
+|---|---|---|
+| 1 解析（`ModuleLocator.locate`） | 相对路径（以 `./`、`../` 开头）或绝对路径：以**配置文件所在目录**为基准解析成目录，要求它是目录且含 `package.json`。包名：`createRequire(<配置文件路径>).resolve("<包名>/package.json")`，即按 Node 规则从配置文件所在目录向上找 `node_modules`（workspace 包在那里是软链接）。然后读 `package.json`，取 `exports["."]`（必须是字符串），拼出入口文件的绝对路径并确认存在 | `plugin not found: <module>` |
+| 2 导入 | `import(pathToFileURL(入口).href)` | `plugin failed to load: <module> (<reason>)` |
+| 3 检查默认导出 | `"default"` 不在命名空间里或为 `undefined` → 文案 2；不是函数 → 文案 3 | 见 4.5 |
+
+为什么用 `"<包名>/package.json"` 而不是直接 `resolve("<包名>")`：`createRequire().resolve` 走的是 CJS 条件（`require`、`node`、`default`），`exports` 若只写了 `import` 条件就会被误判为找不到（附录 B 实验 2：`@spike/import-only` 得到 `ERR_PACKAGE_PATH_NOT_EXPORTED`）。本设计只用它定位 `package.json`，入口由加载器自己从 `exports["."]` 取；插件包的 `exports` 因此规定为（L7 检查）：
+
+```json
+"exports": { ".": "./src/XxxPlugin.ts", "./package.json": "./package.json" }
+```
+
+- `"."` 是字符串：对 `import()`、`createRequire().resolve()`、TypeScript 的 NodeNext 解析都成立；
+- `"./package.json"`：方式 B 的定位与方式 A 的 JSON import 都需要（附录 B 实验 2：缺少时两者都失败）；
+- 插件包必须 `"type": "module"`：否则 tsx 把 `.ts` 当 CJS 编译（附录 B 实验 2 的意外发现）。
+
+为什么不直接 `import("<包名>")`：裸包名的 `import()` 以**加载器文件**所在位置为基准解析，而规格要求“包名按运行环境的模块解析规则解析”，基准应当是配置文件。实验 2 也确认：`cwd` 是无关的临时目录（与基线运行相同）时，从配置文件目录解析与导入都成功。
+
+CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文件 URL)` 同样生效（实验 2 的 `@svgframe/plugin-command-stats` 用例）。
+
+### 4.7 会话与装配配置的对照矩阵
+
+| # | 运行 | 会话 | 方式 A 的参数 | 方式 B 的参数 | 插件集合 | 比较对象 | 新插件要改代码吗 |
+|---|---|---|---|---|---|---|---|
+| 1 | 基线兼容 | `cli-1`、`cli-1-1a`、`regression` | `--bare` | `--config {transcript}/configs/empty.json`（`{"plugins": []}`） | 只有内置（规格 §6“禁用新增插件（包括树标签）”） | `expected/<会话>/`（`final` 的输出），A、B 两次运行都要与之逐字节相同 | 不要：两种参数都不包含任何可选插件 |
+| 2 | §6.1B 复现 | `cli-1-1b` | `--only @svgframe/plugin-shape-box` | `--config {transcript}/configs/box.json` | 内置 + box（**不带 `modified-star`**，否则 `tree` 多出 `*`） | `expected/cli-1-1b/`（逐行对照 P1 规格 §6.1B 手工核对，见 9.2 S12） | 不要：S13 接入 `modified-star` 后，`--only` 与 `box.json` 都不包含它 |
+| 3 | 双装配一致：基础 | `cli-1` | 不带参数（full） | `--config {repo}/plugins.config.json` | 内置 + `optional()` 全部（= 配置全部，4.9 的一致性测试保证） | A 的输出 = B 的输出（不存期望输出） | 不要：新插件进组合根和配置，两边同时增加 |
+| 4 | 双装配一致：§6.1B | `cli-1-1b` | 同 #2 | 同 #2 | 同 #2 | 同 #2（期望输出 + A = B） | 不要 |
+| 5 | 双装配一致：新增命令 | `cli-2`（含 `stats`、`dir`） | 不带参数（full） | `--config {repo}/plugins.config.json` | 全部 | `expected/cli-2/`（手工核对）+ A = B | 不要 |
+
+`dir` 的会话（#5）：`SessionRunner` 已经在新建的临时目录里运行 CLI 并以它为 cwd（`SessionRunner.ts:19-31`），fixtures 复制进去后目录内容是固定的；stdout、stderr 经管道收集，**不写进这个目录**，所以日志不会改变目录列表。`cli-2` 的输入把 `dir` 放在任何 `save` 之前（`save` 产出的文件会出现在列表里）。fixtures 里放 `.hidden`、一个子目录（目录里放一个文件，因为 git 存不了空目录）和几个普通文件。
+
+### 4.8 基线工具的扩展（S9）
+
+现在 `SessionRunner.run`（`scripts/baseline/SessionRunner.ts:26`）以 `spawnSync(BaselinePaths.TSX, [BaselinePaths.entryAbsolute()], { cwd: workDir … })` 无参数启动 CLI。扩展方式：**不另写第二个 runner**，只让同一个 `SessionRunner` 接受参数。
+
+| 改动 | 内容 |
+|---|---|
+| `SessionRunner.run(session, args)` | `args` 追加在入口路径之后；其余（临时目录、fixtures、收集输出与文件）不变 |
+| 会话声明自己的运行 | 新文件 `doc/transcript/<会话>.runs.json`（可选）：`{ "groups": [ { "expected": "<expected 下的目录名>" \| null, "runs": [[参数…], …] } ] }`。参数中的 `{repo}`、`{transcript}` 由 `BaselinePaths` 替换为**绝对路径**（cwd 是临时目录，相对路径会失效） |
+| 缺省 | 没有 `.runs.json` 的会话等价于 `{ "groups": [ { "expected": "<会话名>", "runs": [[]] } ] }`，即现在的行为 |
+| 比对规则（`RunGroup`，新） | 组内每一次运行都与 `expected` 逐字节比较（`expected` 不为 null 时）；组内各次运行之间也两两比较（双装配一致）；差异报告注明是哪两次运行 |
+| `--update` | 只写 `expected` 不为 null 的组；要求组内各次运行结果相同，否则一个文件都不写；仍然需要用户事先明确同意 |
+| 孤儿检查 | `TranscriptSession.baselineNames()` 的“已知”集合改为所有 `.runs.json` 引用到的 `expected` 名 |
+| 双装配运行器 | 就是上面的组：S9 不再写别的脚本 |
+
+**这部分在 S9 实现**。理由：S8 的“允许修改”不含 `scripts/`；而在 S10 之前，不带参数启动等于 bare（`optional()` 为空），现有基线不受影响。S9 给三个已有会话加上 4.7 #1 的 `.runs.json`（`--bare` 与空配置），从此不带参数的 full 怎样增长都不影响基线。S8 的验收“空配置和不用配置两种方式启动，基线会话都与 `final` 逐字节一致”在 S8 用一次性命令手工验证，S9 把它固定成 `.runs.json`。S4（本节）、S8、S9（9.2）三处说法一致。
+
+### 4.9 两种装配的一致性保证
+
+| 保证 | 机制 | 何时生效 |
+|---|---|---|
+| 同一插件实现 | 两种方式最终都是 `new <默认导出的类>(options)`，类来自同一个包 | S8 |
+| 同一注册与校验路径 | `PluginInstaller.install`（4.1） | S6（A）、S8（B） |
+| 插件集合与顺序相同 | 系统测试：`CompositionRoot.optional()` 的包名序列 = `plugins.config.json` 中 `enabled` 项的 `module` 序列（包名形式） | **S14**（S10–S13 的接入提交 C 与配置提交 C′ 之间，两边会短暂不一致，所以这条测试不能早于 S13 结束） |
+| options 相同 | 同上测试比较 options | S14 |
+| 输出逐字节相同 | 4.7 #3–#5 | S9（工具）、S12/S14（会话） |
+
+---
+
+## 5 决定、约定补充与已知偏差
+
+### 5.1 决策 X1–X18（对应分析 §7 的 D1–D18）
+
+每条：决定、至少一个真实的备选、理由、落在哪一步、用什么测试验证。
+
+| 决策 | 决定 | 备选（未采纳） | 理由 | 步骤 / 验证 |
+|---|---|---|---|---|
+| **X1**（分析 D1）目录边界 | 内核 = workspace 包 `packages/kernel`（`@svgframe/kernel`，`exports` 只暴露 `api.ts` 与 `host-api.ts`）；装配处 = 根包 `src/`；插件 = `plugins/*` 各一个 workspace 包；加载器独占 `src/loader/`（1.1） | ① 三个顶层目录都在根包里，只靠 architecture test；② 装配处也做成 workspace 包 `packages/host` | `exports` 让 TypeScript 与 Node 在解析阶段就拒绝深层 import（附录 B 实验 2），比扫描更硬；装配处留在根包，`npm run cli` 与基线工具的入口路径都不变（备选②要改 `CLI_ENTRY`，并让根包变空） | S5 搬迁、S6 加 `exports`；验证：architecture test L1–L4、`npm run typecheck`、基线 0 差异 |
+| **X2**（D2）回显名与树名 | `kindName()`（新）默认 = `tagName()`；`label()` 改为 `kindName#id`（回显、`show`、警告、错误）；新增 `treeLabel()` = `tagName#id`，只给 `tree`（3.6） | 保持 `label()` = `tagName#id`，新增 `echoLabel()` 给回显 | 35 处中只有 `tree` 的 2 处要换成树名，其余 30 多处都是回显或错误；改定义比改 30 个调用点的差异小得多 | S6；验证：基线 0 差异（内置图形不变）、S12 的 `box#n2 moved by` 与 `g#n1 (box)` 测试 |
+| **X3**（D3）box 的模板 | 矩形：`x y w h` 原样，`fill = #4a90d9`；标题文字位于 $\left(x + \tfrac{w}{8},\ y + \tfrac{h}{2} + 5\right)$，数值按 V3 格式化 | $(x + 20,\ y + h/2 + 5)$ | 两个公式都拟合 P1 规格的两个数据点（(120,100,160,60) → (140,135)，(520,100,160,60) → (540,135)）；P1 规格说“居中由插件模板负责”，水平偏移随宽度变化更接近“居中”的本意 | S12；验证：box 单元测试、`cli-1-1b` 会话 |
+| **X4**（D4）`create box … in` 的回显 | `box#n3 created (g#n3 + rect#n3-rect + text#n3-label) in box#n1`：`<label> created<creationDetail><where>`（2.1.6） | `box#n3 created in box#n1 (g#n3 + …)` | 括号说明的是新建的 box，紧跟在它后面不会被误读为说明 `box#n1`；内置图形的 `creationDetail` 为空，Phase 1 的格式不变 | S6（机制）、S12（文案）；验证：`CreateCommand` 契约测试、box 测试 |
+| **X5**（D5）移走必要子部件 | 拒绝，`error: cannot detach required part of composite shape: <id>`；钩子 `canRelease` 在 `delete`、`addto`（换容器时）、`group` 中检查（3.7） | ① 删除部件时连带删除整个 box；② 允许并把 box 降级为 `g` | ①让 `delete n1-rect` 的回显与 undo 都变得出人意料；②运行时改变对象类型，`Shape` 的子类不能就地变身。拒绝最简单、可预期、undo 语义不受影响 | S7（钩子）、S12（box 覆写）；验证：钩子契约测试（替身容器）、box 测试 |
+| **X6**（D6）box 读回不完整 | 装了插件：**警告并降级为普通 `g`**；涉及 box 的重复 id：**拒绝整个读入**（ADR-2） | 不完整也拒绝整个读入 | 装插件不应让一个原本能打开的文件变得打不开；降级与“未装插件时降级”一致，`data-kind` 原样保留，保存后再读结果相同；重复 id 违反全局唯一，规格明确要求拒绝 | S6（`readWithNext`、`reject`、`occurrences`）、S12；验证：box 读回测试 |
+| **X7**（D7）怎样识别子部件 | 按**派生 id**：box 元素必须有显式 id `I`，直接子元素中恰有一个 `<rect id="I-rect">` 和一个 `<text id="I-label">`；位置不限；允许其他子元素（含嵌套 box）；子部件 id 若是自动分配的（文件里没写）则不算 | 按位置：第一个 rect、第一个 text | 创建时就按派生 id 命名，读回用同一规则才能 round-trip；按位置识别会把 `front n1-rect` 之后保存的文件读错 | S12；验证：读回测试（顺序调换、缺部件、类型不符、多出子元素） |
+| **X8**（D8）box 上的其他属性 | 没有处理器 → 白名单路径，设在 `<g>` 自身：`set n1 stroke red` → `box#n1 updated: stroke=red` | 把 `stroke` 等也传播到矩形 | 规格只要求 `fill`、`label` 两个领域语义；其余属性保持 Phase 1 对 `g` 的语义（E6），README 中注明这与 `fill` 不对称 | S12；验证：box 测试 |
+| **X9**（D9）处理器冲突 | 取 `priority` 最大者；最大值上并列 → `error: ambiguous attribute handlers for <attr> on <id>: <a>, <b>`，不修改（2.4.4） | ① 先注册者胜；② 全部按顺序组合执行 | ①是“未定义的覆盖”的一种，换个加载顺序结果就变；②语义不清（两个处理器都改 fill 时谁的值留下？），回显也不好写 | S7；验证：替身处理器的冲突测试 |
+| **X10**（D10）处理器的回显 | 由处理器返回的 `AttributeChange` 提供，`plan` 时取得并保存；`fill` 的 undo 为 `box#n2 fill restored on n2-rect` | `fill` 的 undo 沿用 Phase 1 的 `box#n2 updated: fill=#4a90d9` | 与 apply 回显 `fill propagated to n2-rect` 对称，说明改的是哪个部件；P1 规格给的 `label` undo（`label restored: "…"`）也是“restored”句式 | S7（机制）、S12（文案）；验证：box 测试、`cli-1-1b` |
+| **X11**（D11）没有文档时 `stats` | `requiresDocument = true`：报 `no document. use 'init' or 'read' first` | 输出 `(total 0, containers 0)` | 规格把“空文档”与“没有文档”区分开（`dir` 特别说明“未执行 init 或 read 时也可使用”，`stats` 没有这句）；与 Phase 1 的 `tree` 一致 | S10；验证：`stats` 单元测试 |
+| **X12**（D12）`dir` 的细节 | 排序：按 UTF-16 码元比较（`a < b`），不用 `localeCompare`；符号链接跟随一层后按目标归类，断链与其他特殊项（FIFO、socket、设备）一律 `[FILE]`；错误中的 `<path>` 是当前工作目录的绝对路径；有参数时报 `usage: dir` | 符号链接单独标 `[LINK]` | 规格的输出格式只有两种标记；对用户而言指向目录的链接就是目录；`stat` 一层不算“遍历其目标”。码元排序与 locale 无关，保证逐字节一致 | S11；验证：替身测试、真实临时目录测试（含符号链接） |
+| **X13**（D13）`stats` / `dir` 在 `help` 中的位置 | 类别 `Display`（`QueryCommand` 的默认），组内按注册顺序：排在 `help` 之后；插件不能新增类别 | 新增 `Plugins:` 类别 | 不改 `help` 的实现与已有输出；按功能分组比按来源分组对用户有用 | S10、S11；验证：S9 的装配契约测试（9.2） |
+| **X14**（D14）加载器的输出 | stdout、banner 之后、第一条命令之前；求值失败为 `plugin failed to load: <module> (<reason>)`；一个插件只报第一条（4.5、ADR-4） | 写 stderr | Phase 1 的 `error:` 一律走 stdout（R12），基线比对 stdout；只有程序错误走 stderr | S8；验证：加载器失败路径测试（每条一个夹具） |
+| **X15**（D15）默认导出 | **类**；options 经构造参数传入（3.1） | 实例；options 经 `activate(ctx, options)` | 实例是模块级单例，同一进程里的多个 `Editor` 会共享插件状态（`modified-star` 的保存点就会串）；构造参数让 options 成为私有字段 | S6（接口）、S8（加载器）；验证：加载器测试“同一插件装进两个 Editor 状态独立” |
+| **X16**（D16）只装内置的启动方式 | `--bare`；另有 `--only` 与 `--config`，四种装配配置见 4.3 | ① 环境变量；② 另一个入口脚本 | 命令行参数在基线工具里最容易逐会话声明（4.8）；不增加入口文件，`CLI_ENTRY` 不变 | S8；验证：`CliArguments` 测试、S9 的基线 `.runs.json` |
+| **X17**（D17）`modified-star` | dirty = 与上次保存（或 `read`、`init`）的内容不一致；不向祖先传播，根行汇总；同一行多个标签按注册顺序；新建节点立即标 `*`；`init` 之后以空画布为保存点（ADR-3） | dirty = 自上次保存以来执行过编辑命令 | `undo` 回到保存点时 `*` 消失才符合“未保存的变化”的字面意思；只需要两个事件，不需要命令上报改了哪些 id | S7（事件）、S13；验证：状态机测试（8.4 的表逐行一条） |
+| **X18**（D18）圈复杂度 | 见 5.3 | `@babel/parser`；`typescript@5` 别名依赖 | 见 5.3 | S9；验证：脚本自检（已知函数的 M 值） |
+
+### 5.2 新增决策 X19–X30
+
+| 决策 | 决定 | 备选（未采纳） | 理由 | 步骤 / 验证 |
+|---|---|---|---|---|
+| **X19** 命令同步 | 命令接口保持同步，`dir` 用 `readdirSync`（2.2.4、ADR-6）；注册对象是任何满足 `CommandType` 的类或实例 | 命令接口支持 `Promise` | 以后再改就是内核改动；异步要改 `Editor`、`Repl`、全部测试的调用方式 | S6；验证：现有测试不变 |
+| **X20** `show` 用回显名 | `show n1` → `box#n1  parent=svg`；`show n1-rect` → `parent=box#n1`（3.6） | `show` 用树名 `g#n1` | `show` 是对象明细，与回显（`added to box#n1`）保持一致；树的类型信息由 `(box)` 标签提供 | S6；验证：box 测试 |
+| **X21** 违约转换 | 能完整回滚的调用点（读回、创建、`set`、`tree`）把插件的非 `EditorError` 异常转成一行 `error:`；不能回滚的（命令 `execute`、事件监听器）按程序错误（3.9） | 一律按程序错误退出 | 规格 §3.2 要求处理器失败时“报告错误并回滚”；回滚已有保证时没有理由让整个编辑器退出 | S6/S7；验证：每种违约一个替身测试 |
+| **X22** 读回并列 | 最高 `matchScore` 并列 → 拒绝整个读入（2.1.3） | 先注册者胜 | 与 X9 同理：不允许未定义的覆盖 | S6；验证：替身提供者测试 |
+| **X23** 事件 | 三个事件（`documentReplaced`、`documentSaved`、`documentEdited`）；先缓冲，命令成功后才派发（3.4） | 只要前两个 | 第三个让 ADR-3 的备选语义将来也能不改内核实现；代价是几行代码 | S7；验证：事件时机测试 |
+| **X24** 两段式接入 | 每个可选插件：接入提交 C（插件 + 组合根 + 锁文件）+ 配置提交 C′（配置 + 会话数据）；文档另起提交（1.6） | 一个提交同时改组合根和配置 | 方式 A 判据“只修改一个顶层装配文件”，`plugins.config.json` 是否算有歧义；拆开后两种解释都满足 | S10–S13；验证：`plugin-diff` 脚本 |
+| **X25** 测试的位置 | Phase 1 的 889 个测试留在根 `tests/`；S6 起新增的测试按归属放进 `packages/kernel/tests/`、`plugins/*/tests/`、`tests/unit/host/`（附录 A.1） | S5 把全部测试拆进各包 | 旧测试同时用内核与内置图形，拆进包里会违反“插件测试不依赖其他插件”；S5 要求测试数不变、只搬不改 | S5；验证：S5 测试数 = 889 |
+| **X26** 第二个公开入口 | `@svgframe/kernel/host`（`host-api.ts`）只给装配处（3.10） | 全部放进 `api.ts` | 规格 §1“插件不得依赖……宿主装配模块”：装配用的类（`PluginInstaller` 等）对插件不可见 | S6；验证：L2 |
+| **X27** `dir` 的对齐 | `[DIR]  docs`、`[FILE] demo.svg`：标记补齐到 6 个字符后加一个空格，名字从第 7 列开始（约定补充 N2、偏差 T2） | 按正文“标记后两个空格”：`[FILE]  demo.svg` | 规格的示例是逐字节的输出；正文说的是 `[DIR]` 的情形 | S11；验证：替身测试 |
+| **X28** 重复 id 的范围 | 只有涉及 box 的重复 id 拒绝整个读入；其余沿用 F14（偏差 T1） | 任何重复 id 都拒绝整个读入 | 规格 §4 的这句话在 box 的“边界”一节里；全局改成拒绝会改变 Phase 1 的读入行为（F14），违反“不修改 Phase 1 的行为”和基线兼容 | S6（`occurrences`）、S12；验证：box 读回测试、基线 0 差异 |
+| **X29** 严格校验 | 配置文件与 `contributes` 都严格校验：未知键、类型不对都算非法（3.3.2、4.4） | 忽略未知键 | 拼错的 `"enable": false` 被静默忽略，插件就会被意外加载 | S6、S8；验证：清单与配置的单元测试 |
+| **X30** 基线的按会话参数 | `doc/transcript/<会话>.runs.json` 声明运行组，在 S9 实现（4.8） | 在输入文件里用注释写参数 | 规格要求输入文件只含命令与注释；把装配方式写进注释就把两件事混在一起了 | S9；验证：`npm run baseline` |
+
+### 5.3 决策 X18 详述：圈复杂度的口径
+
+**解析方式：`typescript/unstable/sync`**（仓库现有 devDependency `typescript@7.0.2`，不新增依赖）。
+
+| 候选 | 结论 |
+|---|---|
+| `typescript/unstable/sync` + `unstable/ast` | **采纳**。附录 B 实验 4：`new API({ cwd })` 启动内置的原生 tsgo，`updateSnapshot({ openProjects: [tsconfig] })` 取得工程，`project.program.getSourceFile(file)` 得到语法树，节点有 `kind` 和 `forEachChild`；`SyntaxKind` 来自 `typescript/unstable/ast`。`final` 的 82 个文件全部解析成功，耗时约 0.26 秒；手算核对了两个函数 |
+| `@babel/parser` | 可行，但要新增 devDependency 并联网安装 |
+| `typescript@5` 的别名依赖 | 可行，但同一仓库里两个 TypeScript 版本，且 5.x 的 API 与仓库实际用的编译器不一致 |
+
+风险：`unstable` 表示接口可能随版本变化。缓解：版本由锁文件固定为 7.0.2；脚本启动时先对一份内置的小样本（`Tokenizer.readQuoted` 的副本，期望 $M = 8$）自检，不符就以非零退出码失败，而不是生成错误的数字。
+
+**口径**：
+
+| 项 | 定死的规则 |
+|---|---|
+| 函数 | 下列节点各算一个函数：`FunctionDeclaration`、`MethodDeclaration`、`Constructor`、`GetAccessor`、`SetAccessor`、`FunctionExpression`、`ArrowFunction`。嵌套函数单独计算，不计入外层函数 |
+| 判定点 $d$ | `IfStatement`、`ForStatement`、`ForInStatement`、`ForOfStatement`、`WhileStatement`、`DoStatement`、`CaseClause`（`default` 不算）、`CatchClause`、`ConditionalExpression`，以及运算符为 `&&`、`\|\|`、`??`、`&&=`、`\|\|=`、`??=` 的二元表达式各算 1。可选链 `?.` 不算 |
+| 单个函数 | $M_f = 1 + d_f$ |
+| 文件 | $M_{\text{file}} = \sum_{f} M_f$；同时报函数个数与 $\max_f M_f$ |
+| 范围 | 只算运行代码：`packages/kernel/src/**`、`src/**`、`plugins/*/src/**`。**测试文件与 `scripts/` 不算圈复杂度**（只在行数表里单列），`vscode-svg/src/**` 单独一张表，不计入 CLI 的任何合计 |
+| 三类汇总 | 按路径前缀：内核 = `packages/kernel/src/`，装配处 = `src/`，插件 = `plugins/*/src/`（再按“内置 / 可选”与每个插件分别小计） |
+| 取数来源 | 对每个修订版 `R`（`final`、当前提交或 `p2`）执行 `git archive R` 解包到临时目录，在那里生成临时 `tsconfig.json` 再解析，所以数字只来自 git 历史，与工作区无关 |
+| `final` 怎样归类 | `final` 时还没有三类目录。用 `git diff --find-renames --name-status final R` 把 `final` 的每个文件映射到它在 `R` 中的路径，按目标路径归类；在 `R` 中已删除的文件归入“已删除”一类 |
+| 增量 | 每一类 $\Delta M_c = M_c^{R} - M_c^{\text{final}}$，以及总计 $\Delta M = \sum_c \Delta M_c$；另列每个文件的 $M^{\text{final}}$、$M^{R}$ 与差值 |
+| 行数 | 每个文件的物理行数与代码行数（去掉空行与只含注释的行）；三类加测试、脚本分别汇总 |
+| 输出 | `docs/metrics/` 下的 Markdown 表与一份 JSON；排序按路径的码元顺序，保证同一输入逐字节相同 |
+
+### 5.4 Phase 1 已知偏差 K1–K6 的去向
+
+| # | 内容（README §5） | Phase 2 中 | 步骤 |
+|---|---|---|---|
+| K1 | `ShapeFactory` 构造函数写死六种图形 | **消除**：改名 `ShapeRegistry`，构造函数为空；六种图形由 `BuiltinShapesPlugin` 经 `PluginInstaller` 注册（2.1.1） | S6 |
+| K2 | `CommandRegistry` 构造函数写死 19 条命令 | **消除**：由 `BuiltinCommandsPlugin` 注册；命令名冲突由安装器报 `duplicate registration: commands/<name>`（README 原文说“需要补的只有命令名冲突策略”，即此） | S6 |
+| K3 | `help` 的排版在 `HelpCommand` 里 | **保留**：`HelpCommand` 进入内置命令插件，排版跟着它走；把排版移进内核的 view 要新增一个内核接口，不属于本阶段目标 | — |
+| K4 | `SetCommand` 用“试赋值”校验 | **保留并推广**：处理器路径同样“试做 → 快照 → 还原”（2.4.5）。不再视为偏差，而是 `set` 事务的设计 | S7 |
+| K5 | `warning:` 前缀在两个类里加 | **保留**：box 的读回警告走 `ImportResult`，不新增第三处 | — |
+| K6 | `create` 的检查顺序 | **保留**：顺序变为“类型 → 个数 → 全部 `claimedIds` 的 id 检查 → 容器 → 取值”，K6 描述的现象不变 | S6 |
+
+### 5.5 约定补充 N1–N16（对规格的解释）
+
+| # | 规格的不清之处 | 约定 | 理由 |
+|---|---|---|---|
+| N1 | P1 规格 §4.1 说 `in` 的目标“必须为 g 类型”；规格 §4 要求 box 支持 `in` | `in` 与 `addto` 的目标可以是任何 `ContainerShape`（`g`、box）。对 Phase 1 已有的输入行为不变；`in <box>` 是新输入 | 规格开头“不修改它们的行为”指已有行为 |
+| N2 | `dir` 的标记与名字之间几个空格：正文说两个，示例 `[FILE] demo.svg` 是一个 | 按示例：名字从第 7 列对齐（决策 X27，偏差 T2） | 示例是逐字节的输出 |
+| N3 | `dir` 对符号链接等特殊项 | 跟随一层；目标是目录 → `[DIR]`，其余（含断链、FIFO、socket）→ `[FILE]`；不递归 | 决策 X12 |
+| N4 | §6.1B 树的对齐与 V1 规则差一位 | 按 V1：3/2/8 个空格；与规格 §5 的示例一致（偏差 T3） | V1 是 Phase 1 已定的统一规则 |
+| N5 | `create box … in` 的回显 | `box#n3 created (g#n3 + rect#n3-rect + text#n3-label) in box#n1` | 决策 X4 |
+| N6 | 没有文档时 `stats` | `no document` 错误 | 决策 X11 |
+| N7 | `dir` 读取失败时的 `<path>` | 当前工作目录的绝对路径（`process.cwd()` 的返回值） | `dir` 没有参数，目标只能是当前目录；绝对路径无歧义 |
+| N8 | box 上 `fill`、`label` 以外的属性 | 白名单路径，设在 `<g>` 上 | 决策 X8 |
+| N9 | box 在 `show` 中的名字 | `box#n1`，`parent=box#n1` | 决策 X20 |
+| N10 | box `fill` 的 undo 回显 | `box#n2 fill restored on n2-rect` | 决策 X10 |
+| N11 | `contributes` 与配置的未知键 | 非法 | 决策 X29 |
+| N12 | 规格没给格式的失败 | `plugin failed to load: <module> (<reason>)`、`invalid plugin manifest: <module> (<reason>)`、`cannot read plugin config: <path>`、`ambiguous attribute handlers for <attr> on <id>: <a>, <b>`、`attribute handler failed: <name> (<reason>)`、`shape provider failed: <type> (<reason>)`、`tree decorator failed: <name> (<reason>)`、`cannot detach required part of composite shape: <id>`、读回中的 `ambiguous shape providers for <tag>: …`、`shape provider <type> failed: <reason>`、`duplicate id <id>`、警告 `box <id> read as plain g: <原因>` | 风格与 §4.2 一致：小写开头、`<描述>: <对象>`、附加信息放括号 |
+| N13 | 加载失败消息的位置 | stdout，banner 之后、第一条命令之前（4.5） | 决策 X14 |
+| N14 | “禁用任何插件框架仍能启动”“禁用可选扩展时的行为” | 内置能力本身也经注册机制装配，任何装配配置都先装内置；`--bare` = 禁用全部可选扩展 | 规格 §1“内置实现可通过注册机制装配” |
+| N15 | `modified-star` 的新建节点与 `init` | 新建节点立即标 `*`；`init` 之后以空画布为保存点（`tree` 立即执行时没有 `*`） | ADR-3 |
+| N16 | `stats` 的类型名用哪个名字；空文档的格式 | 叶子按 `kindName()` 计数（内置叶子与 `tagName()` 相同）；空文档输出恰为 `(total 0, containers 0)`，前面没有空格 | 规格示例 |
+
+### 5.6 已知偏差 T1–T4（对规格的偏离）
+
+| # | 规格原文 | 本设计 | 原因 | 怎样核验 |
+|---|---|---|---|---|
+| T1 | §4 边界：“重复 id 违反全局唯一性，不能仅靠降级消除，必须拒绝整个读入” | 只有涉及 box 的重复 id（box 自身或其派生的两个部件 id 在文件中出现不止一次）才拒绝；其余重复 id 沿用 Phase 1 F14：保留第一个，后续改名并警告 | 全局拒绝会改变 Phase 1 已实现、已被测试与基线固定的读入行为（`IdAllocator.idFor`，`io/IdAllocator.ts:29-42`）；该句位于 box 一节的“边界”里 | box 读回测试；基线（`regression` 会话的 `read mixed.svg`）0 差异 |
+| T2 | §2.2：“标记后用两个空格连接名称” | `[FILE]` 后只有一个空格（名字与 `[DIR]  ` 之后的名字对齐） | 与同节示例逐字节一致；正文与示例矛盾时取示例 | `dir` 替身测试 |
+| T3 | P1 规格 §6.1B 树中三处摘要前 2/1/7 个空格 | 3/2/8 个空格 | V1（最宽 + 2）；规格 §5 的示例本身就是 3/2/8 | `cli-1-1b` 会话；`doc/transcript/README.md` 加注 |
+| T4 | 失败文案应当确定 | `<reason>` 取异常消息的第一行，Node 的模块错误消息含绝对路径，所以换一台机器或换一个目录，消息会不同 | 不改写 Node 的消息才能保留排错信息；同一机器、同一输入下仍然确定；会话文件中不含加载失败的用例，加载失败只在单元测试里按前缀断言 | 加载器测试 |
+
+---
+
+## 6 ADR 草稿
+
+S15 把这些草稿整理进 README。
+
+### ADR-1 属性扩展点的契约
+
+- **背景**：规格 §3.3 的初始接口只传 `shapeId`，处理器拿不到文档；没有冲突规则；修改多个子部件时怎样成为一个 undo 单元、部分修改后抛错怎样恢复，都未定义。Phase 1 的 `Group.restore` 在子节点数不一致时直接抛错（`model/Group.ts:76-78`），处理器一旦改了结构，回滚就会失败。
+- **备选**：① 处理器自己负责撤销（返回一个 undo 闭包）；② 处理器在命令层注册成独立命令；③ 内核做快照事务，处理器只能经受限视图改属性（采纳）。冲突规则的备选：先注册者胜；全部组合执行；按优先级、并列拒绝（采纳）。
+- **决定**：`handles(view, attr)` 只读；`apply(target, attr, value)` 拿到 `AttributeTarget`，只能 `part(id)` 与 `setAttribute`；内核在 `apply` 前后对**目标子树**取 `ShapeMemento`，`set` 的 undo/redo 就是恢复这两个快照；`apply` 抛错立即恢复并报错，`EditorError` 原样、其他异常包装为 `attribute handler failed`；不回退到白名单；冲突按 `priority` 取最大、并列报 `ambiguous attribute handlers`；无处理器命中时回到 Phase 1 白名单。
+- **后果**：① 一次 `set` 天然是一个 undo 单元，与改了几个部件无关；② 回滚不依赖处理器写对撤销逻辑；③ 处理器不能做结构性修改（例如“设置 label 时顺便新建一个 text”），需要结构修改的语义只能做成命令；④ 透传属性不能经处理器修改（快照不覆盖它们，`AttributeTarget` 也不提供）。
+
+### ADR-2 读回：选提供者与降级
+
+- **背景**：`box` 的元素也是 `<g>`，按标签名分派（`SvgImporter.ts:147`）无法区分；没装 box 时要自然降级为 `g`，内核里不能出现 `data-kind`；装了 box 但元素不完整怎么办；重复 id 必须拒绝。
+- **备选**：① 内核先查 `data-kind` 再查标签名（内核出现 `data-kind`，违反规格 §4）；② 每个提供者给 `matchScore`，最高者读（采纳）。不完整时：拒绝整个读入；警告并降级（采纳）。
+- **决定**：`matchScore` 0 = 不认识，1 = 标签名，2 = 标签名 + 区分属性；最高分并列拒绝整个读入；box 的 `read` 先只看 `ElementView` 做三项检查——**涉及 box 的重复 id → `throw reader.reject("duplicate id …")`**；结构不完整（缺显式 id、缺 `<id>-rect` 或 `<id>-label`、部件标签不符）→ `reader.warn("box <id> read as plain g: <原因>")` 并 `return reader.readWithNext(element)`；都通过才分配 id、读子元素、构造 `BoxShape`。部件按派生 id 识别，位置不限，允许多余子元素。
+- **后果**：① 未装插件时降级是分数规则的自然结果，内核零特例；② 装插件不会让原来能打开的文件打不开；③ 降级后的 `g` 带着 `data-kind="box"` 透传属性，保存再读结果相同；④ 预检查必须在任何副作用之前完成，所以 box 的检查只能基于 XML 元素，不能基于构造好的对象；⑤ 两个插件同时认领一类元素时，用户会得到明确的读入错误而不是随机结果。
+
+### ADR-3 `modified-star` 的 dirty 语义、祖先传播与拼接顺序
+
+- **背景**：规格 §5 要求在 ADR 中说明三处取舍，并说明新建节点是否立即标记；状态必须封装在标签实例的字段里。
+- **备选**：dirty 判定——① 发生过编辑命令（`undo` 后 `*` 不消失）；② 内容与上次保存不一致（采纳）。祖先传播——① 子图形改了，所有祖先容器行都标；② 不传播，只标改动的节点和根行（采纳）。拼接顺序——① 按注册顺序（采纳）；② 按标签名字母序；③ 每个标签自带权重。
+- **决定**：`ModifiedStar` 在 `documentReplaced`、`documentSaved` 时记录保存点：每个图形的指纹（`tagName`、全部 `svgAttributes()`、`textContent()`、父 id）与整份文档的序列化文本。渲染时：图形行的指纹与保存点不同、或保存点里没有这个 id → `*`；根行的序列化文本与保存点不同 → `*`。`init` 的保存点是空画布。多个标签按注册顺序拼接，所以是 `g#n1 (box) *`。
+- **后果**：① `undo` 回到保存点时 `*` 全部消失，`redo` 又出现；② 只依赖两个事件，不需要命令上报改了哪些 id；③ 删除节点、调整 z-order 不会让任何图形行带 `*`，只体现在根行上（根行比较的是整份序列化）；④ 父容器不因子节点改动而带 `*`，与规格 §5 示例一致（`rect#n1-rect` 有 `*`，`g#n1` 没有）；⑤ 每次 `tree` 都要序列化一次文档，代价与文档大小成正比，对 CLI 可以忽略；⑥ 两种装配的顺序必须一致，由 4.9 的测试保证。
+
+### ADR-4 配置清单的校验时机
+
+- **背景**：`contributes` 声明与实际注册可能不一致；规格要求不一致、激活失败、重复注册时撤销该插件的全部暂存注册，并继续加载后续插件。
+- **备选**：① 激活**前**只看清单查重、激活后再比对；② 激活后统一校验（采纳）；③ 不暂存，直接写入注册表，失败时逐项撤销。
+- **决定**：顺序固定为 清单解析 → 构造并激活（写进暂存区）→ 查重（暂存区内部与已提交的注册）→ 清单比对 → 提交。只报第一条失败。内置插件、方式 A、方式 B 用同一个 `PluginInstaller`。
+- **后果**：① 查重以实际注册为准，清单写错不会导致漏查；② 提交前任何一步失败都只需丢弃暂存区，不存在“提交了一半”；③ 清单比对放在查重之后，同时违反两条的插件报的是重复注册（更能说明冲突在哪）；④ 插件在激活时能做的事必须全部经过上下文，否则无法回滚，所以 `activate` 契约禁止其他副作用，L8 做静态检查。
+
+### ADR-5 内核做成 workspace 包，用 `exports` 划定公开 API
+
+- **背景**：规格 §1 要求插件只依赖内核公开的抽象，§6 要求包名按 Node 规则解析；判据 `git diff -- <内核目录>` 需要清楚的目录边界。
+- **备选**：① 内核留在根包的 `src/kernel/`，只靠 architecture test；② 内核、装配处都做成 workspace 包；③ 内核做成 workspace 包，装配处留在根包（采纳）。
+- **决定**：`packages/kernel`（`@svgframe/kernel`），`exports` 只有 `.`（`api.ts`，给插件）与 `./host`（`host-api.ts`，给装配处）；插件只写裸名 import；P5 为这两个汇总文件开受控例外（P5a）。
+- **后果**：① 深层 import 在 `tsc` 与运行时都会失败，architecture test 只需兜底相对路径；② 新增内核公开类型要改 `api.ts`（这是内核改动，接入插件时不应发生）；③ 根测试仍可用相对路径测内部类；④ `npm install` 会在 `node_modules/@svgframe/` 下建软链接，CI 的 `npm ci` 同样处理。
+
+### ADR-6 命令接口保持同步
+
+- **背景**：`dir` 要读文件系统；`Editor.executeLine` 是同步的，`Repl` 逐行同步调用它。
+- **备选**：① 命令支持异步（`execute` 返回 `Promise`）；② 保持同步，`dir` 用 `readdirSync`（采纳）。
+- **决定**：保持同步。
+- **后果**：① 内核、`Repl` 与全部现有测试不变；② 将来真正需要异步的插件（网络、长耗时导出）无法接入，需要另起内核版本；③ 读一个目录的阻塞时间对交互式 CLI 可以忽略。
+
+---
+
 ## 附录 A 现有文件归属表
 
 `fe10441` 上 `src/` 的 82 个文件逐个列出：归到哪一类、S5 怎样搬、之后哪一步改它。S5 只做表中的 `git mv` 与 import 路径修正，**不改任何行为**；“之后”一列是 S6–S8 的预告，以第 2–4 部分为准。
@@ -1404,3 +1795,128 @@ end
 | `scripts/metrics/`、`scripts/plugin-diff/` | S9 新建；`scripts/tsconfig.json` 的 `include: ["."]` 自动覆盖 |
 | `doc/transcript/` | S5–S8 不动；S9 为已有的三个会话加 `<会话>.runs.json`（4.8）；S12 加 `cli-1-1b`，S14 加 `cli-2` |
 | `vscode-svg/` | 不动；不进 workspaces、tsconfig、vitest、architecture test、CLI 的 metrics（1.4） |
+
+---
+
+## 附录 B 验证实验记录
+
+全部在仓库之外的 `/tmp/s4-spike/` 中进行，代码不入库。环境：macOS，Node v26.13.0，npm 12.2.2，`typescript` 7.0.2，tsx 4.23.15 与 vitest（均取自仓库的 `node_modules`）。
+
+### B.1 实验 1：npm workspaces
+
+- **目的**：新增一个 `.ts` 插件包时，根 `package.json` 与 `package-lock.json` 各有什么变化；`vscode-svg/` 会不会被收进去。
+- **做法**：
+
+```bash
+mkdir -p /tmp/s4-spike/ws && cd /tmp/s4-spike/ws
+cp <仓库>/package.json <仓库>/package-lock.json <仓库>/tsconfig.json .
+cp -cR <仓库>/node_modules .                                  # APFS 克隆，免联网
+mkdir vscode-svg && echo '{"name":"vscode-svg","version":"0.0.1","private":true}' > vscode-svg/package.json
+git init -q && git add package.json package-lock.json && git commit -qm base
+# ① 只加 workspaces 字段
+node -e 'p=require("./package.json");p.workspaces=["packages/*","plugins/*"];require("fs").writeFileSync("package.json",JSON.stringify(p,null,2)+"\n")'
+npm install --no-audit --no-fund --prefer-offline && git diff --stat
+# ② 加内核包 packages/kernel（exports: {".": "./src/api.ts"}），npm install
+# ③ 加插件包 plugins/command-stats（type: module，exports 字符串 + ./package.json，dependencies: {"@svgframe/kernel": "0.1.0"}），npm install
+```
+
+- **输出摘录**：
+  - ①：`package.json` 多出 `workspaces`；`package-lock.json` 只在根条目 `""` 下多出同样的 `workspaces` 数组（4 行）。
+  - ②：`package-lock.json` +8 行：`"node_modules/@svgframe/kernel": { "resolved": "packages/kernel", "link": true }` 与 `"packages/kernel": { "name": "@svgframe/kernel", "version": "0.1.0" }`；`node_modules/@svgframe/kernel -> ../../packages/kernel`。
+  - ③：**根 `package.json` 无变化**；`package-lock.json` +11 行：`"node_modules/@svgframe/plugin-command-stats": { "resolved": "plugins/command-stats", "link": true }` 与 `"plugins/command-stats": { "name": …, "version": "0.1.0", "dependencies": { "@svgframe/kernel": "0.1.0" } }`；`node_modules/@svgframe/plugin-command-stats -> ../../plugins/command-stats`。
+  - 三次安装后锁文件中都没有 `vscode-svg`；`plugins/` 下没有 `package.json` 的空目录被忽略，不报错。
+- **结论**：S5 声明 glob 之后，每接入一个插件只改 `package-lock.json`（两段，约 11 行）；glob 写成 `packages/*`、`plugins/*` 不会收进 `vscode-svg/`（1.4）。
+
+### B.2 实验 2：tsx 下按字符串模块名加载 `.ts` 插件；`exports` 的写法；类型检查与测试范围
+
+- **目的**：加载器用字符串模块名（相对路径、包名各一个）能否在 tsx 下导入 `.ts` 插件；`exports` 怎样写才能同时被 `import()` 与 `createRequire().resolve()` 解析；`tsconfig` 与 vitest 的 glob 是否覆盖新插件、排除 `vscode-svg/`。
+- **做法**：在 `ws/host/probe.ts`（`ws` 是 `"type": "module"`）里实现“先解析后导入”：相对路径以配置文件目录为基准找 `package.json`，包名用 `createRequire(<配置文件>).resolve("<包名>/package.json")`，再按 `exports["."]` 拼入口、`import(pathToFileURL(入口).href)`。**在无关的临时目录 `/tmp/s4-spike/cwd` 下运行**：
+
+```bash
+cd /tmp/s4-spike/cwd && <仓库>/node_modules/.bin/tsx /tmp/s4-spike/ws/host/probe.ts /tmp/s4-spike/ws/plugins.config.json
+```
+
+- **输出摘录**：
+
+```text
+@svgframe/plugin-command-stats   resolve: ok …/plugins/command-stats/package.json   import: ok, default=function hello stats
+./plugins/command-stats          resolve: ok plugins/command-stats/package.json     import: ok, default=function hello stats
+@spike/import-only               resolve: FAIL ERR_PACKAGE_PATH_NOT_EXPORTED        （exports 只有 {".": {"import": …}}，没有 ./package.json）
+@spike/no-pkgjson-export         resolve: FAIL ERR_PACKAGE_PATH_NOT_EXPORTED        （exports 是字符串但没有 ./package.json）
+createRequire.resolve @spike/import-only            -> FAIL ERR_PACKAGE_PATH_NOT_EXPORTED   （CJS 条件不匹配 import）
+createRequire.resolve @svgframe/plugin-command-stats -> plugins/command-stats/src/StatsPlugin.ts
+import() @spike/import-only ok                                                      （ESM 条件匹配）
+json import: @svgframe/plugin-command-stats {"commands":["stats"]}                  （import … with { type: "json" }）
+```
+
+  另外：把探针放在没有 `"type": "module"` 的目录里时，tsx 报 `Top-level await is currently not supported with the "cjs" output format`——说明 `.ts` 文件的模块格式取决于所在包的 `type`。
+- **类型检查**：`tsconfig.json` 的 `include` 改为 `["src","tests","host","packages/*/src","packages/*/tests","plugins/*/src","plugins/*/tests"]`、加 `resolveJsonModule`：`tsc --noEmit -p .` 通过（内核经 `exports` 指向 `.ts` 源码、JSON import、默认导出都能解析）；在 `vscode-svg/src/bad.ts` 放 `const x: number = "not checked";` 仍通过（不在范围内）；插件里写 `import { Greeter } from "@svgframe/kernel/src/Greeter.js"` 报 `TS2307: Cannot find module`。运行时深层 import 报 `ERR_PACKAGE_PATH_NOT_EXPORTED`。
+- **测试范围**：`vitest.config.ts` 设 `include: ["tests/**/*.test.ts","packages/*/tests/**/*.test.ts","plugins/*/tests/**/*.test.ts"]`，在 `vscode-svg/tests/bad.test.ts` 放一个必然失败的测试：`vitest run` → `Test Files 3 passed (3)`；去掉配置文件再运行 → `FAIL vscode-svg/tests/bad.test.ts`。插件测试经 `@svgframe/kernel` 导入 `.ts` 源码正常。
+- **结论**：插件包的 `exports` 定为 `{ ".": "<入口>.ts", "./package.json": "./package.json" }`，并且必须 `"type": "module"`（L7）；加载器只用 `createRequire` 定位 `package.json`，入口自己取（4.6）；tsconfig 与 vitest 的 glob 按 1.4 写。
+
+### B.3 实验 3：三种失败分别抛什么
+
+- **目的**：“模块不存在”“模块存在但求值时抛错”“模块存在但它自己的依赖缺失”能否区分。
+- **做法**：三个夹具包——`@spike/eval-throws`（入口顶层 `throw new Error("boom at load")`）、`@spike/missing-dep`（入口 `import { x } from "left-pad-does-not-exist"`）、`@spike/no-default`（只有具名导出）；外加不存在的 `@svgframe/plugin-nope` 与 `./plugins/nope`。分别用“先解析后导入”与“直接 `import(包名)`”两种方式加载。
+- **输出摘录**：
+
+```text
+先解析后导入：
+  @svgframe/plugin-nope   resolve: FAIL MODULE_NOT_FOUND: Cannot find module '@svgframe/plugin-nope/package.json'
+  ./plugins/nope          resolve: FAIL（目录或 package.json 不存在）
+  @spike/eval-throws      resolve: ok   import: FAIL Error: boom at load
+  @spike/missing-dep      resolve: ok   import: FAIL ERR_MODULE_NOT_FOUND: Cannot find package 'left-pad-does-not-exist' imported from …/plugins/missing-dep/src/Entry.ts
+  @spike/no-default       resolve: ok   import: ok, default=undefined
+直接 import(包名)：
+  @svgframe/plugin-nope   FAIL ERR_MODULE_NOT_FOUND Cannot find package '@svgframe/plugin-nope' imported from <ws>/host/probe2.ts
+  @spike/missing-dep      FAIL ERR_MODULE_NOT_FOUND Cannot find package 'left-pad-does-not-exist' imported from <ws>/plugins/missing-dep/src/Entry.ts
+```
+
+- **结论**：直接 `import()` 时“找不到”与“依赖缺失”是同一个错误码，只有消息文本不同（不可靠）；先解析后导入则按阶段区分：解析失败 → `plugin not found`，导入失败 → `plugin failed to load`，`default` 为 `undefined` → `plugin has no default export`（4.5、4.6）。另见 Node 的消息含绝对路径（偏差 T4）。
+
+### B.4 实验 4：D18 的解析方案
+
+- **目的**：在 TypeScript 7 下解析 `src/` 中的文件并数出判定点。
+- **做法**：`git archive fe10441 src | tar -x -C /tmp/s4-spike/cc/snap`，在 `snap/` 写一个最小 `tsconfig.json`；脚本 `cc.ts`：
+
+```ts
+import { API } from "typescript/unstable/sync";
+import { SyntaxKind } from "typescript/unstable/ast";
+const api = new API({ cwd: root });
+const project = api.updateSnapshot({ openProjects: [`${root}/tsconfig.json`] }).getProjects()[0];
+const sf = project.program.getSourceFile(`${root}/${file}`);
+// 遍历 forEachChild；函数节点：FunctionDeclaration、MethodDeclaration、Constructor、Get/SetAccessor、FunctionExpression、ArrowFunction
+// 判定点：If、For、ForIn、ForOf、While、Do、CaseClause、CatchClause、ConditionalExpression，以及 &&、||、?? 的 BinaryExpression
+```
+
+- **输出摘录**：
+
+```text
+src/commands/HelpCommand.ts  execute  M=3        ← 手算：for + if = 2 个判定点
+src/commands/Tokenizer.ts    readQuoted  M=8     ← 手算：while 1；if(… && (… || …)) 3；else if 1；if(… && …) 2 → d = 7
+src/commands/Tokenizer.ts    readPlain   M=3     ← while + && 
+src/model/IdSyntax.ts        validate    M=2
+82 files, total M=669        （0.26 s）
+```
+
+  `cc.ts` 以仓库的 `tsconfig.json` 为基础做类型检查，`tsc --noEmit` 通过（`typescript/unstable/sync` 带类型声明）。
+- **结论**：采纳 `typescript/unstable/sync`，不新增依赖；口径见 5.3。
+
+### B.5 实验 5：差异判据的路径规格
+
+- **目的**：`plugins` 作为路径规格是否会匹配 `plugins.config.json`；不存在的路径时 `git diff` 的行为。
+- **做法与输出**：在实验 1 的仓库里，一个提交同时改 `plugins.config.json` 与 `plugins/command-stats/src/StatsPlugin.ts`：
+
+```text
+$ git diff HEAD^ HEAD --name-status -- packages/kernel plugins ':(exclude)plugins/command-stats'
+（空）
+$ git diff HEAD^ HEAD --name-status -- plugins
+M	plugins/command-stats/src/StatsPlugin.ts            ← 不含 plugins.config.json
+$ git diff HEAD^ HEAD --name-status -- no/such/dir ; echo rc=$?
+rc=0                                                    ← 路径不存在时空输出、退出码 0
+$ git cat-file -e HEAD^:no/such/dir ; echo rc=$?
+fatal: path 'no/such/dir' does not exist in 'HEAD^'
+rc=128
+```
+
+- **结论**：`<既有插件目录>` 可以直接写 `plugins` 再排除新插件；判据命令之前必须用 `git cat-file -e` 断言路径存在（1.5）。
