@@ -3,14 +3,14 @@ import { EditorSession } from "../../../packages/kernel/src/app/EditorSession.js
 import { CommandRegistry } from "../../../packages/kernel/src/commands/CommandRegistry.js";
 import { History } from "../../../packages/kernel/src/commands/History.js";
 import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
-import { ShapeFactory } from "../../../packages/kernel/src/model/ShapeFactory.js";
+import { ShapeRegistry } from "../../../packages/kernel/src/model/ShapeRegistry.js";
 import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 
 describe("EditorSession", () => {
   const files = new MemoryFileSystem();
   const commands = new CommandRegistry();
-  const factory = new ShapeFactory();
+  const factory = new ShapeRegistry();
   const session = () => new EditorSession(files, commands, factory);
 
   it("starts without a document and without a save path", () => {

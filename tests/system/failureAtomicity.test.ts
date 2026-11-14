@@ -6,7 +6,7 @@ import { SvgSerializer } from "../../packages/kernel/src/io/SvgSerializer.js";
 import { EditorError } from "../../packages/kernel/src/model/EditorError.js";
 import { Group } from "../../plugins/builtin-shapes/src/Group.js";
 import type { ParamSpec } from "../../packages/kernel/src/model/ParamSpec.js";
-import { ShapeFactory } from "../../packages/kernel/src/model/ShapeFactory.js";
+import { ShapeRegistry } from "../../packages/kernel/src/model/ShapeRegistry.js";
 import { MemoryFileSystem } from "../unit/io/MemoryFileSystem.js";
 import { TranscriptRunner } from "./TranscriptRunner.js";
 
@@ -62,7 +62,7 @@ class Fixture {
   private readonly serializer = new SvgSerializer();
 
   constructor(lines: readonly string[]) {
-    const factory = new ShapeFactory();
+    const factory = new ShapeRegistry();
     factory.register(CompositeBox);
     this.session = new EditorSession(this.files, new CommandRegistry(), factory);
     this.editor = new Editor(this.session);

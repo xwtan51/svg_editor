@@ -2,7 +2,7 @@ import type { FileSystem } from "../../../packages/kernel/src/io/FileSystem.js";
 import { CommandRegistry } from "../../../packages/kernel/src/commands/CommandRegistry.js";
 import type { CommandContext } from "../../../packages/kernel/src/commands/CommandContext.js";
 import { History } from "../../../packages/kernel/src/commands/History.js";
-import { ShapeFactory } from "../../../packages/kernel/src/model/ShapeFactory.js";
+import { ShapeRegistry } from "../../../packages/kernel/src/model/ShapeRegistry.js";
 import type { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 
@@ -16,7 +16,7 @@ export class TestContext implements CommandContext {
   private readonly files: FileSystem;
   private readonly log = new History();
   private readonly commands = new CommandRegistry();
-  private readonly factory = new ShapeFactory();
+  private readonly factory = new ShapeRegistry();
 
   constructor(document: SvgDocument | null = null, fileSystem: FileSystem = new MemoryFileSystem()) {
     this.doc = document;
@@ -59,7 +59,7 @@ export class TestContext implements CommandContext {
     return this.commands;
   }
 
-  shapeFactory(): ShapeFactory {
+  shapeFactory(): ShapeRegistry {
     return this.factory;
   }
 }

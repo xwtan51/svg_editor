@@ -3,7 +3,7 @@ import { EditorError } from "../model/EditorError.js";
 import { NumberFormat } from "../model/NumberFormat.js";
 import type { Shape } from "../model/Shape.js";
 import type { ShapeContainer } from "../model/ShapeContainer.js";
-import { ShapeFactory } from "../model/ShapeFactory.js";
+import { ShapeRegistry } from "../model/ShapeRegistry.js";
 import type { ShapeType } from "../model/ShapeType.js";
 import { StyleAttributes } from "../model/StyleAttributes.js";
 import { SvgDocument } from "../model/SvgDocument.js";
@@ -15,7 +15,7 @@ import type { XmlElement } from "./XmlElement.js";
 
 /**
  * SVG file → new `SvgDocument` plus warnings. Elements are built through
- * `ShapeFactory` by tag name; which XML attributes a type understands comes
+ * `ShapeRegistry` by tag name; which XML attributes a type understands comes
  * from its `params` (geometry and create options) plus the common style
  * attributes, so there is no per-tag code here. Everything else is kept as
  * pass-through attributes (F7).
@@ -33,10 +33,10 @@ export class SvgImporter {
   /** `inkscape:label` → `inkscape`; `xml:` is predefined and `xmlns:` declares rather than uses a prefix. */
   private static readonly USED_PREFIX = /^(?!xmlns:|xml:)([^:]+):/;
 
-  private readonly factory: ShapeFactory;
+  private readonly factory: ShapeRegistry;
   private readonly adapter = new XmlDomAdapter();
 
-  constructor(factory: ShapeFactory = new ShapeFactory()) {
+  constructor(factory: ShapeRegistry = new ShapeRegistry()) {
     this.factory = factory;
   }
 

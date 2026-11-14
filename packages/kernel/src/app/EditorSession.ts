@@ -2,7 +2,7 @@ import type { CommandContext } from "../commands/CommandContext.js";
 import type { CommandRegistry } from "../commands/CommandRegistry.js";
 import { History } from "../commands/History.js";
 import type { FileSystem } from "../io/FileSystem.js";
-import type { ShapeFactory } from "../model/ShapeFactory.js";
+import type { ShapeRegistry } from "../model/ShapeRegistry.js";
 import type { SvgDocument } from "../model/SvgDocument.js";
 
 /**
@@ -17,9 +17,9 @@ export class EditorSession implements CommandContext {
   private readonly log = new History();
   private readonly files: FileSystem;
   private readonly commands: CommandRegistry;
-  private readonly factory: ShapeFactory;
+  private readonly factory: ShapeRegistry;
 
-  constructor(files: FileSystem, commands: CommandRegistry, factory: ShapeFactory) {
+  constructor(files: FileSystem, commands: CommandRegistry, factory: ShapeRegistry) {
     this.files = files;
     this.commands = commands;
     this.factory = factory;
@@ -62,7 +62,7 @@ export class EditorSession implements CommandContext {
     return this.commands;
   }
 
-  shapeFactory(): ShapeFactory {
+  shapeFactory(): ShapeRegistry {
     return this.factory;
   }
 }

@@ -15,7 +15,7 @@ import { Text } from "../../../../plugins/builtin-shapes/src/Text.js";
  * TO REFACTOR (README §4.1): the built-in types are hard-wired in the
  * constructor; plugin types will be added from outside through `register`.
  */
-export class ShapeFactory {
+export class ShapeRegistry {
   private readonly types = new Map<string, ShapeType>();
 
   constructor() {

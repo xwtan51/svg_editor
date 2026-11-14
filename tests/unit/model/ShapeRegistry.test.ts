@@ -6,7 +6,7 @@ import { Group } from "../../../plugins/builtin-shapes/src/Group.js";
 import { LeafShape } from "../../../packages/kernel/src/model/LeafShape.js";
 import { Line } from "../../../plugins/builtin-shapes/src/Line.js";
 import { Rect } from "../../../plugins/builtin-shapes/src/Rect.js";
-import { ShapeFactory } from "../../../packages/kernel/src/model/ShapeFactory.js";
+import { ShapeRegistry } from "../../../packages/kernel/src/model/ShapeRegistry.js";
 import type { ShapeType } from "../../../packages/kernel/src/model/ShapeType.js";
 import { Text } from "../../../plugins/builtin-shapes/src/Text.js";
 
@@ -23,23 +23,23 @@ function usage(type: ShapeType): string {
   return [`create ${type.typeName} <id>`, ...type.params.map((p) => p.usageToken())].join(" ");
 }
 
-describe("ShapeFactory", () => {
+describe("ShapeRegistry", () => {
   it("registers exactly the six built-in types, in order", () => {
-    expect(new ShapeFactory().typeNames()).toEqual(["rect", "circle", "ellipse", "line", "text", "g"]);
+    expect(new ShapeRegistry().typeNames()).toEqual(["rect", "circle", "ellipse", "line", "text", "g"]);
   });
 
   it.each(BUILT_IN)("lookup(%s) returns the class itself", (name, type) => {
-    expect(new ShapeFactory().lookup(name)).toBe(type);
+    expect(new ShapeRegistry().lookup(name)).toBe(type);
   });
 
   it("reports an unknown type with the exact §4.2 message", () => {
-    const factory = new ShapeFactory();
+    const factory = new ShapeRegistry();
     expect(() => factory.lookup("hexagon")).toThrow(EditorError);
     expect(() => factory.lookup("hexagon")).toThrow(new EditorError("unknown shape type: hexagon (is the plugin loaded?)"));
   });
 
   it.each(["box", "Rect", "RECT", "", "svg", "path"])("rejects %j (case-sensitive, box not built in)", (name) => {
-    expect(() => new ShapeFactory().lookup(name)).toThrow(
+    expect(() => new ShapeRegistry().lookup(name)).toThrow(
       new EditorError(`unknown shape type: ${name} (is the plugin loaded?)`),
     );
   });
@@ -48,14 +48,14 @@ describe("ShapeFactory", () => {
     class Hexagon extends Group {
       static override readonly typeName = "hexagon";
     }
-    const factory = new ShapeFactory();
+    const factory = new ShapeRegistry();
     factory.register(Hexagon);
     expect(factory.lookup("hexagon")).toBe(Hexagon);
     expect(factory.typeNames()).toContain("hexagon");
   });
 
   it("registering a name twice is a programming error", () => {
-    const factory = new ShapeFactory();
+    const factory = new ShapeRegistry();
     let thrown: unknown;
     try {
       factory.register(Rect);
@@ -67,7 +67,7 @@ describe("ShapeFactory", () => {
   });
 
   it("checks the static side at compile time", () => {
-    const factory = new ShapeFactory();
+    const factory = new ShapeRegistry();
     // Never executed: this only has to fail type-checking.
     const notAShapeType = () =>
       // @ts-expect-error LeafShape has no static typeName / params / create
@@ -76,11 +76,11 @@ describe("ShapeFactory", () => {
   });
 
   it("instances are independent (no global registry)", () => {
-    const a = new ShapeFactory();
+    const a = new ShapeRegistry();
     a.register(class Star extends Group {
       static override readonly typeName = "star";
     });
-    expect(() => new ShapeFactory().lookup("star")).toThrow(EditorError);
+    expect(() => new ShapeRegistry().lookup("star")).toThrow(EditorError);
   });
 });
 

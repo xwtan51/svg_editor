@@ -12,7 +12,7 @@ import { EditCommand } from "../../../packages/kernel/src/commands/EditCommand.j
  * `create <type> <id> [params…] [in <containerId>]` (spec §3, §4.1).
  *
  * The number of parameters depends on the type, which is only known once the
- * `ShapeFactory` has been asked, so the per-type count is checked in `prepare`,
+ * `ShapeRegistry` has been asked, so the per-type count is checked in `prepare`,
  * right after the type: type → count → id → container → values. The usage
  * error then shows the syntax of that type (R7).
  */

@@ -1,5 +1,5 @@
 import type { FileSystem } from "../io/FileSystem.js";
-import type { ShapeFactory } from "../model/ShapeFactory.js";
+import type { ShapeRegistry } from "../model/ShapeRegistry.js";
 import type { SvgDocument } from "../model/SvgDocument.js";
 import type { CommandRegistry } from "./CommandRegistry.js";
 import type { History } from "./History.js";
@@ -37,5 +37,5 @@ export interface CommandContext {
   registry(): CommandRegistry;
 
   /** For `create` (shape type by name, spec §2.1 name dispatch #1). */
-  shapeFactory(): ShapeFactory;
+  shapeFactory(): ShapeRegistry;
 }

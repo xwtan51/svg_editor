@@ -6,7 +6,7 @@ import { CommandRegistry } from "../../../packages/kernel/src/commands/CommandRe
 import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
 import { QueryCommand } from "../../../packages/kernel/src/commands/QueryCommand.js";
 import { SvgSerializer } from "../../../packages/kernel/src/io/SvgSerializer.js";
-import { ShapeFactory } from "../../../packages/kernel/src/model/ShapeFactory.js";
+import { ShapeRegistry } from "../../../packages/kernel/src/model/ShapeRegistry.js";
 import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 
@@ -48,7 +48,7 @@ function editorWith(document: SvgDocument | null = new SvgDocument()): { editor:
   const registry = new CommandRegistry();
   registry.register(PingCommand);
   registry.register(BrokenCommand);
-  const session = new EditorSession(new MemoryFileSystem(), registry, new ShapeFactory());
+  const session = new EditorSession(new MemoryFileSystem(), registry, new ShapeRegistry());
   if (document !== null) {
     session.replaceDocument(document, null);
   }

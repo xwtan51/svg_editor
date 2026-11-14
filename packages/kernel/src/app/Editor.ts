@@ -3,7 +3,7 @@ import { CommandRegistry } from "../commands/CommandRegistry.js";
 import type { CommandResult } from "../commands/CommandResult.js";
 import { NodeFileSystem } from "../../../../src/adapters/NodeFileSystem.js";
 import { EditorError } from "../model/EditorError.js";
-import { ShapeFactory } from "../model/ShapeFactory.js";
+import { ShapeRegistry } from "../model/ShapeRegistry.js";
 import { EditorSession } from "./EditorSession.js";
 
 /**
@@ -25,7 +25,7 @@ export class Editor {
 
   /** An editor on the real file system, with the built-in commands and shape types and no document. */
   static createDefault(): Editor {
-    return new Editor(new EditorSession(new NodeFileSystem(), new CommandRegistry(), new ShapeFactory()));
+    return new Editor(new EditorSession(new NodeFileSystem(), new CommandRegistry(), new ShapeRegistry()));
   }
 
   /**

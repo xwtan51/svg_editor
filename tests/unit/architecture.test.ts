@@ -328,7 +328,7 @@ function ioIsolationViolations(files: SourceFile[]): string[] {
 
 // ---------------------------------------------------------------- P2: name dispatch
 
-const NAME_DISPATCH_FILES = ["model/ShapeFactory.ts", "commands/CommandRegistry.ts"];
+const NAME_DISPATCH_FILES = ["model/ShapeRegistry.ts", "commands/CommandRegistry.ts"];
 
 function typeRegistryViolations(files: SourceFile[]): string[] {
   return files
@@ -457,10 +457,10 @@ function subclassImportViolations(files: SourceFile[]): string[] {
     .map((ref) => `${describeImport(ref)} at run time (subclass)`);
 }
 
-function concreteShapeFactoryViolations(files: SourceFile[]): string[] {
+function concreteShapeRegistryViolations(files: SourceFile[]): string[] {
   const shapeClasses = descendantsOf("Shape", files.filter((file) => file.module === "model"));
   return allImports(files)
-    .filter((ref) => shapeClasses.has(baseName(ref.from.path)) && baseName(ref.target ?? "") === "ShapeFactory")
+    .filter((ref) => shapeClasses.has(baseName(ref.from.path)) && baseName(ref.target ?? "") === "ShapeRegistry")
     .map(describeImport);
 }
 
@@ -562,11 +562,11 @@ describe("architecture (README §3) applied to the scanned source", () => {
     expect(ioIsolationViolations(sources)).toEqual([]);
   });
 
-  it("P2: Map<string, ShapeType | CommandType> only in ShapeFactory / CommandRegistry", () => {
+  it("P2: Map<string, ShapeType | CommandType> only in ShapeRegistry / CommandRegistry", () => {
     expect(typeRegistryViolations(sources)).toEqual([]);
   });
 
-  it("P2: no Map from names to functions outside ShapeFactory / CommandRegistry", () => {
+  it("P2: no Map from names to functions outside ShapeRegistry / CommandRegistry", () => {
     expect(functionMapViolations(sources)).toEqual([]);
   });
 
@@ -586,8 +586,8 @@ describe("architecture (README §3) applied to the scanned source", () => {
     expect(subclassImportViolations(sources)).toEqual([]);
   });
 
-  it("P4: concrete shape classes do not import ShapeFactory", () => {
-    expect(concreteShapeFactoryViolations(sources)).toEqual([]);
+  it("P4: concrete shape classes do not import ShapeRegistry", () => {
+    expect(concreteShapeRegistryViolations(sources)).toEqual([]);
   });
 
   it("P5: one exported class or interface per file, named like the file", () => {
@@ -678,7 +678,7 @@ describe("architecture rules detect synthetic violations", () => {
 
   it("P2: type registries", () => {
     expect(typeRegistryViolations([file("model/X.ts", "private m = new Map<string, ShapeType>();")])).toHaveLength(1);
-    expect(typeRegistryViolations([file("model/ShapeFactory.ts", "private m = new Map<string, ShapeType>();")])).toEqual([]);
+    expect(typeRegistryViolations([file("model/ShapeRegistry.ts", "private m = new Map<string, ShapeType>();")])).toEqual([]);
   });
 
   it.each([
@@ -718,10 +718,10 @@ describe("architecture rules detect synthetic violations", () => {
     expect(subclassImportViolations([typeOnly, group])).toEqual([]);
   });
 
-  it("P4: concrete shape importing ShapeFactory", () => {
-    const rect = file("model/Rect.ts", 'import type { ShapeFactory } from "./ShapeFactory.js";\nexport class Rect extends LeafShape {}');
+  it("P4: concrete shape importing ShapeRegistry", () => {
+    const rect = file("model/Rect.ts", 'import type { ShapeRegistry } from "./ShapeRegistry.js";\nexport class Rect extends LeafShape {}');
     const leaf = file("model/LeafShape.ts", "export abstract class LeafShape extends Shape {}");
-    expect(concreteShapeFactoryViolations([rect, leaf])).toHaveLength(1);
+    expect(concreteShapeRegistryViolations([rect, leaf])).toHaveLength(1);
   });
 
   it("P5", () => {

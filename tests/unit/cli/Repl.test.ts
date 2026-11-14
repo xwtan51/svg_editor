@@ -6,7 +6,7 @@ import { Repl } from "../../../src/cli/Repl.js";
 import { CommandRegistry } from "../../../packages/kernel/src/commands/CommandRegistry.js";
 import type { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
 import { QueryCommand } from "../../../packages/kernel/src/commands/QueryCommand.js";
-import { ShapeFactory } from "../../../packages/kernel/src/model/ShapeFactory.js";
+import { ShapeRegistry } from "../../../packages/kernel/src/model/ShapeRegistry.js";
 import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 
@@ -44,7 +44,7 @@ class Capture extends Writable {
 function editor(): Editor {
   const registry = new CommandRegistry();
   registry.register(BrokenCommand);
-  const session = new EditorSession(new MemoryFileSystem(), registry, new ShapeFactory());
+  const session = new EditorSession(new MemoryFileSystem(), registry, new ShapeRegistry());
   session.replaceDocument(new SvgDocument(), null);
   return new Editor(session);
 }
