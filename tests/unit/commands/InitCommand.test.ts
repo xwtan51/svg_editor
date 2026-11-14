@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { InitCommand } from "../../../src/commands/InitCommand.js";
-import { SvgDocument } from "../../../src/model/SvgDocument.js";
+import { InitCommand } from "../../../plugins/builtin-commands/src/InitCommand.js";
+import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 import { CommandRunner } from "./CommandRunner.js";
 

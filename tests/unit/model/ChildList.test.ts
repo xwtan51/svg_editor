@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { ChildList } from "../../../src/model/ChildList.js";
-import { EditorError } from "../../../src/model/EditorError.js";
-import { Group } from "../../../src/model/Group.js";
-import { Rect } from "../../../src/model/Rect.js";
-import { SvgDocument } from "../../../src/model/SvgDocument.js";
+import { ChildList } from "../../../packages/kernel/src/model/ChildList.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
+import { Group } from "../../../plugins/builtin-shapes/src/Group.js";
+import { Rect } from "../../../plugins/builtin-shapes/src/Rect.js";
+import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 
 describe("ChildList", () => {
   it("inserts at the given index and sets the parent pointer", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { EditorError } from "../../../src/model/EditorError.js";
-import { StyleAttributes } from "../../../src/model/StyleAttributes.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
+import { StyleAttributes } from "../../../packages/kernel/src/model/StyleAttributes.js";
 
 describe("StyleAttributes", () => {
   it("starts empty", () => {

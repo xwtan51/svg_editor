@@ -17,5 +17,13 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },
-  "include": ["src", "tests"]
+  "include": [
+    "src",
+    "tests",
+    "packages/*/src",
+    "packages/*/tests",
+    "plugins/*/src",
+    "plugins/*/tests",
+    "vitest.config.ts"
+  ]
 }

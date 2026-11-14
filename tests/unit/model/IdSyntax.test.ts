@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { EditorError } from "../../../src/model/EditorError.js";
-import { IdSyntax } from "../../../src/model/IdSyntax.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
+import { IdSyntax } from "../../../packages/kernel/src/model/IdSyntax.js";
 
 describe("IdSyntax (F16)", () => {
   it.each(["r1", "_x", "start-label", "a.b:c", "Z9_", "svg"])("accepts %s", (id) => {

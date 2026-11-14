@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { Circle } from "../../../src/model/Circle.js";
-import { EditorError } from "../../../src/model/EditorError.js";
-import { Ellipse } from "../../../src/model/Ellipse.js";
-import { Line } from "../../../src/model/Line.js";
-import { Rect } from "../../../src/model/Rect.js";
-import type { Shape } from "../../../src/model/Shape.js";
-import { Text } from "../../../src/model/Text.js";
+import { Circle } from "../../../plugins/builtin-shapes/src/Circle.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
+import { Ellipse } from "../../../plugins/builtin-shapes/src/Ellipse.js";
+import { Line } from "../../../plugins/builtin-shapes/src/Line.js";
+import { Rect } from "../../../plugins/builtin-shapes/src/Rect.js";
+import type { Shape } from "../../../packages/kernel/src/model/Shape.js";
+import { Text } from "../../../plugins/builtin-shapes/src/Text.js";
 import { build } from "./build.js";
 
 describe("leaf tagName and label (V8)", () => {

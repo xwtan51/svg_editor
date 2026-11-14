@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { ImportResult } from "../../../src/io/ImportResult.js";
-import { SvgImporter } from "../../../src/io/SvgImporter.js";
-import { SvgSerializer } from "../../../src/io/SvgSerializer.js";
-import { CanvasSize } from "../../../src/model/CanvasSize.js";
-import { EditorError } from "../../../src/model/EditorError.js";
-import type { Shape } from "../../../src/model/Shape.js";
-import { SvgDocument } from "../../../src/model/SvgDocument.js";
-import { Text } from "../../../src/model/Text.js";
+import type { ImportResult } from "../../../packages/kernel/src/io/ImportResult.js";
+import { SvgImporter } from "../../../packages/kernel/src/io/SvgImporter.js";
+import { SvgSerializer } from "../../../packages/kernel/src/io/SvgSerializer.js";
+import { CanvasSize } from "../../../packages/kernel/src/model/CanvasSize.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
+import type { Shape } from "../../../packages/kernel/src/model/Shape.js";
+import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
+import { Text } from "../../../plugins/builtin-shapes/src/Text.js";
 import { build } from "../model/build.js";
 import { MemoryFileSystem } from "./MemoryFileSystem.js";
 

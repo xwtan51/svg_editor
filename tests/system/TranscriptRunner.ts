@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
-import { Editor } from "../../src/app/Editor.js";
-import { EditorSession } from "../../src/app/EditorSession.js";
-import { CommandRegistry } from "../../src/commands/CommandRegistry.js";
-import { ShapeFactory } from "../../src/model/ShapeFactory.js";
+import { Editor } from "../../packages/kernel/src/app/Editor.js";
+import { EditorSession } from "../../packages/kernel/src/app/EditorSession.js";
+import { CommandRegistry } from "../../packages/kernel/src/commands/CommandRegistry.js";
+import { ShapeFactory } from "../../packages/kernel/src/model/ShapeFactory.js";
 import { MemoryFileSystem } from "../unit/io/MemoryFileSystem.js";
 
 /** One line of a transcript file, with its 1-based line number. */

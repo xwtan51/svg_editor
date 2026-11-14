@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { RedoCommand } from "../../../src/commands/RedoCommand.js";
-import { UndoCommand } from "../../../src/commands/UndoCommand.js";
+import { RedoCommand } from "../../../plugins/builtin-commands/src/RedoCommand.js";
+import { UndoCommand } from "../../../plugins/builtin-commands/src/UndoCommand.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 import { CommandRunner } from "./CommandRunner.js";
 

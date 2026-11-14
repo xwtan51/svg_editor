@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { SaveCommand } from "../../../src/commands/SaveCommand.js";
-import { SvgSerializer } from "../../../src/io/SvgSerializer.js";
-import { EditorError } from "../../../src/model/EditorError.js";
+import { SaveCommand } from "../../../plugins/builtin-commands/src/SaveCommand.js";
+import { SvgSerializer } from "../../../packages/kernel/src/io/SvgSerializer.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 import { CommandRunner } from "./CommandRunner.js";
 

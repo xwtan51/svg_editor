@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { ArgList } from "../../../src/commands/ArgList.js";
-import { CommandCategory } from "../../../src/commands/CommandCategory.js";
-import type { CommandContext } from "../../../src/commands/CommandContext.js";
-import { CommandParser } from "../../../src/commands/CommandParser.js";
-import { CommandResult } from "../../../src/commands/CommandResult.js";
-import { DocumentCommand } from "../../../src/commands/DocumentCommand.js";
-import { HelpCommand } from "../../../src/commands/HelpCommand.js";
-import { HistoryCommand } from "../../../src/commands/HistoryCommand.js";
+import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
+import { CommandCategory } from "../../../packages/kernel/src/commands/CommandCategory.js";
+import type { CommandContext } from "../../../packages/kernel/src/commands/CommandContext.js";
+import { CommandParser } from "../../../packages/kernel/src/commands/CommandParser.js";
+import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
+import { DocumentCommand } from "../../../packages/kernel/src/commands/DocumentCommand.js";
+import { HelpCommand } from "../../../plugins/builtin-commands/src/HelpCommand.js";
+import { HistoryCommand } from "../../../packages/kernel/src/commands/HistoryCommand.js";
 import { CommandRunner } from "./CommandRunner.js";
 import { TestContext } from "./TestContext.js";
 

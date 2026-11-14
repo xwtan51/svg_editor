@@ -1,4 +1,4 @@
-import type { Shape } from "../../../src/model/Shape.js";
+import type { Shape } from "../../../packages/kernel/src/model/Shape.js";
 
 /** Test helper: applies `set`-style attributes in order and returns the same shape. */
 export function build<T extends Shape>(shape: T, attributes: Record<string, string>): T {

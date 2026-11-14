@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { EditorError } from "../../../src/model/EditorError.js";
-import { NumberFormat } from "../../../src/model/NumberFormat.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
+import { NumberFormat } from "../../../packages/kernel/src/model/NumberFormat.js";
 
 describe("NumberFormat.parse (R8)", () => {
   it.each([

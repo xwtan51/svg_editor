@@ -1,7 +1,7 @@
 /**
  * Architecture rules of doc/README.md §3 (D1–D8, P1–P5, P8: only ChildList may
  * call Shape.attachTo / detach, P9: view calls no mutating model method),
- * checked by scanning src/.
+ * checked by scanning packages/kernel/src/, src/ and plugins/<directory>/src/ (design §1.2.3).
  *
  * Every rule is a function `(files) => violations` so that the bottom of this
  * file can feed it synthetic sources and prove that it really detects a breach.
@@ -16,25 +16,48 @@
  *   `import("x")` and `require("x")` with literal specifiers; computed
  *   specifiers are not seen. An import counts as type-only when written
  *   `import type` / `export type`, or when every braced specifier has `type`.
- * - Module = first directory under src/. Directories without .ts files (empty
- *   or missing) contribute no files, so their rules pass vacuously. Guard against
- *   that: the "is scanned" tests assert that named files of every module (model,
- *   io, view, commands, app, cli) are actually found.
+ * - Every scanned file has a region (kernel / host / plugin:<directory>) and a
+ *   logical path. S5 transition (design §1.2.2): LOGICAL_DIRECTORIES maps each
+ *   real location back to its path under src/ as of tag `final`, so every rule
+ *   below judges exactly as it did then. Relative imports are resolved from the
+ *   real location and then mapped the same way. Synthetic files keep the `final`
+ *   layout (location src/<path>).
+ * - Module = first directory of the logical path. Directories without .ts files
+ *   (empty or missing) contribute no files, so their rules pass vacuously. Guard
+ *   against that: the "is scanned" tests assert that named files of every module
+ *   (model, io, view, commands, app, cli) are actually found, at their real
+ *   locations, and that every region contributes at least one file.
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-const SRC_DIR = fileURLToPath(new URL("../../src/", import.meta.url));
+const REPO_DIR = fileURLToPath(new URL("../../", import.meta.url));
+
+/**
+ * S5 transition map (design §1.2.2): real directory → directory under src/ at
+ * tag `final`; the first matching prefix wins. Rewritten in S6 with L1–L10.
+ */
+const LOGICAL_DIRECTORIES: ReadonlyArray<readonly [real: string, logical: string]> = [
+  ["packages/kernel/src/", ""],
+  ["plugins/builtin-shapes/src/", "model/"],
+  ["plugins/builtin-commands/src/", "commands/"],
+  ["src/adapters/", "io/"],
+  ["src/", ""],
+];
 
 /** The process entry script: the only file exempt from P5. */
 const ENTRY_SCRIPT = "cli/main.ts";
 
 interface SourceFile {
-  /** Relative to src/, POSIX separators, e.g. "model/Shape.ts". */
+  /** Logical path: relative to src/ as of tag `final`, POSIX separators, e.g. "model/Shape.ts". */
   path: string;
-  /** First directory under src/, e.g. "model". */
+  /** Repository-relative real location, e.g. "packages/kernel/src/model/Shape.ts". */
+  location: string;
+  /** "kernel", "host" or "plugin:<directory>" (design §1.2.3). */
+  region: string;
+  /** First directory of the logical path, e.g. "model". */
   module: string;
   /** Comments removed; strings kept (import specifiers live in strings). */
   code: string;
@@ -46,7 +69,7 @@ interface ImportRef {
   from: SourceFile;
   specifier: string;
   typeOnly: boolean;
-  /** Target path relative to src/ (".ts"), or null for package / node: imports. */
+  /** Logical target path (".ts"), or null for package / node: imports. */
   target: string | null;
 }
 
@@ -90,9 +113,34 @@ function stripSource(text: string): { code: string; bare: string } {
   return { code, bare };
 }
 
-function analyze(path: string, text: string): SourceFile {
+function analyze(path: string, text: string, location = `src/${path}`, region = "host"): SourceFile {
   const module = path.includes("/") ? (path.split("/")[0] ?? "") : "(src root)";
-  return { path, module, ...stripSource(text) };
+  return { path, location, region, module, ...stripSource(text) };
+}
+
+/** Logical path of a repository-relative location, or null outside LOGICAL_DIRECTORIES. */
+function logicalPath(location: string): string | null {
+  for (const [real, logical] of LOGICAL_DIRECTORIES) {
+    if (location.startsWith(real)) return logical + location.slice(real.length);
+  }
+  return null;
+}
+
+function listDirectories(dir: string): string[] {
+  try {
+    return readdirSync(dir).filter((name) => statSync(join(dir, name)).isDirectory());
+  } catch {
+    return [];
+  }
+}
+
+/** The three scan globs of design §1.2.3, repository-relative, each with its region. */
+function scanRoots(): Array<{ dir: string; region: string }> {
+  return [
+    { dir: "packages/kernel/src", region: "kernel" },
+    { dir: "src", region: "host" },
+    ...listDirectories(join(REPO_DIR, "plugins")).map((name) => ({ dir: `plugins/${name}/src`, region: `plugin:${name}` })),
+  ];
 }
 
 function listTypeScript(dir: string): string[] {
@@ -110,15 +158,20 @@ function listTypeScript(dir: string): string[] {
 }
 
 function loadSources(): SourceFile[] {
-  return listTypeScript(SRC_DIR).map((full) =>
-    analyze(relative(SRC_DIR, full).split(sep).join("/"), readFileSync(full, "utf8")),
+  return scanRoots().flatMap(({ dir, region }) =>
+    listTypeScript(join(REPO_DIR, dir)).map((full) => {
+      const location = relative(REPO_DIR, full).split(sep).join("/");
+      return analyze(logicalPath(location) ?? location, readFileSync(full, "utf8"), location, region);
+    }),
   );
 }
 
+/** Resolved from the real location, then mapped to a logical path; unmapped targets count as outside src. */
 function resolveTarget(from: SourceFile, specifier: string): string | null {
   if (!specifier.startsWith(".")) return null;
-  const absolute = resolve(SRC_DIR, dirname(from.path), specifier);
-  return relative(SRC_DIR, absolute).split(sep).join("/").replace(/\.js$/, ".ts");
+  const absolute = resolve(REPO_DIR, dirname(from.location), specifier);
+  const location = relative(REPO_DIR, absolute).split(sep).join("/").replace(/\.js$/, ".ts");
+  return logicalPath(location) ?? `../${location}`;
 }
 
 function moduleOfPath(path: string): string {
@@ -456,11 +509,17 @@ function parentPointerViolations(files: SourceFile[]): string[] {
 
 const sources = loadSources();
 
-describe("architecture (README §3) applied to src/", () => {
+describe("architecture (README §3) applied to the scanned source", () => {
   it("scans the source tree", () => {
+    const locations = sources.map((file) => file.location);
+    expect(locations).toContain("packages/kernel/src/model/Shape.ts");
+    expect(locations).toContain("plugins/builtin-shapes/src/Rect.ts");
+    expect(locations).toContain("src/cli/main.ts");
+    const regions = scanRoots().map((root) => root.region);
+    expect(regions).toEqual(expect.arrayContaining(["kernel", "host", "plugin:builtin-shapes", "plugin:builtin-commands"]));
+    for (const region of regions) expect(sources.some((file) => file.region === region), region).toBe(true);
     const paths = sources.map((file) => file.path);
-    expect(paths).toContain("model/Shape.ts");
-    expect(paths).toContain(ENTRY_SCRIPT);
+    expect(new Set(paths).size).toBe(paths.length);
   });
 
   it("every file belongs to a module of §1.1", () => {
@@ -698,7 +757,7 @@ describe("architecture rules detect synthetic violations", () => {
   });
 });
 
-// ---------------------------------------------------------------- view does not modify the model (appended with src/view/)
+// ---------------------------------------------------------------- view does not modify the model (appended with the view module)
 
 /**
  * README §1.1: view lays the model out as text and does not modify it. Checked
@@ -726,11 +785,11 @@ function viewMutationViolations(files: SourceFile[]): string[] {
     .flatMap((file) => [...file.bare.matchAll(call)].map((m) => `${file.path} calls .${m[1]}(`));
 }
 
-describe("view (README §1.1, §3.1 D3) applied to src/", () => {
+describe("view (README §1.1, §3.1 D3) applied to the scanned source", () => {
   it("view/ is scanned, so D3 is not satisfied vacuously", () => {
-    const paths = sources.map((file) => file.path);
-    expect(paths).toContain("view/TreeRenderer.ts");
-    expect(paths).toContain("view/ShapeDetailRenderer.ts");
+    const locations = sources.map((file) => file.location);
+    expect(locations).toContain("packages/kernel/src/view/TreeRenderer.ts");
+    expect(locations).toContain("packages/kernel/src/view/ShapeDetailRenderer.ts");
   });
 
   it("view calls no mutating model method", () => {
@@ -747,23 +806,23 @@ describe("view (README §1.1, §3.1 D3) applied to src/", () => {
   });
 });
 
-describe("app and cli (README §3.1 D6, D7, §3.2 P1) applied to src/", () => {
+describe("app and cli (README §3.1 D6, D7, §3.2 P1) applied to the scanned source", () => {
   it("app/ and cli/ are scanned, so D6, D7 and P1 are not satisfied vacuously", () => {
-    const paths = sources.map((file) => file.path);
-    expect(paths).toContain("app/Editor.ts");
-    expect(paths).toContain("app/EditorSession.ts");
-    expect(paths).toContain("cli/Repl.ts");
-    expect(paths).toContain(ENTRY_SCRIPT);
+    const locations = sources.map((file) => file.location);
+    expect(locations).toContain("packages/kernel/src/app/Editor.ts");
+    expect(locations).toContain("packages/kernel/src/app/EditorSession.ts");
+    expect(locations).toContain("src/cli/Repl.ts");
+    expect(locations).toContain("src/cli/main.ts");
   });
 });
 
-describe("commands and io (README §3.1 D2, D4, D5, §3.2 P1) applied to src/", () => {
+describe("commands and io (README §3.1 D2, D4, D5, §3.2 P1) applied to the scanned source", () => {
   it("commands/ and io/ are scanned, so D2, D4, D5 and P1 are not satisfied vacuously", () => {
-    const paths = sources.map((file) => file.path);
-    expect(paths).toContain("commands/CommandRegistry.ts");
-    expect(paths).toContain("commands/ReadCommand.ts");
-    expect(paths).toContain("io/SvgImporter.ts");
-    expect(paths).toContain("io/NodeFileSystem.ts");
-    expect(paths).toContain("io/XmlDomAdapter.ts");
+    const locations = sources.map((file) => file.location);
+    expect(locations).toContain("packages/kernel/src/commands/CommandRegistry.ts");
+    expect(locations).toContain("plugins/builtin-commands/src/ReadCommand.ts");
+    expect(locations).toContain("packages/kernel/src/io/SvgImporter.ts");
+    expect(locations).toContain("src/adapters/NodeFileSystem.ts");
+    expect(locations).toContain("packages/kernel/src/io/XmlDomAdapter.ts");
   });
 });

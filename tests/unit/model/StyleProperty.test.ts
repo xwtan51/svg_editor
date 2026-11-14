@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ColorProperty } from "../../../src/model/ColorProperty.js";
-import { EditorError } from "../../../src/model/EditorError.js";
-import { StrokeWidthProperty } from "../../../src/model/StrokeWidthProperty.js";
+import { ColorProperty } from "../../../packages/kernel/src/model/ColorProperty.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
+import { StrokeWidthProperty } from "../../../packages/kernel/src/model/StrokeWidthProperty.js";
 
 describe("ColorProperty", () => {
   it("starts unset and stores any non-empty text verbatim", () => {

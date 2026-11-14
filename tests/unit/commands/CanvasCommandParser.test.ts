@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { ArgList } from "../../../src/commands/ArgList.js";
-import { CanvasCommandParser } from "../../../src/commands/CanvasCommandParser.js";
-import { CommandCategory } from "../../../src/commands/CommandCategory.js";
-import { ResizeCanvasCommand } from "../../../src/commands/ResizeCanvasCommand.js";
-import { ShowCanvasCommand } from "../../../src/commands/ShowCanvasCommand.js";
-import { Tokenizer } from "../../../src/commands/Tokenizer.js";
-import { CanvasSize } from "../../../src/model/CanvasSize.js";
-import { SvgDocument } from "../../../src/model/SvgDocument.js";
+import { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
+import { CanvasCommandParser } from "../../../plugins/builtin-commands/src/CanvasCommandParser.js";
+import { CommandCategory } from "../../../packages/kernel/src/commands/CommandCategory.js";
+import { ResizeCanvasCommand } from "../../../plugins/builtin-commands/src/ResizeCanvasCommand.js";
+import { ShowCanvasCommand } from "../../../plugins/builtin-commands/src/ShowCanvasCommand.js";
+import { Tokenizer } from "../../../packages/kernel/src/commands/Tokenizer.js";
+import { CanvasSize } from "../../../packages/kernel/src/model/CanvasSize.js";
+import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 import { CommandRunner } from "./CommandRunner.js";
 
 const USAGE = "usage: canvas [w] [h]";

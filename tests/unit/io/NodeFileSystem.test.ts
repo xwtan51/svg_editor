@@ -2,8 +2,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { NodeFileSystem } from "../../../src/io/NodeFileSystem.js";
-import { EditorError } from "../../../src/model/EditorError.js";
+import { NodeFileSystem } from "../../../src/adapters/NodeFileSystem.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
 
 describe("NodeFileSystem", () => {
   let dir: string;

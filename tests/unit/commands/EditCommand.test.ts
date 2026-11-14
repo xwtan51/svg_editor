@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { CommandCategory } from "../../../src/commands/CommandCategory.js";
-import { CommandResult } from "../../../src/commands/CommandResult.js";
-import { EditCommand } from "../../../src/commands/EditCommand.js";
-import { EditorError } from "../../../src/model/EditorError.js";
-import { SvgDocument } from "../../../src/model/SvgDocument.js";
+import { CommandCategory } from "../../../packages/kernel/src/commands/CommandCategory.js";
+import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
+import { EditCommand } from "../../../packages/kernel/src/commands/EditCommand.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
+import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 import { TestContext } from "./TestContext.js";
 
 class ScriptedEdit extends EditCommand {

@@ -1,11 +1,11 @@
 import { expect } from "vitest";
-import { CommandParser } from "../../../src/commands/CommandParser.js";
-import type { CommandResult } from "../../../src/commands/CommandResult.js";
-import type { FileSystem } from "../../../src/io/FileSystem.js";
-import { SvgSerializer } from "../../../src/io/SvgSerializer.js";
-import { EditorError } from "../../../src/model/EditorError.js";
-import type { Shape } from "../../../src/model/Shape.js";
-import { SvgDocument } from "../../../src/model/SvgDocument.js";
+import { CommandParser } from "../../../packages/kernel/src/commands/CommandParser.js";
+import type { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
+import type { FileSystem } from "../../../packages/kernel/src/io/FileSystem.js";
+import { SvgSerializer } from "../../../packages/kernel/src/io/SvgSerializer.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
+import type { Shape } from "../../../packages/kernel/src/model/Shape.js";
+import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 import { TestContext } from "./TestContext.js";
 
 /**

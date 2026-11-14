@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ArgList } from "../../../src/commands/ArgList.js";
-import { Tokenizer } from "../../../src/commands/Tokenizer.js";
-import { EditorError } from "../../../src/model/EditorError.js";
+import { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
+import { Tokenizer } from "../../../packages/kernel/src/commands/Tokenizer.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
 
 const MOVE_USAGE = "move <id> <dx> <dy>";
 

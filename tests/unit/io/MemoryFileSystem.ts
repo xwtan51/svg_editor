@@ -1,5 +1,5 @@
-import type { FileSystem } from "../../../src/io/FileSystem.js";
-import { EditorError } from "../../../src/model/EditorError.js";
+import type { FileSystem } from "../../../packages/kernel/src/io/FileSystem.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
 
 /** Test double: files live in a map; a missing path behaves like a missing file. */
 export class MemoryFileSystem implements FileSystem {

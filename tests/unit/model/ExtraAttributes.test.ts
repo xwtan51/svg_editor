@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ExtraAttributes } from "../../../src/model/ExtraAttributes.js";
+import { ExtraAttributes } from "../../../packages/kernel/src/model/ExtraAttributes.js";
 
 describe("ExtraAttributes (F7)", () => {
   it("keeps attributes verbatim in insertion order", () => {

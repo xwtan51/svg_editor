@@ -1,7 +1,7 @@
 import { readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { SvgImporter } from "../../src/io/SvgImporter.js";
-import { SvgSerializer } from "../../src/io/SvgSerializer.js";
+import { SvgImporter } from "../../packages/kernel/src/io/SvgImporter.js";
+import { SvgSerializer } from "../../packages/kernel/src/io/SvgSerializer.js";
 import { TranscriptRunner } from "./TranscriptRunner.js";
 
 /** Every transcript in tests/transcripts/, in name order. */

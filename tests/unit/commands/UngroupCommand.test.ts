@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Group } from "../../../src/model/Group.js";
+import { Group } from "../../../plugins/builtin-shapes/src/Group.js";
 import { CommandRunner } from "./CommandRunner.js";
 
 /** scene { a, inner { b, c }, d } */

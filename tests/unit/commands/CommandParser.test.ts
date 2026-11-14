@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
-import type { ArgList } from "../../../src/commands/ArgList.js";
-import { CommandCategory } from "../../../src/commands/CommandCategory.js";
-import type { CommandContext } from "../../../src/commands/CommandContext.js";
-import { CommandParser } from "../../../src/commands/CommandParser.js";
-import { CommandRegistry } from "../../../src/commands/CommandRegistry.js";
-import { CommandResult } from "../../../src/commands/CommandResult.js";
-import { DocumentCommand } from "../../../src/commands/DocumentCommand.js";
-import { History } from "../../../src/commands/History.js";
-import { HistoryCommand } from "../../../src/commands/HistoryCommand.js";
-import { QueryCommand } from "../../../src/commands/QueryCommand.js";
-import { EditorError } from "../../../src/model/EditorError.js";
+import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
+import { CommandCategory } from "../../../packages/kernel/src/commands/CommandCategory.js";
+import type { CommandContext } from "../../../packages/kernel/src/commands/CommandContext.js";
+import { CommandParser } from "../../../packages/kernel/src/commands/CommandParser.js";
+import { CommandRegistry } from "../../../packages/kernel/src/commands/CommandRegistry.js";
+import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
+import { DocumentCommand } from "../../../packages/kernel/src/commands/DocumentCommand.js";
+import { History } from "../../../packages/kernel/src/commands/History.js";
+import { HistoryCommand } from "../../../packages/kernel/src/commands/HistoryCommand.js";
+import { QueryCommand } from "../../../packages/kernel/src/commands/QueryCommand.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
 
 /** A query command type that echoes its arguments. */
 class EchoCommand extends QueryCommand {

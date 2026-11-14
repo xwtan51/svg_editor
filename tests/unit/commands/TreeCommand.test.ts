@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { TreeCommand } from "../../../src/commands/TreeCommand.js";
+import { TreeCommand } from "../../../plugins/builtin-commands/src/TreeCommand.js";
 import { CommandRunner } from "./CommandRunner.js";
 
 describe("tree", () => {

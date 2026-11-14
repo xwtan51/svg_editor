@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { Editor } from "../../src/app/Editor.js";
-import { EditorSession } from "../../src/app/EditorSession.js";
-import { CommandRegistry } from "../../src/commands/CommandRegistry.js";
-import { SvgSerializer } from "../../src/io/SvgSerializer.js";
-import { EditorError } from "../../src/model/EditorError.js";
-import { Group } from "../../src/model/Group.js";
-import type { ParamSpec } from "../../src/model/ParamSpec.js";
-import { ShapeFactory } from "../../src/model/ShapeFactory.js";
+import { Editor } from "../../packages/kernel/src/app/Editor.js";
+import { EditorSession } from "../../packages/kernel/src/app/EditorSession.js";
+import { CommandRegistry } from "../../packages/kernel/src/commands/CommandRegistry.js";
+import { SvgSerializer } from "../../packages/kernel/src/io/SvgSerializer.js";
+import { EditorError } from "../../packages/kernel/src/model/EditorError.js";
+import { Group } from "../../plugins/builtin-shapes/src/Group.js";
+import type { ParamSpec } from "../../packages/kernel/src/model/ParamSpec.js";
+import { ShapeFactory } from "../../packages/kernel/src/model/ShapeFactory.js";
 import { MemoryFileSystem } from "../unit/io/MemoryFileSystem.js";
 import { TranscriptRunner } from "./TranscriptRunner.js";
 

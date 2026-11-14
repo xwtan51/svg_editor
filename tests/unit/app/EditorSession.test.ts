@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { EditorSession } from "../../../src/app/EditorSession.js";
-import { CommandRegistry } from "../../../src/commands/CommandRegistry.js";
-import { History } from "../../../src/commands/History.js";
-import { EditorError } from "../../../src/model/EditorError.js";
-import { ShapeFactory } from "../../../src/model/ShapeFactory.js";
-import { SvgDocument } from "../../../src/model/SvgDocument.js";
+import { EditorSession } from "../../../packages/kernel/src/app/EditorSession.js";
+import { CommandRegistry } from "../../../packages/kernel/src/commands/CommandRegistry.js";
+import { History } from "../../../packages/kernel/src/commands/History.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
+import { ShapeFactory } from "../../../packages/kernel/src/model/ShapeFactory.js";
+import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 
 describe("EditorSession", () => {

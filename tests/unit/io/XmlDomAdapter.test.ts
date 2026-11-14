@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { XmlDomAdapter } from "../../../src/io/XmlDomAdapter.js";
-import { EditorError } from "../../../src/model/EditorError.js";
+import { XmlDomAdapter } from "../../../packages/kernel/src/io/XmlDomAdapter.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
 
 function parse(text: string) {
   return new XmlDomAdapter().parse(text);

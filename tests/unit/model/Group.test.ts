@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { Circle } from "../../../src/model/Circle.js";
-import { EditorError } from "../../../src/model/EditorError.js";
-import { Group } from "../../../src/model/Group.js";
-import { Line } from "../../../src/model/Line.js";
-import { Rect } from "../../../src/model/Rect.js";
-import { SvgDocument } from "../../../src/model/SvgDocument.js";
-import { Text } from "../../../src/model/Text.js";
+import { Circle } from "../../../plugins/builtin-shapes/src/Circle.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
+import { Group } from "../../../plugins/builtin-shapes/src/Group.js";
+import { Line } from "../../../plugins/builtin-shapes/src/Line.js";
+import { Rect } from "../../../plugins/builtin-shapes/src/Rect.js";
+import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
+import { Text } from "../../../plugins/builtin-shapes/src/Text.js";
 import { build } from "./build.js";
 
 function catchError(action: () => void): unknown {
