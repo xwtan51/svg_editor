@@ -137,6 +137,22 @@ describe("spec A.2 — incomplete XML: the part before the error (VA16)", () => 
     expectInvariants(text, outline);
   });
 
+  it("inserting before an existing sibling (README O4b): later elements disappear, an emptied ancestor becomes a leaf", () => {
+    const at = EXAMPLE.indexOf("<rect");
+    const typing = EXAMPLE.slice(0, at) + "<c" + EXAMPLE.slice(at);
+    const outline = parser.parse(typing);
+    expect(outline.isComplete()).toBe(false);
+    expect(shape(outline.roots())).toBe("svg[g#flow]");
+    expect(find(outline, "g#flow").role()).toBe(OutlineRole.LEAF);
+    expectInvariants(typing, outline);
+
+    const done = EXAMPLE.slice(0, at) + '<circle id="c" r="3"/>' + EXAMPLE.slice(at);
+    const restored = parser.parse(done);
+    expect(restored.isComplete()).toBe(true);
+    expect(shape(restored.roots())).toBe("svg[g#flow[circle#c, rect#start, g#nested[text]]]");
+    expect(find(restored, "g#flow").role()).toBe(OutlineRole.CONTAINER);
+  });
+
   it("a mismatched end tag stops at that tag", () => {
     const text = "<svg><g><rect/></svg>";
     const outline = parser.parse(text);
