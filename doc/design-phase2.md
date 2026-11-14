@@ -65,8 +65,10 @@ README 已经用了 R/F/E/U/V/K/B/C/W/Q/A/M/P/D，VSCode 扩展用了 VA。本�
 | `AttributeHandler` | 接口 | 同上 | S7 | 扩展点④ |
 | `AttributeTarget` | 接口 | 同上 | S7 | 处理器能改的“目标子树”：只能改属性，不能改结构 |
 | `AttributeChange` | 接口 | 同上 | S7 | 处理器返回的修改说明（回显与撤销文案） |
-| `AttributeDispatcher` | 类 | 同上 | S7 | 查询处理器、裁决冲突、做快照事务 |
-| `AttributeEdit` | 类 | 同上 | S7 | 一次已裁决、已试做的属性修改（前后快照 + 两条文案） |
+| `AttributePlanner` | 接口 | 同上 | S7 | `CommandContext.attributeEdits()` 的返回类型：只有 `plan()`（2.4.3） |
+| `PlannedAttributeEdit` | 接口 | 同上 | S7 | `plan()` 的返回类型：`redo()`、`undo()` 与两条文案（2.4.3） |
+| `AttributeDispatcher` | 类 | 同上 | S7 | `AttributePlanner` 的实现：查询处理器、裁决冲突、做快照事务（不导出） |
+| `AttributeEdit` | 类 | 同上 | S7 | `PlannedAttributeEdit` 的实现：一次已裁决、已试做的属性修改（前后快照 + 两条文案；不导出） |
 | `EditableSubtree` | 类 | 同上 | S7 | `AttributeTarget` 的唯一实现 |
 | `TreeDecorator` | 接口 | `packages/kernel/src/view/` | S7 | 扩展点③ |
 | `TreeRowView` | 接口 | 同上 | S7 | 标签看到的一行：根行或图形行 |
@@ -232,7 +234,28 @@ src/cli → app → extension → commands → {view, io} → model        （�
 | 防空转 | 现有的“is scanned”断言保留，路径改成新位置；新增“每个区域至少扫描到一个文件”“每个 `plugins/*` 至少扫描到其入口文件” |
 | 合成违规用例 | 现有写法保留：每条规则都是“文件集合 → 违规列表”的函数，测试后半部分喂合成源码证明它能报错。L1–L10 各加一组 |
 
-接入新插件时，新目录自动进入扫描，名单自动扩充，**测试本身不改**。
+每条规则在哪些区域生效见 1.2.4。接入新插件时，新目录自动进入扫描，名单自动扩充，**测试本身不改**。
+
+#### 1.2.4 范式规则 P1–P10 在三个区域中的适用范围
+
+S5 起 architecture test 同时扫描内核、装配处、插件三个区域（1.2.3）。现有的范式规则如果不分区域原样套用，有一条会直接挡住插件的本职工作：P3 的“不与图形类型名比较”（`typeNameComparisonViolations`，名单 `BUILT_IN_TYPE_NAMES` 含 `"g"`、`"rect"`、`"text"`）会让 `BoxProvider.matchScore` 中的 `element.name() === "g"` 失败。届时只能改测试或用常量绕开正则，这与“接入新插件时测试本身不改”矛盾。所以每条规则按区域定范围，区域由路径 glob 决定（`packages/kernel/src/**`、`src/**`、`plugins/*/src/**`），不列插件名单：
+
+| 规则 | 内核 | 装配处 | 插件 | 理由与例外 |
+|---|---|---|---|---|
+| P1 IO 隔离 | 适用：不得 import `node:fs`、`node:readline`，不得用 `console.*`、`process.std*`；`@xmldom/xmldom` 只在 `io/XmlDomAdapter.ts` | 适用：`node:fs`、`node:module` 只在 `src/adapters/**`、`src/loader/**`；`node:readline`、`console.*`、`process.std*` 只在 `src/cli/**` | 适用：`node:fs` 只在文件名以 `Node` 开头的适配器类中；不得用 `@xmldom/xmldom`、`node:readline`、`console.*`、`process.std*` | 即 L9；插件的 IO 也要隔离在适配器里，命令逻辑才能用替身测试（规格 §2.3） |
+| P2 以名字查“实现”的 `Map` | 适用：`Map<string, ShapeProvider \| ShapeType \| CommandType>` 只允许出现在 `ShapeRegistry`、`CommandRegistry`；值为函数的 `Map` / `Record` 一律不允许 | 适用，无例外（组合根用数组，加载器不得有名称映射，L5） | 适用，无例外 | 规格 §7“内核不按名字枚举”针对内核；插件与装配处也没有需要“按名字查实现”的地方。数据 `Map`（如 `ShapeTally` 的 `Map<string, number>`）不在此列，与 Phase 1 相同 |
+| P3a 不用 `switch` | 适用 | 适用（加载器另有 L5） | 适用 | 四份演练中没有任何地方需要 `switch` |
+| P3b 不对 `Shape` 的子类用 `instanceof` | 适用 | 适用 | 适用 | 插件识别自己的图形用 `kindName()` 与自己的常量比较（8.3 `BoxAttributeHandler.handles`、`BoxTypeLabel.tagFor`），不需要 `instanceof`；保留这条规则也就挡住了“对别的插件的类做 `instanceof`” |
+| P3c 不与图形类型名的字面量比较 | 适用；另有更严的 L6（内核中不出现任何注册名字面量） | 适用 | **不适用** | “按名字分派”的禁令针对内核：内核不能因为某种图形而走不同分支。插件识别自己的元素、标签名、子部件和属性是它的本职，例如 `BoxProvider.matchScore` 比较 `"g"` 与 `data-kind`、`structureProblem` 检查子元素是不是 `rect`、`text`、`BoxAttributeHandler` 比较 `fill`、`label`。实现方式：`typeNameComparisonViolations` 只对内核与装配处的文件运行；它的类型名名单在 Phase 1 的内置名之外，再加上从全部 `plugins/*/package.json` 的 `contributes.shapes` 收集到的名字 |
+| P4 不在运行时 import 自己的子类；具体图形类不 import 图形注册表 | 适用（`ShapeFactory` 改名后为 `ShapeRegistry`） | 适用 | 适用：插件中的 `Shape` 子类（如 `BoxShape`、内置图形）不得 import `ShapeRegistry`（它本来也不在 `api.ts` 里）；插件内部的类层次同样不得在运行时 import 自己的子类 | 防 ESM 循环导入，与区域无关 |
+| P5 一类一文件、文件名 = 类名、只用具名导出 | 适用；例外 P5a（`api.ts`、`host-api.ts`） | 适用；例外 `src/cli/main.ts`（进程入口） | 适用；例外 P5b（每个插件的入口文件用 `export default class`） | 1.3 |
+| P6 字段私有、不导出自由函数 | 适用 | 适用 | 适用 | P5 的扫描已覆盖“不导出自由函数”；字段私有由代码审查保证（与 Phase 1 相同） |
+| P7 用户错误一律 `EditorError`；`error:` 前缀只在一处加 | 适用 | 适用：前缀只由 `EditorAssembler`（启动）添加，命令时由内核的 `Editor` 添加 | 适用：插件只抛 `EditorError`，不自己拼 `error:` | 4.5 |
+| P8 只有 `ChildList` 调 `attachTo` / `detach` | 适用 | 适用 | 适用：插件组装子树用 `ContainerShape.insertAt`（8.3 `BoxProvider.create`），不直接动父指针 | 父指针与子节点列表必须同处修改 |
+| P9 `view/` 不调用模型的变更方法 | 适用于 `packages/kernel/src/view/**` | 不涉及 | 不按目录适用；树标签与处理器的 `handles` 只拿到只读视图（2.3.5、2.4.2），由 P10 防止强制转换 | P9 是按内核目录定义的规则 |
+| P10 插件中不得出现 `as Shape`、`as SvgDocument`、`as ContainerShape` | 不涉及 | 不涉及 | 适用 | 2.3.5：只读视图只能靠接口形状保证，强制转换是故意违约 |
+
+8.3 草图中的每一处比较都落在“插件 × P3c 不适用”这一格；其余规则在 8.1–8.4 的草图中都能原样通过。
 
 ### 1.3 `api.ts` 与“一类一文件”的协调
 
@@ -460,8 +483,13 @@ export interface ShapeReader {
   applyAttributes(shape: Shape, element: ElementView, consumed: readonly string[]): void;
   /** 逐个子元素做读回分派；返回构造好的游离子树，顺序同文档；不支持的子元素已跳过并警告。 */
   readChildren(element: ElementView): Shape[];
-  /** 整个文件中显式写出这个 id 的元素个数（含被跳过的元素，同 F13 的统计口径）。 */
-  occurrences(id: string): number;
+  /**
+   * 声明“这个 id 在被导入的元素中至多出现一次”。被导入的元素 = 由某个提供者读取的元素（含降级后由次优提供者读取的），
+   * 不含被跳过的不支持元素及其子树，也不含被叶子丢弃或展平的子元素——与 F14 的口径相同（F14 只在被导入的元素之间判断）。
+   * 只看文件中显式写出的 id。检查推迟到整个读入的最后一步：此时每个元素是否被导入已经确定，不需要预测。
+   * 违反 → 整个读入失败：`cannot parse file: <path> (duplicate id <id>)`，有多个时报声明顺序中的第一个。
+   */
+  requireUnique(id: string): void;
   /** 追加一条警告（不带 `warning: ` 前缀）。 */
   warn(message: string): void;
   /** 降级：把这个元素交给尚未尝试过的次优提供者；没有时返回 null（调用方原样返回 null 即“跳过”）。 */
@@ -573,7 +601,7 @@ export interface CommandContext {
   history(): UndoStack;                    // 收窄：只有 undo() / redo()（新接口 UndoStack）
   commands(): CommandCatalog;              // 取代 registry()：只读，commandTypes() / lookup()
   shapes(): ShapeCatalog;                  // 取代 shapeFactory()：只读 + 按名构造（2.1.2）
-  attributeEdits(): AttributeDispatcher;   // 新：set 的处理器管线（2.4）
+  attributeEdits(): AttributePlanner;      // 新：set 的处理器管线，只暴露 plan()（2.4.3）
   treeDecorators(): readonly TreeDecorator[];  // 新：tree 的标签（2.3）
 }
 ```
@@ -723,14 +751,32 @@ export interface AttributeChange {
 
 #### 2.4.3 `set` 的流程
 
-`SetCommand`（内置命令插件）只做一件新事：先问管线。管线 `AttributeDispatcher`（新，内核）：
+`SetCommand`（内置命令插件）只做一件新事：先问管线。管线对命令只以两个接口出现，二者都经 `api.ts` 以 `type` 导出（3.10）：
+
+```ts
+// packages/kernel/src/model/AttributePlanner.ts（新，S7）——CommandContext.attributeEdits() 的返回类型
+export interface AttributePlanner {
+  /** 裁决并试做；没有处理器命中时返回 null（交回白名单路径）。失败抛 EditorError，文档不变。 */
+  plan(target: Shape, attribute: string, value: string): PlannedAttributeEdit | null;
+}
+// packages/kernel/src/model/PlannedAttributeEdit.ts（新，S7）——SetCommand 保存的字段类型
+export interface PlannedAttributeEdit {
+  redo(): void;              // 恢复“之后”快照
+  undo(): void;              // 恢复“之前”快照
+  appliedMessage(): string;  // plan 时取得的回显
+  undoneMessage(): string;   // plan 时取得的撤销回显
+}
+```
+
+实现类 `AttributeDispatcher`（新，内核，`implements AttributePlanner`）与 `AttributeEdit`（新，内核，`implements PlannedAttributeEdit`）不导出，内置命令插件只依赖这两个接口（L2）：
+
 
 ```text
 SetCommand.prepare(document):
   target = findShape(document, id)                              // no such shape（R10 顺序不变）
   edit   = context.attributeEdits().plan(target, attribute, value)   // 可能抛 EditorError
   if edit === null: Phase 1 的白名单路径（现有代码不变：试赋值 → 快照 → 还原，K4）
-  else: 记住 edit
+  else: 记住 edit                                              // 字段类型 PlannedAttributeEdit
 SetCommand.apply():   edit === null ? target.restore(after) : edit.redo()
 SetCommand.undo():    edit === null ? target.restore(before) + Phase 1 回显 : edit.undo()
 回显：                edit === null ? Phase 1（E8） : edit.appliedMessage() / edit.undoneMessage()
@@ -748,7 +794,7 @@ AttributeDispatcher.plan(target, attribute, value):
   9. 返回 AttributeEdit(target, before, after, applied, undone)
 ```
 
-`AttributeEdit`（新）：`redo()` = `target.restore(after)`，`undo()` = `target.restore(before)`；两条文案在 `plan` 时就算好并保存，撤销与重做时不再调用插件代码，redo 的回显与首次执行相同（U6）。
+`AttributeEdit`（`PlannedAttributeEdit` 的实现）：`redo()` = `target.restore(after)`，`undo()` = `target.restore(before)`；两条文案在 `plan` 时就算好并保存，撤销与重做时不再调用插件代码，redo 的回显与首次执行相同（U6）。
 
 #### 2.4.4 四个契约问题（规格 §3.3，ADR-1 的要点）
 
@@ -1067,7 +1113,7 @@ protected checkReleasable(shape: Shape): void;
 | 选提供者 | 2.1.3：最高 `matchScore`；并列拒绝整个读入；全 0 跳过 | `ShapeRegistry`（读回时由 `SvgImporter` 的内部会话调用） |
 | 子元素 | 一律经 `ShapeReader.readChildren` / `readStandard` 分派 | 2.1.4 |
 | box 子部件不完整（装了 box 插件） | **警告并降级为普通 `g`**：`warning: box <id> read as plain g: <原因>`，然后 `reader.readWithNext(element)`；`data-kind="box"` 落进透传属性，保存时原样写回 | ADR-2；预检查只看 `ElementView`，在分配任何 id、产生任何其他警告之前完成，所以降级不会留下副作用 |
-| 重复 id | 涉及 box 的重复 id **拒绝整个读入**：`cannot parse file: <path> (duplicate id <id>)`；不涉及 box 的重复 id 沿用 F14（改名并警告） | ADR-2；偏差 T1 |
+| 重复 id | 涉及 box 的重复 id **拒绝整个读入**：`cannot parse file: <path> (duplicate id <id>)`；不涉及 box 的重复 id 沿用 F14（改名并警告）。“重复”只在被导入的元素之间判断（与 F14 同一口径）：box 的 `read` 用 `requireUnique` 声明自己的三个 id，读入结束时统一检查；被跳过的 `<path id="n1-rect">` 不算重复 | ADR-2；偏差 T1 |
 | 读入失败 | 原文档、默认路径、历史都不变，不打印警告 | 现有 F20：`ReadCommand.execute` 在 `SvgImporter.read` 完成之后才调用 `replaceDocument`（`ReadCommand.ts:34-40`）；失败时也没有事件（3.4） |
 
 ### 3.9 违约处理总则
@@ -1098,10 +1144,10 @@ protected checkReleasable(shape: Shape): void;
 
 | 入口 | 谁可以 import | 导出（S7 完成时；全部是现有或本文已定义的名字） |
 |---|---|---|
-| `@svgframe/kernel`（`api.ts`） | 插件、装配处、根测试 | **model**：`Shape`、`LeafShape`、`ContainerShape`、`ShapeContainer`(type)、`SvgDocument`、`CanvasSize`、`ShapeMemento`(type)、`TreePosition`、`ParamSpec`、`ShapeType`(type)、`ShapeProvider`(type)、`StaticShapeProvider`、`ShapeKit`(type)、`ShapeCatalog`(type)、`ShapeReader`(type)、`ElementView`(type)、`ShapeView`(type)、`DocumentView`(type)、`AttributeHandler`(type)、`AttributeTarget`(type)、`AttributeChange`(type)、`EditorError`、`NumberFormat`、`IdSyntax`、`GeometryAttribute`、`CoordinateRole`(type)、`XCoordinate`、`YCoordinate`、`Extent`；**io**：`FileSystem`(type)、`SvgImporter`、`SvgSerializer`；**view**：`TreeRenderer`、`ShapeDetailRenderer`、`TreeDecorator`(type)、`TreeRowView`(type)；**commands**：`Command`、`EditCommand`、`QueryCommand`、`DocumentCommand`、`HistoryCommand`、`CommandType`(type)、`CommandCategory`、`CommandContext`(type)、`CommandResult`、`ArgList`、`History`(type)、`UndoStack`(type)、`CommandCatalog`(type)；**extension**：`Plugin`(type)、`PluginClass`(type)、`PluginContext`(type)、`PluginOptions`、`DocumentListener`(type) |
+| `@svgframe/kernel`（`api.ts`） | 插件、装配处、根测试 | **model**：`Shape`、`LeafShape`、`ContainerShape`、`ShapeContainer`(type)、`SvgDocument`、`CanvasSize`、`ShapeMemento`(type)、`TreePosition`、`ParamSpec`、`ShapeType`(type)、`ShapeProvider`(type)、`StaticShapeProvider`、`ShapeKit`(type)、`ShapeCatalog`(type)、`ShapeReader`(type)、`ElementView`(type)、`ShapeView`(type)、`DocumentView`(type)、`AttributeHandler`(type)、`AttributeTarget`(type)、`AttributeChange`(type)、`AttributePlanner`(type)、`PlannedAttributeEdit`(type)、`EditorError`、`NumberFormat`、`IdSyntax`、`GeometryAttribute`、`CoordinateRole`(type)、`XCoordinate`、`YCoordinate`、`Extent`；**io**：`FileSystem`(type)、`SvgImporter`、`SvgSerializer`；**view**：`TreeRenderer`、`ShapeDetailRenderer`、`TreeDecorator`(type)、`TreeRowView`(type)；**commands**：`Command`、`EditCommand`、`QueryCommand`、`DocumentCommand`、`HistoryCommand`、`CommandType`(type)、`CommandCategory`、`CommandContext`(type)、`CommandResult`、`ArgList`、`History`(type)、`UndoStack`(type)、`CommandCatalog`(type)；**extension**：`Plugin`(type)、`PluginClass`(type)、`PluginContext`(type)、`PluginOptions`、`DocumentListener`(type) |
 | `@svgframe/kernel/host`（`host-api.ts`） | **只有**装配处（L2 禁止插件 import 它） | `Editor`、`EditorSession`、`ExtensionRegistry`、`PluginInstaller`、`PluginCandidate`、`PluginManifest`、`InstallOutcome` |
 
-不导出（内核内部实现）：`ChildList`、`StyleAttributes`、`StyleProperty`、`ColorProperty`、`StrokeWidthProperty`、`ExtraAttributes`、`ShapeRegistry`、`CommandRegistry`、`CommandParser`、`CommandLine`、`Token`、`Tokenizer`、`XmlDomAdapter`、`XmlElement`、`IdAllocator`、`ImportResult`、`AttributeDispatcher`、`AttributeEdit`、`EditableSubtree`、`TreeRow`、`StagingContext`、`ContributionCategory`、`DocumentEvents`。根测试（`tests/`）不是插件，可以用相对路径 import 内部类（它们本来就这样做）。
+不导出（内核内部实现）：`ChildList`、`StyleAttributes`、`StyleProperty`、`ColorProperty`、`StrokeWidthProperty`、`ExtraAttributes`、`ShapeRegistry`、`CommandRegistry`、`CommandParser`、`CommandLine`、`Token`、`Tokenizer`、`XmlDomAdapter`、`XmlElement`、`IdAllocator`、`ImportResult`、`AttributeDispatcher`、`AttributeEdit`（二者经 `AttributePlanner`、`PlannedAttributeEdit` 两个接口暴露给命令）、`EditableSubtree`、`TreeRow`、`StagingContext`、`ContributionCategory`、`DocumentEvents`。根测试（`tests/`）不是插件，可以用相对路径 import 内部类（它们本来就这样做）。
 
 ### 3.11 图
 
@@ -1248,6 +1294,9 @@ package "kernel" {
   }
   class ShapeRegistry
   class CommandRegistry
+  interface AttributePlanner {
+    +plan(target, attribute, value): PlannedAttributeEdit | null
+  }
   class AttributeDispatcher
   class TreeRenderer
   class PluginInstaller
@@ -1263,6 +1312,7 @@ package "kernel" {
   CommandRegistry o--> "*" CommandType
   CommandType ..> Command : parse
   AttributeDispatcher o--> "*" AttributeHandler
+  AttributeDispatcher ..|> AttributePlanner
   TreeRenderer o--> "*" TreeDecorator
 }
 
@@ -1582,10 +1632,10 @@ CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文�
 |---|---|---|---|---|
 | **X1**（分析 D1）目录边界 | 内核 = workspace 包 `packages/kernel`（`@svgframe/kernel`，`exports` 只暴露 `api.ts` 与 `host-api.ts`）；装配处 = 根包 `src/`；插件 = `plugins/*` 各一个 workspace 包；加载器独占 `src/loader/`（1.1） | ① 三个顶层目录都在根包里，只靠 architecture test；② 装配处也做成 workspace 包 `packages/host` | `exports` 让 TypeScript 与 Node 在解析阶段就拒绝深层 import（附录 B 实验 2），比扫描更硬；装配处留在根包，`npm run cli` 与基线工具的入口路径都不变（备选②要改 `CLI_ENTRY`，并让根包变空） | S5 搬迁、S6 加 `exports`；验证：architecture test L1–L4、`npm run typecheck`、基线 0 差异 |
 | **X2**（D2）回显名与树名 | `kindName()`（新）默认 = `tagName()`；`label()` 改为 `kindName#id`（回显、`show`、警告、错误）；新增 `treeLabel()` = `tagName#id`，只给 `tree`（3.6） | 保持 `label()` = `tagName#id`，新增 `echoLabel()` 给回显 | 35 处中只有 `tree` 的 2 处要换成树名，其余 30 多处都是回显或错误；改定义比改 30 个调用点的差异小得多 | S6；验证：基线 0 差异（内置图形不变）、S12 的 `box#n2 moved by` 与 `g#n1 (box)` 测试 |
-| **X3**（D3）box 的模板 | 矩形：`x y w h` 原样，`fill = #4a90d9`；标题文字位于 $\left(x + \tfrac{w}{8},\ y + \tfrac{h}{2} + 5\right)$，数值按 V3 格式化 | $(x + 20,\ y + h/2 + 5)$ | 两个公式都拟合 P1 规格的两个数据点（(120,100,160,60) → (140,135)，(520,100,160,60) → (540,135)）；P1 规格说“居中由插件模板负责”，水平偏移随宽度变化更接近“居中”的本意 | S12；验证：box 单元测试、`cli-1-1b` 会话 |
+| **X3**（D3）box 的模板 | 矩形：`x y w h` 原样，`fill = #4a90d9`；标题文字位于 $\left(x + \tfrac{w}{8},\ y + \tfrac{h}{2} + 5\right)$，数值按 V3 格式化 | $(x + 20,\ y + h/2 + 5)$ | 两个公式都拟合 P1 规格仅有的两个数据点（(120,100,160,60) → (140,135)，(520,100,160,60) → (540,135)），也都不会让文字真正居中；选 $w/8$ 只是让水平偏移随框宽等比变化，两者之间没有更强的依据 | S12；验证：box 单元测试、`cli-1-1b` 会话 |
 | **X4**（D4）`create box … in` 的回显 | `box#n3 created (g#n3 + rect#n3-rect + text#n3-label) in box#n1`：`<label> created<creationDetail><where>`（2.1.6） | `box#n3 created in box#n1 (g#n3 + …)` | 括号说明的是新建的 box，紧跟在它后面不会被误读为说明 `box#n1`；内置图形的 `creationDetail` 为空，Phase 1 的格式不变 | S6（机制）、S12（文案）；验证：`CreateCommand` 契约测试、box 测试 |
 | **X5**（D5）移走必要子部件 | 拒绝，`error: cannot detach required part of composite shape: <id>`；钩子 `canRelease` 在 `delete`、`addto`（换容器时）、`group` 中检查（3.7） | ① 删除部件时连带删除整个 box；② 允许并把 box 降级为 `g` | ①让 `delete n1-rect` 的回显与 undo 都变得出人意料；②运行时改变对象类型，`Shape` 的子类不能就地变身。拒绝最简单、可预期、undo 语义不受影响 | S7（钩子）、S12（box 覆写）；验证：钩子契约测试（替身容器）、box 测试 |
-| **X6**（D6）box 读回不完整 | 装了插件：**警告并降级为普通 `g`**；涉及 box 的重复 id：**拒绝整个读入**（ADR-2） | 不完整也拒绝整个读入 | 装插件不应让一个原本能打开的文件变得打不开；降级与“未装插件时降级”一致，`data-kind` 原样保留，保存后再读结果相同；重复 id 违反全局唯一，规格明确要求拒绝 | S6（`readWithNext`、`reject`、`occurrences`）、S12；验证：box 读回测试 |
+| **X6**（D6）box 读回不完整 | 装了插件：**警告并降级为普通 `g`**；涉及 box 的重复 id：**拒绝整个读入**（ADR-2） | 不完整也拒绝整个读入 | 装插件不应让一个原本能打开的文件变得打不开；降级与“未装插件时降级”一致，`data-kind` 原样保留，保存后再读结果相同；重复 id 违反全局唯一，规格明确要求拒绝 | S6（`readWithNext`、`reject`、`requireUnique`）、S12；验证：box 读回测试 |
 | **X7**（D7）怎样识别子部件 | 按**派生 id**：box 元素必须有显式 id `I`，直接子元素中恰有一个 `<rect id="I-rect">` 和一个 `<text id="I-label">`；位置不限；允许其他子元素（含嵌套 box）；子部件 id 若是自动分配的（文件里没写）则不算 | 按位置：第一个 rect、第一个 text | 创建时就按派生 id 命名，读回用同一规则才能 round-trip；按位置识别会把 `front n1-rect` 之后保存的文件读错 | S12；验证：读回测试（顺序调换、缺部件、类型不符、多出子元素） |
 | **X8**（D8）box 上的其他属性 | 没有处理器 → 白名单路径，设在 `<g>` 自身：`set n1 stroke red` → `box#n1 updated: stroke=red` | 把 `stroke` 等也传播到矩形 | 规格只要求 `fill`、`label` 两个领域语义；其余属性保持 Phase 1 对 `g` 的语义（E6），README 中注明这与 `fill` 不对称 | S12；验证：box 测试 |
 | **X9**（D9）处理器冲突 | 取 `priority` 最大者；最大值上并列 → `error: ambiguous attribute handlers for <attr> on <id>: <a>, <b>`，不修改（2.4.4） | ① 先注册者胜；② 全部按顺序组合执行 | ①是“未定义的覆盖”的一种，换个加载顺序结果就变；②语义不清（两个处理器都改 fill 时谁的值留下？），回显也不好写 | S7；验证：替身处理器的冲突测试 |
@@ -1612,7 +1662,7 @@ CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文�
 | **X25** 测试的位置 | Phase 1 的 889 个测试留在根 `tests/`；S6 起新增的测试按归属放进 `packages/kernel/tests/`、`plugins/*/tests/`、`tests/unit/host/`（附录 A.1） | S5 把全部测试拆进各包 | 旧测试同时用内核与内置图形，拆进包里会违反“插件测试不依赖其他插件”；S5 要求测试数不变、只搬不改 | S5；验证：S5 测试数 = 889 |
 | **X26** 第二个公开入口 | `@svgframe/kernel/host`（`host-api.ts`）只给装配处（3.10） | 全部放进 `api.ts` | 规格 §1“插件不得依赖……宿主装配模块”：装配用的类（`PluginInstaller` 等）对插件不可见 | S6；验证：L2 |
 | **X27** `dir` 的对齐 | `[DIR]  docs`、`[FILE] demo.svg`：标记补齐到 6 个字符后加一个空格，名字从第 7 列开始（约定补充 N2、偏差 T2） | 按正文“标记后两个空格”：`[FILE]  demo.svg` | 规格的示例是逐字节的输出；正文说的是 `[DIR]` 的情形 | S11；验证：替身测试 |
-| **X28** 重复 id 的范围 | 只有涉及 box 的重复 id 拒绝整个读入；其余沿用 F14（偏差 T1） | 任何重复 id 都拒绝整个读入 | 规格 §4 的这句话在 box 的“边界”一节里；全局改成拒绝会改变 Phase 1 的读入行为（F14），违反“不修改 Phase 1 的行为”和基线兼容 | S6（`occurrences`）、S12；验证：box 读回测试、基线 0 差异 |
+| **X28** 重复 id 的范围 | 只有涉及 box 的重复 id 拒绝整个读入；其余沿用 F14（偏差 T1） | 任何重复 id 都拒绝整个读入 | 规格 §4 的这句话在 box 的“边界”一节里；全局改成拒绝会改变 Phase 1 的读入行为（F14），违反“不修改 Phase 1 的行为”和基线兼容 | S6（`requireUnique`）、S12；验证：box 读回测试（重复 id 拒绝）；F14 不变由 `tests/unit/io/IdAllocator.test.ts`、`tests/unit/io/SvgImporter.test.ts`（“F14: the first holder keeps a duplicate id …”）验证 |
 | **X29** 严格校验 | 配置文件与 `contributes` 都严格校验：未知键、类型不对都算非法（3.3.2、4.4） | 忽略未知键 | 拼错的 `"enable": false` 被静默忽略，插件就会被意外加载 | S6、S8；验证：清单与配置的单元测试 |
 | **X30** 基线的按会话参数 | `doc/transcript/<会话>.runs.json` 声明运行组，在 S9 实现（4.8） | 在输入文件里用注释写参数 | 规格要求输入文件只含命令与注释；把装配方式写进注释就把两件事混在一起了 | S9；验证：`npm run baseline` |
 
@@ -1680,7 +1730,7 @@ CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文�
 
 | # | 规格原文 | 本设计 | 原因 | 怎样核验 |
 |---|---|---|---|---|
-| T1 | §4 边界：“重复 id 违反全局唯一性，不能仅靠降级消除，必须拒绝整个读入” | 只有涉及 box 的重复 id（box 自身或其派生的两个部件 id 在文件中出现不止一次）才拒绝；其余重复 id 沿用 Phase 1 F14：保留第一个，后续改名并警告 | 全局拒绝会改变 Phase 1 已实现、已被测试与基线固定的读入行为（`IdAllocator.idFor`，`io/IdAllocator.ts:29-42`）；该句位于 box 一节的“边界”里 | box 读回测试；基线（`regression` 会话的 `read mixed.svg`）0 差异 |
+| T1 | §4 边界：“重复 id 违反全局唯一性，不能仅靠降级消除，必须拒绝整个读入” | 只有涉及 box 的重复 id（box 自身或其派生的两个部件 id 在**被导入的元素**中出现不止一次）才拒绝；其余重复 id 沿用 Phase 1 F14：保留第一个，后续改名并警告。口径与 F14 相同：被跳过的不支持元素（及其子树）上的 id 不计入，所以 box 部件与一个 `<path id="n1-rect">` 同名时照常读入（`requireUnique`，2.1.4） | 全局拒绝会改变 Phase 1 已实现并已被测试固定的读入行为（`IdAllocator.idFor`，`io/IdAllocator.ts:29-42`）；该句位于 box 一节的“边界”里 | 涉及 box 的部分：box 读回测试（8.3）。F14 不变的部分：`tests/unit/io/IdAllocator.test.ts`（期望 `duplicate id rect1, reassigned to rect3`）与 `tests/unit/io/SvgImporter.test.ts` 中的 “F14: the first holder keeps a duplicate id, later ones are reassigned with a warning”，S6 之后这两组测试保持不变并通过。注意：`doc/transcript/` 与 `tests/` 的 SVG 夹具里都没有重复 id，基线会话不能作为 F14 的证据 |
 | T2 | §2.2：“标记后用两个空格连接名称” | `[FILE]` 后只有一个空格（名字与 `[DIR]  ` 之后的名字对齐） | 与同节示例逐字节一致；正文与示例矛盾时取示例 | `dir` 替身测试 |
 | T3 | P1 规格 §6.1B 树中三处摘要前 2/1/7 个空格 | 3/2/8 个空格 | V1（最宽 + 2）；规格 §5 的示例本身就是 3/2/8 | `cli-1-1b` 会话；`doc/transcript/README.md` 加注 |
 | T4 | 失败文案应当确定 | `<reason>` 取异常消息的第一行，Node 的模块错误消息含绝对路径，所以换一台机器或换一个目录，消息会不同 | 不改写 Node 的消息才能保留排错信息；同一机器、同一输入下仍然确定；会话文件中不含加载失败的用例，加载失败只在单元测试里按前缀断言 | 加载器测试 |
@@ -1702,7 +1752,7 @@ S15 把这些草稿整理进 README。
 
 - **背景**：`box` 的元素也是 `<g>`，按标签名分派（`SvgImporter.ts:147`）无法区分；没装 box 时要自然降级为 `g`，内核里不能出现 `data-kind`；装了 box 但元素不完整怎么办；重复 id 必须拒绝。
 - **备选**：① 内核先查 `data-kind` 再查标签名（内核出现 `data-kind`，违反规格 §4）；② 每个提供者给 `matchScore`，最高者读（采纳）。不完整时：拒绝整个读入；警告并降级（采纳）。
-- **决定**：`matchScore` 0 = 不认识，1 = 标签名，2 = 标签名 + 区分属性；最高分并列拒绝整个读入；box 的 `read` 先只看 `ElementView` 做三项检查——**涉及 box 的重复 id → `throw reader.reject("duplicate id …")`**；结构不完整（缺显式 id、缺 `<id>-rect` 或 `<id>-label`、部件标签不符）→ `reader.warn("box <id> read as plain g: <原因>")` 并 `return reader.readWithNext(element)`；都通过才分配 id、读子元素、构造 `BoxShape`。部件按派生 id 识别，位置不限，允许多余子元素。
+- **决定**：`matchScore` 0 = 不认识，1 = 标签名，2 = 标签名 + 区分属性；最高分并列拒绝整个读入；box 的 `read` 先对自己的三个 id（有显式 id 时）调用 `reader.requireUnique`——**无论随后是否降级都声明**，所以重复 id 不会因降级而被 F14 悄悄改名；读入结束时，若其中任何一个在被导入的元素中出现不止一次，内核拒绝整个读入（`cannot parse file: <path> (duplicate id …)`）。“被导入”与 F14 同一口径，被跳过的不支持元素不计。接着只看 `ElementView` 检查结构：不完整（缺显式 id、缺 `<id>-rect` 或 `<id>-label`、部件标签不符）→ `reader.warn("box <id> read as plain g: <原因>")` 并 `return reader.readWithNext(element)`；都通过才分配 id、读子元素、构造 `BoxShape`。部件按派生 id 识别，位置不限，允许多余子元素。
 - **后果**：① 未装插件时降级是分数规则的自然结果，内核零特例；② 装插件不会让原来能打开的文件打不开；③ 降级后的 `g` 带着 `data-kind="box"` 透传属性，保存再读结果相同；④ 预检查必须在任何副作用之前完成，所以 box 的检查只能基于 XML 元素，不能基于构造好的对象；⑤ 两个插件同时认领一类元素时，用户会得到明确的读入错误而不是随机结果。
 
 ### ADR-3 `modified-star` 的 dirty 语义、祖先传播与拼接顺序
@@ -2320,9 +2370,7 @@ export class BoxProvider implements ShapeProvider {            // ShapeProvider 
     const id = element.attribute("id");
     if (id !== undefined && id.length > 0) {
       for (const claimed of this.claimedIds(id)) {
-        if (reader.occurrences(claimed) > 1) {
-          throw reader.reject(`duplicate id ${claimed}`);                                           // ADR-2：拒绝整个读入
-        }
+        reader.requireUnique(claimed);                                                              // ADR-2：读入结束时检查；降级也不豁免
       }
     }
     const problem = this.structureProblem(element, id);                                             // 只看 ElementView，无副作用
@@ -2411,7 +2459,7 @@ export default class BoxPlugin implements Plugin {
 | 没装插件时降级为 `g`，`data-kind` 原样写回 | 2.1.3；`g` 的提供者 + 透传属性（F7） | 根测试（`tests/system/`，S12）：用 bare 读写同一文件 |
 | 子部件不完整 / 类型错误 → 警告并降级 | `structureProblem` + `readWithNext`（ADR-2） | `BoxReadBack`：缺 `n1-label`、`n1-rect` 是 `<circle>`、box 无 id、部件 id 是自动分配的 |
 | 部件顺序调换、多出子元素（嵌套 box） | 按派生 id 识别（X7） | `BoxReadBack` |
-| 重复 id → 拒绝整个读入，原文档不变 | `occurrences` + `reject` | `BoxReadBack`、`BoxInEditor`（`read` 失败后 `tree` 不变） |
+| 重复 id → 拒绝整个读入，原文档不变 | `requireUnique`（2.1.4） | `BoxReadBack`：① 另一处 `<rect id="n1-rect">` → 拒绝；② box 内有两个 `<rect id="n1-rect">`（结构不完整、降级）→ 仍拒绝；③ 文件中另有被跳过的 `<path id="n1-rect">` → **照常读入**为 box（与 F14 同口径）；④ 嵌套在被跳过元素里的同名 id → 照常读入。`BoxInEditor`：`read` 失败后 `tree` 不变 |
 | `delete n1-rect`、`addto other n1-label`、`group x n1-rect` → `cannot detach required part of composite shape: <id>` | `canRelease` + `checkReleasable`（3.7） | `BoxInEditor`：状态完全不变 |
 | `front n1-rect`（box 内部调顺序）允许 | 3.7 | `BoxInEditor` |
 | `tree` 中 `g#n1 (box)`；`tree n1` 第一行 `g#n1 (box)` | `treeLabel()` + `BoxTypeLabel`（2.3） | `BoxTypeLabel`、`cli-1-1b` |
@@ -2536,7 +2584,7 @@ M	doc/transcript/README.md
 | 按 `data-kind` 读回、不认识时降级 | `matchScore` 分派（2.1.3） |
 | 读回时复用子元素处理 | `ShapeReader.readChildren`、`allocateId`、`applyAttributes`（2.1.4） |
 | 不完整时降级 | `ShapeReader.warn`、`readWithNext`（2.1.4） |
-| 重复 id 拒绝整个读入 | `ShapeReader.occurrences`、`reject`（2.1.4） |
+| 重复 id 拒绝整个读入 | `ShapeReader.requireUnique`（2.1.4） |
 | 读入失败时原文档不变 | `ReadCommand` 的现有顺序（3.8） |
 | 两种装配 | 组合根一项 / 配置一项（4.1） |
 
@@ -2665,7 +2713,7 @@ rg -n "import|require|switch" src/loader                                        
 |---|---|---|---|
 | G1 | box | box 需要 rect/text，但不能 import 内置插件；缺少时应在激活时失败 | `PluginContext.shapeTypes()`（3.2）+ `ShapeKit`（2.1.2、2.1.5） |
 | G2 | box | 不完整的 box 要降级为 `g`，但降级之前不能留下任何副作用（已分配的 id、已产生的警告） | `ShapeReader.readWithNext` + 只基于 `ElementView` 的预检查（2.1.4、ADR-2） |
-| G3 | box | 判断“涉及 box 的重复 id”需要整个文件的 id 计数 | `ShapeReader.occurrences`（2.1.4） |
+| G3 | box | 判断“涉及 box 的重复 id”需要知道哪些元素真正被导入（与 F14 同口径），而 box 读取自己时还不知道后面的元素会不会被跳过 | `ShapeReader.requireUnique`：声明在读取时，检查推迟到读入结束（2.1.4）。评审后由“全文件计数”改为此口径 |
 | G4 | box | 装了 box 时 `data-kind` 会被当作透传属性再写一次 | `ShapeReader.applyAttributes(…, consumed)`（2.1.4、2.1.3） |
 | G5 | box | box 自己解析子元素会与内置图形的 id 分配、警告、透传属性不一致 | `ShapeReader.readChildren`、`readStandard`（2.1.4） |
 | G6 | box | 创建回显 `(g#n1 + …)` 与 `in` 子句的位置 | `ShapeProvider.creationDetail` + 回显顺序（2.1.6、X4） |
@@ -2693,7 +2741,7 @@ rg -n "import|require|switch" src/loader                                        
 | 插件测试 | `plugins/<目录>/tests/` | 内核（`@svgframe/kernel`、`@svgframe/kernel/host`）+ 本插件 + 本插件测试目录里的替身 | 每个插件独立可测（规格 §4、§7）；最小编辑器 = `ExtensionRegistry` + `PluginInstaller` 安装本插件与替身插件 + `EditorSession` + `Editor` |
 | 装配处测试 | 根 `tests/unit/host/` | 全部 | `CliArguments`、`EditorAssembler`、`PluginConfig`、`ModuleLocator`、`PluginLoader` |
 | 加载器夹具 | 根 `tests/fixtures/plugins/<用例>/` | 内核 | 每条失败路径一个假插件包（不在 `plugins/` 下，不是 workspace） |
-| architecture test | 根 `tests/unit/architecture.test.ts` | 读源码与 `package.json` | L1–L10、P1–P10 |
+| architecture test | 根 `tests/unit/architecture.test.ts` | 读源码与 `package.json` | L1–L10；P1–P10 按 1.2.4 的区域范围 |
 | 系统测试 | 根 `tests/system/` | 全部 | 双装配、基线兼容、装配契约 |
 | 基线会话 | `doc/transcript/` + `npm run baseline` | 真实 CLI 进程 | 与 `final` 逐字节一致；双装配逐字节一致 |
 
@@ -2702,7 +2750,7 @@ rg -n "import|require|switch" src/loader                                        
 | 步骤 | 新增测试 | 关键断言 |
 |---|---|---|
 | S5 | 无新增；architecture test 改扫描根与过渡映射 | 测试数 = 889；基线 3 个会话 0 差异；`git diff -M --stat` 绝大多数为重命名；“is scanned”断言指向新路径 |
-| S6 | 内核：`ShapeRegistry`（注册、按名查找、`unknown shape type`、`matchScore` 选择、并列拒绝、全 0 跳过）；`StaticShapeProvider`；`SvgImporter` 的 `readWithNext` / `occurrences` / `reject` / `applyAttributes(consumed)`（替身提供者）；`CommandRegistry`（`unknown command`）；`PluginInstaller`（成功提交、激活失败回滚、异步 activate、重复注册：与已提交 / 本插件内部、清单不符、清单非法、多重违反只报第一条、回滚后后续插件照常安装、`seal` 之后再注册抛错）；`PluginManifest`；`ContainerShape`；`CreateCommand` 的 `claimedIds` 查重与 `creationDetail`（替身提供者）、`shape provider failed` 包装；`label` / `treeLabel` / `kindName`。装配处：`CompositionRoot` 的内置插件表、`EditorAssembler`（bare）。architecture test：L1–L4、L6–L8、L10、P5a、P5b，各配合成违规用例 | 基线 0 差异；889 个旧测试全过（`Editor.createDefault` 的测试改为经 `EditorAssembler`）；`rg` 在内核里搜不到任何注册名（L6） |
+| S6 | 内核：`ShapeRegistry`（注册、按名查找、`unknown shape type`、`matchScore` 选择、并列拒绝、全 0 跳过）；`StaticShapeProvider`；`SvgImporter` 的 `readWithNext` / `requireUnique`（被导入元素中重复 → 拒绝；被跳过元素上的同名 id 不计；降级不豁免；读入失败时原文档不变）/ `reject` / `applyAttributes(consumed)`（替身提供者）；F14 的两组现有测试不变；`CommandRegistry`（`unknown command`）；`PluginInstaller`（成功提交、激活失败回滚、异步 activate、重复注册：与已提交 / 本插件内部、清单不符、清单非法、多重违反只报第一条、回滚后后续插件照常安装、`seal` 之后再注册抛错）；`PluginManifest`；`ContainerShape`；`CreateCommand` 的 `claimedIds` 查重与 `creationDetail`（替身提供者）、`shape provider failed` 包装；`label` / `treeLabel` / `kindName`。装配处：`CompositionRoot` 的内置插件表、`EditorAssembler`（bare）。architecture test：L1–L4、L6–L8、L10、P5a、P5b，以及 P1–P10 按 1.2.4 的区域范围（含“插件中比较自己的类型名不报错”的合成用例），各配合成违规用例 | 基线 0 差异；889 个旧测试全过（`Editor.createDefault` 的测试改为经 `EditorAssembler`）；`rg` 在内核里搜不到任何注册名（L6） |
 | S7 | 内核：`AttributeDispatcher`（命中、未命中 → null、优先级、并列 → `ambiguous`、`handles` 抛错、`apply` 部分修改后抛 `EditorError` / 抛普通 `Error` → 文档与 undo/redo 深度、io 锁都不变、不回退白名单、undo / redo 各一次整体恢复、redo 回显与首次相同）；`TreeRenderer`（无标签逐字节不变、单个标签、两个标签按注册顺序、根行与 `tree <id>` 第一行、标签不参与列宽、`tagFor` 违约 → `tree decorator failed`）；`DocumentEvents`（三个事件的触发点、失败命令不派发、`read` / `save` 失败无事件、订阅顺序）；`canRelease`（替身容器拒绝时 `delete` / `addto` / `group` 的状态完全不变、同容器 `addto` 允许）；`SvgSerializer(DocumentView)`。architecture test：P10 | 基线 0 差异；对照第 8 节逐项确认 box 与 `modified-star` 需要的内核接口都已存在（S7 的验收） |
 | S8 | 装配处：`CliArguments`（四种配置、互斥、未知参数、`--only` 未知包名、退出码 2）；`PluginConfig`（合法、语法错误、顶层多键、项缺 `module`、`enabled` 非布尔、`options` 非对象、文件不存在）；`ModuleLocator`（相对路径以配置目录为基准、包名经 `node_modules`、目录无 `package.json`、`exports` 缺 `./package.json`、入口文件不存在）；`PluginLoader`：**四条规格失败路径**（`not found`、`no default export`、`manifest mismatch`、`failed to activate`）+ 重复注册 + 求值失败 + 依赖缺失（报 `failed to load` 而非 `not found`）+ 默认导出不是类 + 回滚后后续插件照常加载 + `enabled: false` 完全跳过 + 数组顺序 + options 传递 + 同一插件装进两个 `Editor` 状态独立；`Repl` 的启动消息位置。architecture test：L5、L9 的 loader 部分 | 手工验证：`--bare` 与 `--config <空配置>` 两种方式下基线三个会话与 `final` 逐字节一致（S9 固定成 `.runs.json`） |
 | S9 | `SessionPlan` / `RunGroup`（缺省组、占位符替换、组内比对、`--update` 拒绝组内不一致）；`ComplexityCounter`（内置样本自检：`readQuoted` 的 M = 8）；`PluginDiffCheck`（对人为构造的“改了内核”的提交报失败、对路径不存在报失败）；architecture test：每个源文件有类注释（metrics 的职责来源）；**通用装配契约测试**：对 `CompositionRoot.optional()` 中每个候选，读其清单的 `commands`，断言 bare 下执行报 `unknown command: <name>`、`--only <包名>` 下 `help` 含以 `  <name>` 开头的一行（S10、S11 接入时自动覆盖，不改测试） | 三个已有会话的 `.runs.json`（`--bare` + 空配置）0 差异；metrics 可由脚本复现 |
@@ -2719,7 +2767,7 @@ rg -n "import|require|switch" src/loader                                        
 
 | 步骤 | 原计划 | 修订 | 理由 |
 |---|---|---|---|
-| S5 | 搬移、修 import 与工程配置 | 明确包含：根 `package.json` 的 `workspaces`（`["packages/*","plugins/*"]`）与 `npm test` 脚本、`packages/kernel/package.json`、`plugins/builtin-shapes/package.json`、`plugins/builtin-commands/package.json`（此时都**不写** `exports` 与 `contributes`）、`vitest.config.ts`、`tsconfig.json` 的 `include` glob、`package-lock.json`；architecture test 的扫描根与过渡映射（1.2.2）；Phase 1 测试留在根 `tests/`；`src/cli/` 不搬 | 1.4：这些配置拖到插件提交里做就破坏零差异；S5 时内核仍 import 内置插件，加 `exports` 与 `api.ts` 会引入循环导入的风险，留到 S6 |
+| S5 | 搬移、修 import 与工程配置 | 明确包含：根 `package.json` 的 `workspaces`（`["packages/*","plugins/*"]`）与 `npm test` 脚本、`packages/kernel/package.json`、`plugins/builtin-shapes/package.json`、`plugins/builtin-commands/package.json`（三个文件在 S5 就必须带 `name`（`@svgframe/kernel`、`@svgframe/plugin-builtin-shapes`、`@svgframe/plugin-builtin-commands`）、`version`（`0.1.0`）、`"private": true` 与 **`"type": "module"`**——缺 `type` 时 tsx 会把包内的 `.ts` 当 CJS 编译（附录 B.2），而 L7 要到 S6 才检查；此时都**不写** `exports` 与 `contributes`）、`vitest.config.ts`、`tsconfig.json` 的 `include` glob、`package-lock.json`；architecture test 的扫描根与过渡映射（1.2.2）；Phase 1 测试留在根 `tests/`；`src/cli/` 不搬 | 1.4：这些配置拖到插件提交里做就破坏零差异；S5 时内核仍 import 内置插件，加 `exports` 与 `api.ts` 会引入循环导入的风险，留到 S6 |
 | S6 | `ShapeProvider` + `Command` 扩展点、内置插件化、`PluginInstaller`、容器抽象、读回分派、名字拆分、组合根 | 另加：`api.ts`、`host-api.ts`、内核 `exports`、`resolveJsonModule`、内置插件的 `exports` 与 `contributes`、`EditorAssembler`（只有 bare/full，`optional()` 为空）、`ShapeReader` / `ElementView`、L1–L4、L6–L8、L10、P5a、P5b；删除 `Editor.createDefault` | 第 2、3 部分 |
 | S7 | `AttributeHandler`、`TreeDecorator`、事件、保护钩子 | 另加：`ShapeView` / `DocumentView`、`SvgSerializer(DocumentView)`、`markSaved` 取代 `setFilePath`、P10 | 3.4、3.6.1 |
 | S8 | 加载器 + 配置 + 失败路径；“允许修改”含 `package.json`（如需要 workspaces） | workspaces 已在 S5 完成；S8 加 `CliArguments`（`--bare`、`--only`、`--config`）、`Repl` 的启动消息、`plugins.config.json`（空列表）、`tests/fixtures/plugins/`、L5、L9 的 loader 部分。**S8 不改 `scripts/`**：基线的按会话参数放在 S9 | 4.3、4.8；S8 的“允许修改”不含 `scripts/`，而 S10 之前不带参数启动等于 bare，基线不受影响 |
@@ -3007,3 +3055,7 @@ rc=128
 ### C.4 PlantUML
 
 本文共 4 张图：3.11.1 模块与依赖、3.11.2 四个扩展点的类图、3.11.3 `set` 经处理器的事务（含 `modified-star` 的事件流）、4.1 方式 A 与方式 B 汇入同一安装路径的时序图。用本机 **PlantUML 1.2026.10**（`PLANTUML_LIMIT_SIZE=8192`，包名含点号的图加了 `set separator none`）逐张渲染为 PNG，全部无语法错误，并逐张打开看过内容。第一次渲染时模块图报错（`package … { … }` 写在同一行），已改为多行写法；图片不入库。
+
+### C.5 `api.ts` 的导出与内置插件需要的名字（评审后补）
+
+临时脚本取 `fe10441` 上将搬进 `plugins/builtin-commands` 的 22 个命令与搬进 `plugins/builtin-shapes` 的 6 个图形类，收集它们从本组以外 import 的名字，共 30 个；去掉按 3.5 被 `ContainerShape` 取代的 `ChildList`，再加上按本设计 S6/S7 它们会用到的 12 个新名字：`Plugin`、`PluginContext`、`PluginOptions`、`StaticShapeProvider`、`ContainerShape`、`ShapeProvider`、`ShapeCatalog`、`CommandCatalog`、`UndoStack`、`TreeDecorator`、`AttributePlanner`、`PlannedAttributeEdit`。共 41 个名字，与 3.10 中 `@svgframe/kernel` 一行逐个比对：**缺 0 个**。评审前缺的两个是 `SetCommand` 要用的 `AttributeDispatcher`、`AttributeEdit`（S7 新增）；现改为经两个接口 `AttributePlanner`、`PlannedAttributeEdit` 以 `type` 导出，实现类仍不导出（2.4.3）。
