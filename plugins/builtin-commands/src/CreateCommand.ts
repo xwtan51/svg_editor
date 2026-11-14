@@ -1,7 +1,7 @@
 import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
 import type { Shape } from "../../../packages/kernel/src/model/Shape.js";
 import type { ShapeContainer } from "../../../packages/kernel/src/model/ShapeContainer.js";
-import type { ShapeType } from "../../../packages/kernel/src/model/ShapeType.js";
+import type { ShapeProvider } from "../../../packages/kernel/src/model/ShapeProvider.js";
 import type { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
 import type { CommandContext } from "../../../packages/kernel/src/commands/CommandContext.js";
@@ -71,7 +71,7 @@ export class CreateCommand extends EditCommand {
     this.document = document;
     this.container = this.containerId === null ? document : this.findContainer(document, this.containerId);
     // Builds a detached shape: number format and value constraints, in parameter order.
-    this.shape = type.create(this.id, values);
+    this.shape = type.create(this.id, values, context.shapeFactory());
     this.index = this.container.childList().length;
   }
 
@@ -90,7 +90,7 @@ export class CreateCommand extends EditCommand {
    * name). A trailing unquoted `in` without a container id is the type's usage
    * error, like a wrong count, even where it would fit as an optional value.
    */
-  private matchParams(type: ShapeType): Map<string, string> {
+  private matchParams(type: ShapeProvider): Map<string, string> {
     const required = type.params.filter((spec) => !spec.isOptional()).length;
     if (this.danglingIn || this.params.length < required || this.params.length > type.params.length) {
       throw new EditorError(`usage: ${CreateCommand.usageOf(type)}`);
@@ -106,7 +106,7 @@ export class CreateCommand extends EditCommand {
   }
 
   /** `create rect <id> <x> <y> <w> <h> [fill] [in <containerId>]` (R7). */
-  private static usageOf(type: ShapeType): string {
+  private static usageOf(type: ShapeProvider): string {
     const params = type.params.map((spec) => ` ${spec.usageToken()}`).join("");
     return `${CreateCommand.commandName} ${type.typeName} <id>${params} ${CreateCommand.IN_CLAUSE}`;
   }

@@ -4,7 +4,7 @@ import { NumberFormat } from "../model/NumberFormat.js";
 import type { Shape } from "../model/Shape.js";
 import type { ShapeContainer } from "../model/ShapeContainer.js";
 import { ShapeRegistry } from "../model/ShapeRegistry.js";
-import type { ShapeType } from "../model/ShapeType.js";
+import type { ShapeProvider } from "../model/ShapeProvider.js";
 import { StyleAttributes } from "../model/StyleAttributes.js";
 import { SvgDocument } from "../model/SvgDocument.js";
 import type { FileSystem } from "./FileSystem.js";
@@ -172,7 +172,7 @@ export class SvgImporter {
    * Splits the attributes into create parameters, style attributes and
    * pass-through ones (kept in document order), then builds the shape.
    */
-  private build(type: ShapeType, id: string, element: XmlElement, path: string): Shape {
+  private build(type: ShapeProvider, id: string, element: XmlElement, path: string): Shape {
     const values = new Map<string, string>();
     const style: Array<[string, string]> = [];
     const extras: Array<[string, string]> = [];
@@ -233,23 +233,23 @@ export class SvgImporter {
 
   /** On a rejected value, finds the offending attribute so that the error can name it (F12). */
   private create(
-    type: ShapeType,
+    type: ShapeProvider,
     id: string,
     values: ReadonlyMap<string, string>,
     element: XmlElement,
     path: string,
   ): Shape {
     try {
-      return type.create(id, values);
+      return type.create(id, values, this.factory);
     } catch (error) {
       const culprit = [...values].find(([name, value]) => this.rejects(type, id, name, value));
       throw this.rethrowInvalid(error, element, path, culprit);
     }
   }
 
-  private rejects(type: ShapeType, id: string, name: string, value: string): boolean {
+  private rejects(type: ShapeProvider, id: string, name: string, value: string): boolean {
     try {
-      type.create(id, new Map([[name, value]]));
+      type.create(id, new Map([[name, value]]), this.factory);
       return false;
     } catch (error) {
       if (error instanceof EditorError) {

@@ -7,6 +7,7 @@ import { EditorError } from "../../packages/kernel/src/model/EditorError.js";
 import { Group } from "../../plugins/builtin-shapes/src/Group.js";
 import type { ParamSpec } from "../../packages/kernel/src/model/ParamSpec.js";
 import { ShapeRegistry } from "../../packages/kernel/src/model/ShapeRegistry.js";
+import { StaticShapeProvider } from "../../packages/kernel/src/model/StaticShapeProvider.js";
 import { MemoryFileSystem } from "../unit/io/MemoryFileSystem.js";
 import { TranscriptRunner } from "./TranscriptRunner.js";
 
@@ -63,7 +64,7 @@ class Fixture {
 
   constructor(lines: readonly string[]) {
     const factory = new ShapeRegistry();
-    factory.register(CompositeBox);
+    factory.register(new StaticShapeProvider(CompositeBox));
     this.session = new EditorSession(this.files, new CommandRegistry(), factory);
     this.editor = new Editor(this.session);
     for (const line of lines) {

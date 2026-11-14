@@ -8,6 +8,7 @@ import { Line } from "../../../plugins/builtin-shapes/src/Line.js";
 import { Rect } from "../../../plugins/builtin-shapes/src/Rect.js";
 import { ShapeRegistry } from "../../../packages/kernel/src/model/ShapeRegistry.js";
 import type { ShapeType } from "../../../packages/kernel/src/model/ShapeType.js";
+import { StaticShapeProvider } from "../../../packages/kernel/src/model/StaticShapeProvider.js";
 import { Text } from "../../../plugins/builtin-shapes/src/Text.js";
 
 const BUILT_IN: Array<[string, ShapeType]> = [
@@ -28,8 +29,13 @@ describe("ShapeRegistry", () => {
     expect(new ShapeRegistry().typeNames()).toEqual(["rect", "circle", "ellipse", "line", "text", "g"]);
   });
 
-  it.each(BUILT_IN)("lookup(%s) returns the class itself", (name, type) => {
-    expect(new ShapeRegistry().lookup(name)).toBe(type);
+  it.each(BUILT_IN)("lookup(%s) returns a provider adapting the class", (name, type) => {
+    const registry = new ShapeRegistry();
+    const provider = registry.lookup(name);
+    expect(provider).toBeInstanceOf(StaticShapeProvider);
+    expect(provider.typeName).toBe(name);
+    expect(provider.params).toBe(type.params);
+    expect(provider.create("x", new Map(), registry)).toBeInstanceOf(type);
   });
 
   it("reports an unknown type with the exact §4.2 message", () => {
@@ -49,8 +55,9 @@ describe("ShapeRegistry", () => {
       static override readonly typeName = "hexagon";
     }
     const factory = new ShapeRegistry();
-    factory.register(Hexagon);
-    expect(factory.lookup("hexagon")).toBe(Hexagon);
+    const provider = new StaticShapeProvider(Hexagon);
+    factory.register(provider);
+    expect(factory.lookup("hexagon")).toBe(provider);
     expect(factory.typeNames()).toContain("hexagon");
   });
 
@@ -58,7 +65,7 @@ describe("ShapeRegistry", () => {
     const factory = new ShapeRegistry();
     let thrown: unknown;
     try {
-      factory.register(Rect);
+      factory.register(new StaticShapeProvider(Rect));
     } catch (error) {
       thrown = error;
     }
@@ -71,15 +78,19 @@ describe("ShapeRegistry", () => {
     // Never executed: this only has to fail type-checking.
     const notAShapeType = () =>
       // @ts-expect-error LeafShape has no static typeName / params / create
-      factory.register(LeafShape);
+      factory.register(new StaticShapeProvider(LeafShape));
     expect(typeof notAShapeType).toBe("function");
   });
 
   it("instances are independent (no global registry)", () => {
     const a = new ShapeRegistry();
-    a.register(class Star extends Group {
-      static override readonly typeName = "star";
-    });
+    a.register(
+      new StaticShapeProvider(
+        class Star extends Group {
+          static override readonly typeName = "star";
+        },
+      ),
+    );
     expect(() => new ShapeRegistry().lookup("star")).toThrow(EditorError);
   });
 });

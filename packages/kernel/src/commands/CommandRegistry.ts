@@ -2,6 +2,7 @@ import { EditorError } from "../model/EditorError.js";
 import { AddToCommand } from "../../../../plugins/builtin-commands/src/AddToCommand.js";
 import { BackCommand } from "../../../../plugins/builtin-commands/src/BackCommand.js";
 import { CanvasCommandParser } from "../../../../plugins/builtin-commands/src/CanvasCommandParser.js";
+import type { CommandCatalog } from "./CommandCatalog.js";
 import type { CommandType } from "./CommandType.js";
 import { CreateCommand } from "../../../../plugins/builtin-commands/src/CreateCommand.js";
 import { DeleteCommand } from "../../../../plugins/builtin-commands/src/DeleteCommand.js";
@@ -29,7 +30,7 @@ import { UngroupCommand } from "../../../../plugins/builtin-commands/src/Ungroup
  * All commands of §3 are registered; `canvas` is registered as
  * `CanvasCommandParser`, which builds a display or a document command.
  */
-export class CommandRegistry {
+export class CommandRegistry implements CommandCatalog {
   private readonly types = new Map<string, CommandType>();
 
   constructor() {
@@ -54,7 +55,7 @@ export class CommandRegistry {
     this.register(RedoCommand);
   }
 
-  /** Registering the same name twice is a programming error. */
+  /** Registering the same name twice is a programming error (the installer checks for duplicates first). */
   register(type: CommandType): void {
     if (this.types.has(type.commandName)) {
       throw new Error(`command already registered: ${type.commandName}`);

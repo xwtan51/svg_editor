@@ -239,13 +239,14 @@ const describeImport = (ref: ImportRef) => `${ref.from.path} imports "${ref.spec
 
 // ---------------------------------------------------------------- D: module dependencies
 
-/** §3.1: which modules each module may import (D1–D4, D6, D7). */
+/** §3.1: which modules each module may import (D1–D4, D6, D7); `extension` per design §1.2.2. */
 const ALLOWED_DEPENDENCIES: Readonly<Record<string, readonly string[]>> = {
   model: [],
   io: ["model"],
   view: ["model"],
   commands: ["model", "view", "io"],
-  app: ["commands", "model", "io"],
+  extension: ["commands", "view", "model", "io"],
+  app: ["extension", "commands", "model", "io"],
   cli: ["app"],
 };
 
