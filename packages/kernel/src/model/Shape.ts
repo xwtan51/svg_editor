@@ -29,8 +29,22 @@ export abstract class Shape {
   /** SVG element name: `rect`, `g`, … */
   abstract tagName(): string;
 
-  /** `rect#r1` (V8). */
+  /**
+   * The user-visible name of the shape's type (design §3.6): what echoes,
+   * `show` and warnings call it. Defaults to the SVG element name; a composite
+   * type written as a `<g>` answers its own name instead.
+   */
+  kindName(): string {
+    return this.tagName();
+  }
+
+  /** Echo name `rect#r1` (V8): commands, `show`, warnings and programming errors. */
   label(): string {
+    return `${this.kindName()}#${this.id}`;
+  }
+
+  /** Tree name `rect#r1`: the element name, used only by the lines of `tree` (design §3.6). */
+  treeLabel(): string {
     return `${this.tagName()}#${this.id}`;
   }
 

@@ -13,7 +13,7 @@ describe("ContainerShape", () => {
     const container = new FakeContainer("c");
     expect(container.asContainer()).toBe(container);
     expect(container.canUngroup()).toBe(true);
-    expect(new FakeContainer("d", false).canUngroup()).toBe(false);
+    expect(new FakeContainer("d", "composite", false).canUngroup()).toBe(false);
   });
 
   it("keeps children in order and sets their parent", () => {
