@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
-import { EditorError } from "../../packages/kernel/src/model/EditorError.js";
-import type { FileSystem } from "../../packages/kernel/src/io/FileSystem.js";
+import { EditorError } from "@svgframe/kernel";
+import type { FileSystem } from "@svgframe/kernel";
 
 /**
  * `FileSystem` on Node's synchronous fs API; the only file allowed to import

@@ -7,13 +7,18 @@ import { CommandResult } from "../../../packages/kernel/src/commands/CommandResu
 import { DocumentCommand } from "../../../packages/kernel/src/commands/DocumentCommand.js";
 import { HelpCommand } from "../../../plugins/builtin-commands/src/HelpCommand.js";
 import { HistoryCommand } from "../../../packages/kernel/src/commands/HistoryCommand.js";
+import type { Plugin } from "../../../packages/kernel/src/extension/Plugin.js";
+import { PluginCandidate } from "../../../packages/kernel/src/extension/PluginCandidate.js";
+import type { PluginContext } from "../../../packages/kernel/src/extension/PluginContext.js";
+import { PluginOptions } from "../../../packages/kernel/src/extension/PluginOptions.js";
+import { BuiltinExtensions } from "../../support/BuiltinExtensions.js";
 import { CommandRunner } from "./CommandRunner.js";
 import { TestContext } from "./TestContext.js";
 
 /*
  * The registered command set is still growing (init / read / save / undo …
  * are added elsewhere), so nothing here pins the full list: the assertions
- * are derived from `registry().commandTypes()`.
+ * are derived from `commands().commandTypes()`.
  */
 
 const CATEGORY_ORDER = [CommandCategory.DOCUMENT, CommandCategory.EDIT, CommandCategory.DISPLAY, CommandCategory.HISTORY];
@@ -46,9 +51,24 @@ class DocumentStub extends DocumentCommand {
   }
 }
 
+/** Registers the two stubs, history first, after the built-in commands. */
+class StubsPlugin implements Plugin {
+  activate(context: PluginContext): void {
+    context.registerCommand(HistoryStub);
+    context.registerCommand(DocumentStub);
+  }
+}
+
+const STUBS = new PluginCandidate(
+  "help-test-stubs",
+  StubsPlugin,
+  { name: "help-test-stubs", contributes: { commands: ["zz-history-stub", "zz-document-stub"] } },
+  PluginOptions.EMPTY,
+);
+
 /** Runs `help` the way the Invoker would, in `context`. */
 function help(context: TestContext, line = "help"): string[] {
-  return new CommandParser(context.registry()).resolve(line).parse().execute(context).lines();
+  return new CommandParser(context.commands()).resolve(line).parse().execute(context).lines();
 }
 
 function isHeading(line: string): boolean {
@@ -59,11 +79,11 @@ describe("help", () => {
   it("lists the usage and summary of every registered command", () => {
     const context = new TestContext(CommandRunner.spec6().document());
     const output = help(context);
-    for (const type of context.registry().commandTypes()) {
+    for (const type of context.commands().commandTypes()) {
       expect(output.filter((line) => line.startsWith(`  ${type.usage} `))).toHaveLength(1);
       expect(output.find((line) => line.startsWith(`  ${type.usage} `))?.endsWith(type.summary)).toBe(true);
     }
-    expect(output.filter((line) => !isHeading(line))).toHaveLength(context.registry().commandTypes().length);
+    expect(output.filter((line) => !isHeading(line))).toHaveLength(context.commands().commandTypes().length);
   });
 
   it("lists tree, show and help themselves", () => {
@@ -78,10 +98,10 @@ describe("help", () => {
     const output = help(context);
     const headings = output.filter(isHeading);
     const expected = CATEGORY_ORDER.filter((category) =>
-      context.registry().commandTypes().some((type) => type.category === category),
+      context.commands().commandTypes().some((type) => type.category === category),
     ).map((category) => `${category.title()}:`);
     expect(headings).toEqual(expected);
-    for (const type of context.registry().commandTypes()) {
+    for (const type of context.commands().commandTypes()) {
       const index = output.findIndex((line) => line.startsWith(`  ${type.usage} `));
       const heading = output.slice(0, index).filter(isHeading).pop();
       expect(heading).toBe(`${type.category.title()}:`);
@@ -89,9 +109,7 @@ describe("help", () => {
   });
 
   it("orders groups by category, not by registration order", () => {
-    const context = new TestContext(null);
-    context.registry().register(HistoryStub);
-    context.registry().register(DocumentStub);
+    const context = new TestContext(null, undefined, BuiltinExtensions.registry(STUBS));
     const output = help(context);
     expect(output.filter(isHeading)).toEqual(CATEGORY_ORDER.map((category) => `${category.title()}:`));
     // Registered after the history stub, yet listed in the first group (as its
@@ -103,7 +121,7 @@ describe("help", () => {
 
   it("aligns every summary in one column: widest usage + 2", () => {
     const context = new TestContext(null);
-    const types = context.registry().commandTypes();
+    const types = context.commands().commandTypes();
     const column = 2 + Math.max(...types.map((type) => type.usage.length)) + 2;
     for (const type of types) {
       const line = help(context).find((l) => l.startsWith(`  ${type.usage} `));

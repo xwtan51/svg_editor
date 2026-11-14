@@ -1,8 +1,5 @@
-import { ShapeDetailRenderer } from "../../../packages/kernel/src/view/ShapeDetailRenderer.js";
-import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
-import type { CommandContext } from "../../../packages/kernel/src/commands/CommandContext.js";
-import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
-import { QueryCommand } from "../../../packages/kernel/src/commands/QueryCommand.js";
+import { CommandResult, QueryCommand, ShapeDetailRenderer } from "@svgframe/kernel";
+import type { ArgList, CommandContext } from "@svgframe/kernel";
 
 /** `show <id>`: the §5.2 attribute detail of one shape (V6), laid out by `ShapeDetailRenderer`. */
 export class ShowCommand extends QueryCommand {

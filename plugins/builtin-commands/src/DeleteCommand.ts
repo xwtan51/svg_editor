@@ -1,9 +1,5 @@
-import type { Shape } from "../../../packages/kernel/src/model/Shape.js";
-import type { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
-import { TreePosition } from "../../../packages/kernel/src/model/TreePosition.js";
-import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
-import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
-import { EditCommand } from "../../../packages/kernel/src/commands/EditCommand.js";
+import { CommandResult, EditCommand, TreePosition } from "@svgframe/kernel";
+import type { ArgList, Shape, SvgDocument } from "@svgframe/kernel";
 
 /**
  * `delete <id>`: detaches the shape (a container with its whole subtree). The

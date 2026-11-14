@@ -1,4 +1,4 @@
-import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
+import type { ArgList } from "@svgframe/kernel";
 import { ZOrderCommand } from "./ZOrderCommand.js";
 
 /** `back <id>`: first among its siblings, i.e. drawn first and at the bottom (E27). */

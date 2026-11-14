@@ -1,12 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { Editor } from "../../packages/kernel/src/app/Editor.js";
 import { EditorSession } from "../../packages/kernel/src/app/EditorSession.js";
-import { CommandRegistry } from "../../packages/kernel/src/commands/CommandRegistry.js";
 import { SvgSerializer } from "../../packages/kernel/src/io/SvgSerializer.js";
 import { EditorError } from "../../packages/kernel/src/model/EditorError.js";
 import { Group } from "../../plugins/builtin-shapes/src/Group.js";
 import type { ParamSpec } from "../../packages/kernel/src/model/ParamSpec.js";
-import { ShapeFactory } from "../../packages/kernel/src/model/ShapeFactory.js";
+import { BuiltinExtensions } from "../support/BuiltinExtensions.js";
 import { MemoryFileSystem } from "../unit/io/MemoryFileSystem.js";
 import { TranscriptRunner } from "./TranscriptRunner.js";
 
@@ -62,9 +61,8 @@ class Fixture {
   private readonly serializer = new SvgSerializer();
 
   constructor(lines: readonly string[]) {
-    const factory = new ShapeFactory();
-    factory.register(CompositeBox);
-    this.session = new EditorSession(this.files, new CommandRegistry(), factory);
+    const registry = BuiltinExtensions.registry(BuiltinExtensions.shapesPlugin("failure-test-shapes", CompositeBox));
+    this.session = new EditorSession(this.files, registry);
     this.editor = new Editor(this.session);
     for (const line of lines) {
       const output = this.editor.executeLine(line);

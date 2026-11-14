@@ -1,7 +1,5 @@
-import { CanvasSize } from "../../../packages/kernel/src/model/CanvasSize.js";
-import type { CommandContext } from "../../../packages/kernel/src/commands/CommandContext.js";
-import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
-import { DocumentCommand } from "../../../packages/kernel/src/commands/DocumentCommand.js";
+import { CanvasSize, CommandResult, DocumentCommand } from "@svgframe/kernel";
+import type { CommandContext } from "@svgframe/kernel";
 
 /**
  * `canvas <w> <h>`: changes the canvas size of the current document. A

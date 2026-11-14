@@ -1,6 +1,6 @@
+import type { ContainerShape } from "./ContainerShape.js";
 import { EditorError } from "./EditorError.js";
 import { ExtraAttributes } from "./ExtraAttributes.js";
-import type { Group } from "../../../../plugins/builtin-shapes/src/Group.js";
 import type { ShapeContainer } from "./ShapeContainer.js";
 import { ShapeMemento } from "./ShapeMemento.js";
 import { StyleAttributes } from "./StyleAttributes.js";
@@ -29,8 +29,22 @@ export abstract class Shape {
   /** SVG element name: `rect`, `g`, … */
   abstract tagName(): string;
 
-  /** `rect#r1` (V8). */
+  /**
+   * The user-visible name of the shape's type (design §3.6): what echoes,
+   * `show` and warnings call it. Defaults to the SVG element name; a composite
+   * type written as a `<g>` answers its own name instead.
+   */
+  kindName(): string {
+    return this.tagName();
+  }
+
+  /** Echo name `rect#r1` (V8): commands, `show`, warnings and programming errors. */
   label(): string {
+    return `${this.kindName()}#${this.id}`;
+  }
+
+  /** Tree name `rect#r1`: the element name, used only by the lines of `tree` (design §3.6). */
+  treeLabel(): string {
     return `${this.tagName()}#${this.id}`;
   }
 
@@ -75,8 +89,8 @@ export abstract class Shape {
    */
   abstract moveDescription(dx: number, dy: number): string;
 
-  /** Polymorphic "is it a container?": `null` for leaves, the group itself for `g`. */
-  asContainer(): Group | null {
+  /** Polymorphic "is it a container?": `null` for leaves, the shape itself for a container. */
+  asContainer(): ContainerShape | null {
     return null;
   }
 

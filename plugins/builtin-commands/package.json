@@ -2,5 +2,35 @@
   "name": "@svgframe/plugin-builtin-commands",
   "version": "0.1.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "exports": {
+    ".": "./src/BuiltinCommandsPlugin.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@svgframe/kernel": "0.1.0"
+  },
+  "contributes": {
+    "commands": [
+      "create",
+      "delete",
+      "move",
+      "scale",
+      "set",
+      "group",
+      "ungroup",
+      "addto",
+      "front",
+      "back",
+      "tree",
+      "show",
+      "help",
+      "init",
+      "read",
+      "save",
+      "canvas",
+      "undo",
+      "redo"
+    ]
+  }
 }

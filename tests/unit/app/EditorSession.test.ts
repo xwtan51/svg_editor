@@ -1,17 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { EditorSession } from "../../../packages/kernel/src/app/EditorSession.js";
-import { CommandRegistry } from "../../../packages/kernel/src/commands/CommandRegistry.js";
 import { History } from "../../../packages/kernel/src/commands/History.js";
 import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
-import { ShapeFactory } from "../../../packages/kernel/src/model/ShapeFactory.js";
 import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
+import { BuiltinExtensions } from "../../support/BuiltinExtensions.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 
 describe("EditorSession", () => {
   const files = new MemoryFileSystem();
-  const commands = new CommandRegistry();
-  const factory = new ShapeFactory();
-  const session = () => new EditorSession(files, commands, factory);
+  const extensions = BuiltinExtensions.registry();
+  const session = () => new EditorSession(files, extensions);
 
   it("starts without a document and without a save path", () => {
     const s = session();
@@ -63,8 +61,8 @@ describe("EditorSession", () => {
   it("hands out the injected collaborators", () => {
     const s = session();
     expect(s.fileSystem()).toBe(files);
-    expect(s.registry()).toBe(commands);
-    expect(s.shapeFactory()).toBe(factory);
+    expect(s.commands()).toBe(extensions.commands());
+    expect(s.shapes()).toBe(extensions.shapes());
   });
 
   it("owns one empty history, stable over the session and separate per session", () => {

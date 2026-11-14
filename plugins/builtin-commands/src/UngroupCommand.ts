@@ -1,11 +1,5 @@
-import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
-import type { Group } from "../../builtin-shapes/src/Group.js";
-import type { Shape } from "../../../packages/kernel/src/model/Shape.js";
-import type { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
-import { TreePosition } from "../../../packages/kernel/src/model/TreePosition.js";
-import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
-import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
-import { EditCommand } from "../../../packages/kernel/src/commands/EditCommand.js";
+import { CommandResult, EditCommand, EditorError, TreePosition } from "@svgframe/kernel";
+import type { ArgList, ContainerShape, Shape, SvgDocument } from "@svgframe/kernel";
 
 /**
  * `ungroup <gid>`: the children take the container's place in its parent, in
@@ -24,7 +18,7 @@ export class UngroupCommand extends EditCommand {
 
   private readonly id: string;
 
-  private group!: Group;
+  private group!: ContainerShape;
   private position!: TreePosition;
   private children!: readonly Shape[];
 
