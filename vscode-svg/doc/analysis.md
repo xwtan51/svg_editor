@@ -74,7 +74,7 @@
 
 ### 1.2 注册与回调的两条链
 
-两张时序图中，参与者和消息都是代码里真实存在的名字：本扩展的类和方法来自 `src/`，VSCode 一侧来自 1.146.0 的源码（上表的简称）。为了能读，VSCode 内部省略了中间的转发层（例如 `extHost.api.impl.ts` 里 `window.registerFileDecorationProvider` 直接转给 `ExtHostDecorations`），只保留跨进程的那一跳。作者本机没有 PlantUML；审查时由独立审查者用 PlantUML 1.2024.7 + Graphviz 渲染检查了本文的五张 PlantUML 图（这两张时序图和第 2 节的三张类图），五张均无语法错误、中文显示正常，渲染图不入库。
+两张时序图中，参与者和消息都是代码里真实存在的名字：本扩展的类和方法来自 `src/`，VSCode 一侧来自 1.146.0 的源码（上表的简称）。为了能读，VSCode 内部省略了中间的转发层（例如 `extHost.api.impl.ts` 里 `window.registerFileDecorationProvider` 直接转给 `ExtHostDecorations`），只保留跨进程的那一跳。本文的五张 PlantUML 图（这两张时序图和第 2 节的三张类图）已用 PlantUML 1.2026.10 + Graphviz 16.1.1 渲染检查：均无语法错误，中文显示正常，渲染图不入库。A.2 的时序图约 4500 像素宽，超过 PlantUML 默认的 4096 像素上限，本地渲染时需设置环境变量 `PLANTUML_LIMIT_SIZE=8192`，否则最右边两列会被截掉。
 
 **A.1 文件标记**
 
@@ -294,6 +294,8 @@ end note
 
 ```plantuml
 @startuml a1-actual-structure
+set separator none
+' 包名里有版本号（1.85.0、1.146.0），不让 PlantUML 把其中的点当成命名空间分隔符
 title A.1 的实际结构：provider 不持有、也不转发给“被装饰者”
 package "vscode API（@types/vscode 1.85.0）" {
   interface FileDecorationProvider {
