@@ -10,6 +10,34 @@
 - 根目录的 `tsconfig.json` 只包含 `src`、`tests`，根目录的 vitest 只扫描 `tests/`，所以根目录的 `npm run typecheck` 和 `npm test` 都不会涉及本目录。
 - ⚠️ **S5 以后如果根目录改用 npm workspaces，`vscode-svg/` 不能被纳入 workspace**。原因有三：它的依赖版本（`@types/vscode`、esbuild 的目标）要跟着所支持的最低 VSCode 版本走（VA10）；它打成 CJS，而 CLI 是 ESM；它的指标要单独统计。根目录的 `workspaces` 字段请只列 CLI 的包（例如 `packages/*`、`plugins/*`），不要写 `*` 或 `.`。
 
+## 第一部分交付总览
+
+规格 `doc/spec/phase_cli_2.md`（仓库根目录）第一部分的每项交付物和每条验收要求，分别在下表中对应到本目录中的位置。分析的正文只在 [`doc/analysis.md`](doc/analysis.md)，这里不重复。观察表指 [`doc/observations.md`](doc/observations.md)，行号是该文件中的行号。
+
+**A.3 要求提交的内容**
+
+| 交付物 | 位置 |
+|---|---|
+| 扩展源码 | [`src/`](src/)：`core/` 19 个类（不依赖 `vscode`）、`host/` 5 个类、入口 [`src/extension.ts`](src/extension.ts)；清单 [`package.json`](package.json)。每个类的职责见本文“[结构](#结构)”，决定见“[决定（VA 编号，供 S3 引用）](#决定va-编号供-s3-引用)” |
+| 安装/启动步骤 | 本文“[命令](#命令)”（`npm ci`、`npm run build`）、“[F5 运行](#f5-运行)”、“[打包 `.vsix`（可选）](#打包-vsix可选)”；自动验证见“[集成测试](#集成测试)” |
+| 示例 SVG | [`samples/example.svg`](samples/example.svg)（与规格图 A.2 相同的结构）、[`samples/broken.svg`](samples/broken.svg)（故意写坏）；边界用例 `LOGO.SVG`、`Mixed.Svg`、`icons.svg/`、`.svg`、`diagram.svg.txt`、`svg`、`plain.txt`、`plain.xml` 也在 [`samples/`](samples/)，各自的用途见“[手动确认清单：文件标记（A.1）](#手动确认清单文件标记a1)” |
+| 文件标记截图 | [`doc/images/a1-explorer-badges.png`](doc/images/a1-explorer-badges.png)、[`doc/images/a1-directory-no-badge.png`](doc/images/a1-directory-no-badge.png)；图注见 [`doc/analysis.md` 第 0 节](doc/analysis.md#0-截图)（图 0-1、0-2） |
+| 大纲定位截图 | [`doc/images/a2-outline.png`](doc/images/a2-outline.png)、[`doc/images/a2-incomplete-xml.png`](doc/images/a2-incomplete-xml.png)；图注见 [`doc/analysis.md` 第 0 节](doc/analysis.md#0-截图)（图 0-3、0-4） |
+| 分析①：VSCode 与插件的职责、注册与回调 | [`doc/analysis.md` 第 1 节](doc/analysis.md#1-vscode-与插件的职责注册与回调) |
+| 分析②：文件装饰与 Decorator、Adapter | [`doc/analysis.md` 第 2 节](doc/analysis.md#2-文件装饰与-decoratoradapter) |
+| 分析③：Phase 1 代码的复用评估 | [`doc/analysis.md` 第 3 节](doc/analysis.md#3-phase-1-代码的复用评估) |
+
+**规格第 7 节验收清单“第一部分”**
+
+| 验收项 | 自动测试 | 手动步骤与观察 | 截图 |
+|---|---|---|---|
+| SVG 标记正确、文件不变 | `tests/unit/SvgBadgeRule.test.ts`（例如「a directory named *.svg gets nothing」「VA3: upper- and mixed-case extensions count as SVG」「VA5: symbolic links — to a file yes, to a directory or dangling no」）；`tests/unit/SvgFileDecorationProvider.test.ts`「returns a FileDecoration with badge [] for an SVG file」「follows the rule for case, directories and links」；`tests/unit/SvgResourceWatcher.test.ts`（刷新，VA7）。文件不变：provider 读磁盘只经 `VscodeResourceKindReader`，其依赖的类型是 `Pick<FileSystem, "stat">`，拿不到写操作 | “[手动确认清单：文件标记（A.1）](#手动确认清单文件标记a1)”和 R1–R5；观察表第 10、11 项（第 75、76 行，标签页上的 `[]`） | 图 0-1、图 0-2 |
+| 原生大纲：层级 | `tests/unit/SvgOutlineParser.test.ts` 的 describe「spec A.2 — nested groups (figure A.2, samples/example.svg)」「spec A.2 — elements without id」；`tests/integration/suite/outline.ts`「example.svg: the outline of figure A.2, rect#start on line 3」 | O1、O9；观察表 §3 的 O1 行（第 88 行）、O9 行（第 97 行） | 图 0-3 |
+| 原生大纲：定位 | `tests/unit/SvgOutlineParser.test.ts`「rect#start is on line 3 — range and selection」「selection is the tag name in the start tag (VA19)」；`tests/unit/OutlineSymbolAdapter.test.ts`「rect#start: range and selection on line 3 (0-based line 2); selection is the tag name (VA19)」 | O2、O3；观察表 §3 的 O2 行（第 89 行）、O3 行（第 90 行） | 图 0-3 |
+| 原生大纲：更新 | `tests/unit/SvgOutlineParser.test.ts` 的 describe「spec A.2 — edit → update (pure part: new text, new tree)」；`tests/unit/SvgDocumentSymbolProvider.test.ts`「asks the document for its text on every call, so an edit is seen at once」；`tests/integration/suite/outline.ts`「insert an element with WorkspaceEdit: the next query shows it」 | O4、O4b；观察表 §3 的 O4 行（第 91 行）、O4b 行（第 92 行） | — |
+| 异常输入不崩溃 | `tests/unit/SvgOutlineParser.test.ts` 的 describe「spec A.2 — incomplete XML: the part before the error (VA16)」「never throws (VA22)」；`tests/unit/SvgDocumentSymbolProvider.test.ts` 的 describe「never throws (VA22)」；`tests/unit/VscodeResourceKindReader.test.ts`「a rejected stat (e.g. file just deleted) yields undefined」；`tests/integration/suite/outline.ts`「incomplete XML: the query does not fail and keeps the part before the error; repaired, the outline is back (VA16)」「samples/broken.svg: the part before the error」「empty, comment-only and garbage documents: an empty outline, no failure (VA22)」「2 000 nesting levels: the outline stops at 256 instead of failing inside VSCode (VA22)」，启动器检查日志中没有 `[svg-badge] SVG outline failed` | O5、O6；观察表 §3 的 O5 行（第 93 行）、O6 行（第 94 行） | 图 0-4 |
+| 模式分析与复用评估齐备 | — | [`doc/analysis.md`](doc/analysis.md) 第 1–3 节 | — |
+
 ## 命令
 
 扩展本身支持 **VSCode 1.85.0 及以上**（见 VA10）。开发工具链（vitest、esbuild、类型检查）需要 Node.js 22 或更高版本；这只是开发机的要求，与扩展运行时用的 Node 无关，后者由 VSCode 自带。以下命令都在 `vscode-svg/` 下执行。
