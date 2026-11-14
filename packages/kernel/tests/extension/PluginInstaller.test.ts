@@ -381,8 +381,8 @@ describe("PluginInstaller: manifest", () => {
       activate(_context: PluginContext): void {}
     }
     const json = { name: "@test/bad", contributes: { shape: ["fake-leaf"] } };
-    const outcome = installer.install(new PluginCandidate("./plugins/bad", Never, json, PluginOptions.EMPTY));
-    expect(outcome.message()).toBe("invalid plugin manifest: ./plugins/bad (unknown contributes key: shape)");
+    const outcome = installer.install(new PluginCandidate("./fixtures/bad", Never, json, PluginOptions.EMPTY));
+    expect(outcome.message()).toBe("invalid plugin manifest: ./fixtures/bad (unknown contributes key: shape)");
     expect(constructed).toBe(false);
     expect(committed(registry)).toEqual([[], [], [], []]);
   });

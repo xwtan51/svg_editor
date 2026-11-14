@@ -7,12 +7,12 @@ import { EditorError } from "../../src/model/EditorError.js";
 describe("PluginManifest", () => {
   it("reads the name and the four categories in the order written", () => {
     const manifest = PluginManifest.parse({
-      name: "@svgframe/plugin-x",
+      name: "@test/x",
       version: "0.1.0",
       type: "module",
       contributes: { shapes: ["box", "star"], commands: ["stats"], decorators: ["d"], attributes: ["a"] },
     });
-    expect(manifest.name()).toBe("@svgframe/plugin-x");
+    expect(manifest.name()).toBe("@test/x");
     expect(manifest.names(ContributionCategory.SHAPES)).toEqual(["box", "star"]);
     expect(manifest.names(ContributionCategory.COMMANDS)).toEqual(["stats"]);
     expect(manifest.names(ContributionCategory.DECORATORS)).toEqual(["d"]);
