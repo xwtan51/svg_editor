@@ -1,0 +1,3061 @@
+# Phase 2 插件化设计（S4）
+
+> 本文是计划 `doc/spec/phase2-plan.md` 第 S4 步的产出，也是 S5–S15 的唯一设计依据（`CLAUDE.md` 规则 3）：接口、文案、目录和取舍一律以本文为准。
+> 依据：规格 `doc/spec/phase_cli_2.md`（下称“规格”，§n 指其第二部分）、`doc/spec/phase_cli_1.md`（下称“P1 规格”）、`final` 的源码与 `doc/README.md`（下称“README”）。凡写“现有”的文件、类、方法、行号，均在 `fe10441`（里程碑 ① 之后的 `main`，`src/` 与 `final` 相同）上核对过，核对结果见附录 C。
+> 分析 `doc/spec/phase2-analysis.md`（下称“分析”）只作参考：采纳的地方不再注明，推翻的地方在第 5 节写明理由。
+
+---
+
+## 0 阅读指引
+
+### 0.1 本文回答的问题
+
+| 部分 | 回答 | 主要服务的步骤 |
+|---|---|---|
+| 1 边界与目录 | 文件放在哪、谁能依赖谁、怎样强制、判据命令的真实路径 | S5、S9 |
+| 2 四个扩展点 | `ShapeProvider`、`Command`、`TreeDecorator`、`AttributeHandler` 的签名与契约 | S6、S7 |
+| 3 支撑设施 | 插件接口、上下文、事务式注册、事件、容器抽象、名字拆分、保护钩子、读回规则 | S6、S7 |
+| 4 两种装配与加载器 | 组合根、加载器、装配配置（profile）、失败文案、基线工具扩展 | S8、S9 |
+| 5 决定与偏差 | 决策 X1–X30、约定补充 N1–N16、已知偏差 T1–T4、K1–K6 的去向 | 全部 |
+| 6 ADR 草稿 | 6 条 | S15 |
+| 7 规格追溯表 | 规格每一条要求由哪个机制满足、哪一步实现、怎样验证 | 全部 |
+| 8 接入演练 | `stats`、`dir`、`box`、`modified-star` 的草图与“内核零改动”论证 | S10–S13 |
+| 9 测试计划与步骤划分 | 每一步的测试；修订后的步骤表 | S5–S15 |
+
+### 0.2 编号约定
+
+README 已经用了 R/F/E/U/V/K/B/C/W/Q/A/M/P/D，VSCode 扩展用了 VA。本文新增的编号一律换前缀，**不再出现裸写的 D 编号**：
+
+| 前缀 | 含义 | 与已有编号的关系 |
+|---|---|---|
+| **X1–X30** | 决策。**X1–X18 与分析 §7 的 D1–D18 一一对应**（X*n* = 分析 D*n*），X19 起是本文新增 | 分析的“D3”在本文一律写作“决策 X3（分析 D3）”；README §3.1 的依赖规则 D1–D8 在本文一律写作“依赖规则 D1”等，两者不会撞车 |
+| **L1–L10** | 新增的分层依赖规则（内核 / 装配处 / 插件之间） | 与 README 的依赖规则 D1–D8、范式规则 P1–P9 并列；S15 并入 README §3 |
+| **P5a、P5b、P10** | 对范式规则的例外与新增 | P5a/P5b 是 P5 的两条受控例外，P10 是新规则 |
+| **N1–N16** | 约定补充（对规格的解释） | 规则 6 要求登记的“解释” |
+| **T1–T4** | 已知偏差（对规格的偏离） | 规则 6 要求登记的“偏离”；README 的 K1–K6 去向见 5.4 |
+| **ADR-1–ADR-6** | 架构决策记录草稿 | S15 整理进 README |
+| **G1–G16** | 接入演练发现、已回填进第 2、3 部分的缺口 | 见 8.5 |
+| **TR-001…** | 规格追溯表的行号 | 见第 7 节 |
+
+### 0.3 名字约定
+
+- 现有的文件、类、方法用 `` `Name` `` 写真实名字；需要时附 `fe10441` 上的行号，例如 `model/Shape.ts:33`。路径在第 1 节给出搬迁规则之前，一律指 `fe10441` 上的位置（`src/` 下）。
+- **本文新设计的名字在首次出现处标“（新）”**，并全部列在 0.4 的新名字表里。附录 C 的机械核对只核对“现有”名字；新名字只核对“不与现有名字撞车”。
+- 改名的现有名字写作“`ShapeFactory` → `ShapeRegistry`（新）”。
+
+### 0.4 新名字表
+
+按所在目录排列（目录本身在 1.1 定义）。“S”列是引入它的步骤。
+
+| 新名字 | 种类 | 位置（相对仓库根） | S | 一句话 |
+|---|---|---|---|---|
+| `@svgframe/kernel` | 包名 | `packages/kernel/package.json` | S5 | 内核 workspace 包 |
+| `api.ts` | 汇总导出文件 | `packages/kernel/src/api.ts` | S6 | 内核公开入口 `@svgframe/kernel`（P5a） |
+| `host-api.ts` | 汇总导出文件 | `packages/kernel/src/host-api.ts` | S6 | 只给装配处的入口 `@svgframe/kernel/host`（P5a） |
+| `ContainerShape` | 抽象类 | `packages/kernel/src/model/` | S6 | “是图形的容器”：子节点、Composite 转发、`canUngroup`、`canRelease` |
+| `ShapeProvider` | 接口 | 同上 | S6 | 扩展点①：一种图形类型 |
+| `StaticShapeProvider` | 类 | 同上 | S6 | 把 `ShapeType`（类的静态侧）适配成 `ShapeProvider` |
+| `ShapeRegistry` | 类 | 同上（由 `ShapeFactory` 改名） | S6 | 已提交的图形提供者；按名查找、按元素选提供者 |
+| `ShapeCatalog` | 接口 | 同上 | S6 | `ShapeRegistry` 的只读 + 构造视图，给命令和插件 |
+| `ShapeKit` | 接口 | 同上 | S6 | “按类型名造一个图形”，给 `ShapeProvider.create` |
+| `ShapeReader` | 接口 | 同上 | S6 | 读回时内核提供给提供者的服务（id、属性、子元素、降级、拒绝） |
+| `ElementView` | 接口 | 同上 | S6 | XML 元素的只读视图（`io/XmlElement` 实现它） |
+| `ShapeView` | 接口 | 同上 | S7 | 图形的只读视图（`Shape` 实现它） |
+| `DocumentView` | 接口 | 同上 | S7 | 文档的只读视图（`SvgDocument` 实现它） |
+| `AttributeHandler` | 接口 | 同上 | S7 | 扩展点④ |
+| `AttributeTarget` | 接口 | 同上 | S7 | 处理器能改的“目标子树”：只能改属性，不能改结构 |
+| `AttributeChange` | 接口 | 同上 | S7 | 处理器返回的修改说明（回显与撤销文案） |
+| `AttributePlanner` | 接口 | 同上 | S7 | `CommandContext.attributeEdits()` 的返回类型：只有 `plan()`（2.4.3） |
+| `PlannedAttributeEdit` | 接口 | 同上 | S7 | `plan()` 的返回类型：`redo()`、`undo()` 与两条文案（2.4.3） |
+| `AttributeDispatcher` | 类 | 同上 | S7 | `AttributePlanner` 的实现：查询处理器、裁决冲突、做快照事务（不导出） |
+| `AttributeEdit` | 类 | 同上 | S7 | `PlannedAttributeEdit` 的实现：一次已裁决、已试做的属性修改（前后快照 + 两条文案；不导出） |
+| `EditableSubtree` | 类 | 同上 | S7 | `AttributeTarget` 的唯一实现 |
+| `TreeDecorator` | 接口 | `packages/kernel/src/view/` | S7 | 扩展点③ |
+| `TreeRowView` | 接口 | 同上 | S7 | 标签看到的一行：根行或图形行 |
+| `TreeRow` | 类 | 同上 | S7 | `TreeRowView` 的实现 |
+| `CommandCatalog` | 接口 | `packages/kernel/src/commands/` | S6 | `CommandRegistry` 的只读视图（给 `help`） |
+| `UndoStack` | 接口 | 同上 | S7 | `History` 的收窄视图，只有 `undo` / `redo` |
+| `Plugin` | 接口 | `packages/kernel/src/extension/` | S6 | `activate(context)` |
+| `PluginClass` | 接口 | 同上 | S6 | 默认导出的形状：`new (options) => Plugin` |
+| `PluginContext` | 接口 | 同上 | S6 | 插件能做的全部事情 |
+| `PluginOptions` | 类 | 同上 | S6 | 不可变的 options 值对象 |
+| `PluginManifest` | 类 | 同上 | S6 | 解析并校验后的 `package.json`（`name` + `contributes`） |
+| `ContributionCategory` | 类 | 同上 | S6 | 四类注册名的封闭值对象集合（shapes、commands、decorators、attributes） |
+| `PluginCandidate` | 类 | 同上 | S6 | “待安装的插件”：标签、插件类、清单、options |
+| `PluginInstaller` | 类 | 同上 | S6 | 事务式注册：暂存、校验、提交、回滚 |
+| `StagingContext` | 类 | 同上 | S6 | `PluginContext` 的唯一实现：注册先进暂存区 |
+| `InstallOutcome` | 类 | 同上 | S6 | 安装结果：成功，或一行失败文案 |
+| `ExtensionRegistry` | 类 | 同上 | S6 | 全部已提交的注册（四类 + 事件订阅） |
+| `DocumentListener` | 接口 | 同上 | S7 | 文档事件的订阅者 |
+| `DocumentEvents` | 类 | `packages/kernel/src/app/` | S7 | 事件缓冲：命令成功后才派发 |
+| `svg-editor` | 根包（已有名字） | `package.json` | — | 装配处所在的根包（已有，不改名） |
+| `CliArguments` | 类 | `src/cli/` | S8 | 解析 `--bare` / `--only` / `--config` |
+| `CompositionRoot` | 类 | `src/assembly/` | S6 | 方式 A 的组合根：内置插件表 + 可选插件表 |
+| `AssemblyProfile` | 类 | 同上 | S8 | 装配配置：bare / full / only / config |
+| `EditorAssembler` | 类 | 同上 | S6 | 按装配配置安装插件、造出 `Editor` |
+| `AssemblyResult` | 类 | 同上 | S8 | 装配结果：`Editor` + 启动消息 |
+| `PluginLoader` | 类 | `src/loader/` | S8 | 方式 B：配置项 → `PluginCandidate` |
+| `PluginConfig` | 类 | 同上 | S8 | 解析并严格校验 `plugins.config.json` |
+| `PluginConfigEntry` | 类 | 同上 | S8 | 配置中的一项 |
+| `ModuleLocator` | 类 | 同上 | S8 | 先解析：模块名 → 包目录、`package.json`、入口文件 |
+| `LocatedModule` | 类 | 同上 | S8 | 解析结果 |
+| `plugins.config.json` | 配置文件 | 仓库根 | S8 | 方式 B 的配置（规格 §6 指定的文件名） |
+| `vitest.config.ts` | 配置文件 | 仓库根 | S5 | 测试范围 glob |
+| `@svgframe/plugin-builtin-shapes` | 包名 | `plugins/builtin-shapes/` | S5 | 内置六种图形 |
+| `BuiltinShapesPlugin` | 类 | `plugins/builtin-shapes/src/` | S6 | 其入口（默认导出） |
+| `@svgframe/plugin-builtin-commands` | 包名 | `plugins/builtin-commands/` | S5 | 内置 19 条命令 |
+| `BuiltinCommandsPlugin` | 类 | `plugins/builtin-commands/src/` | S6 | 其入口（默认导出） |
+| `@svgframe/plugin-command-stats` | 包名 | `plugins/command-stats/` | S10 | `stats` |
+| `StatsPlugin`、`StatsCommand`、`ShapeTally` | 类 | `plugins/command-stats/src/` | S10 | 见 8.1 |
+| `@svgframe/plugin-command-dir` | 包名 | `plugins/command-dir/` | S11 | `dir` |
+| `DirPlugin`、`DirCommandType`、`DirCommand`、`DirectoryLister`、`DirectoryEntry`、`NodeDirectoryLister`、`WorkingDirectory`、`NodeWorkingDirectory` | 类 / 接口 | `plugins/command-dir/src/` | S11 | 见 8.2 |
+| `@svgframe/plugin-shape-box` | 包名 | `plugins/shape-box/` | S12 | `box` |
+| `BoxPlugin`、`BoxShape`、`BoxProvider`、`BoxAttributeHandler`、`BoxFillChange`、`BoxLabelChange`、`BoxTypeLabel` | 类 | `plugins/shape-box/src/` | S12 | 见 8.3 |
+| `@svgframe/plugin-tree-star` | 包名 | `plugins/tree-star/` | S13 | `modified-star` |
+| `TreeStarPlugin`、`ModifiedStar`、`SaveBaseline` | 类 | `plugins/tree-star/src/` | S13 | 见 8.4 |
+| `SessionPlan`、`RunGroup` | 类 | `scripts/baseline/` | S9 | 基线工具：会话的运行组（4.8） |
+| `<会话>.runs.json` | 数据文件 | `doc/transcript/` | S9 | 会话的运行组声明 |
+| `MetricsTool`、`ComplexityCounter`、`SourceSnapshot`、`MetricsReport` | 类 | `scripts/metrics/` | S9 | metrics 脚本（5.3 X18） |
+| `PluginDiffCheck` | 类 | `scripts/plugin-diff/` | S9 | 规格 §6 三条判据的检查脚本 |
+| 插件包内的测试文件与测试替身：`FakeLeaf`、`FakeContainer`、`FakeCommandContext`、`FakeDirectoryLister`、`FakeWorkingDirectory`、`FakeShapesPlugin`、`FakeRect`、`FakeText`、`FakeGroup`；测试文件 `ShapeTally`、`StatsCommand`、`StatsPlugin`、`DirCommand`、`DirInEditor`、`NodeDirectoryLister`、`BoxProvider`、`BoxReadBack`、`BoxAttributeHandler`、`BoxInEditor`、`BoxTypeLabel`、`ModifiedStar`、`StarInEditor`（均为 `*.test.ts`） | 测试类 / 测试文件 | `plugins/*/tests/` | S10–S13 | 见第 8 节各演练 |
+
+现有方法上新增或改变的成员（不是新类，但也是新名字）：
+
+| 成员 | 所在 | S | 说明 |
+|---|---|---|---|
+| `Shape.kindName()` | `Shape` | S6 | 回显用的类型名，默认等于 `tagName()` |
+| `Shape.treeLabel()` | `Shape` | S6 | 树名 `tagName#id`；`Shape.label()` 改为 `kindName#id`（3.6） |
+| `Shape.parentId()`、`Shape.childViews()`、`Shape.isContainer()` | `Shape`（实现 `ShapeView`） | S7 | 只读视图方法（3.6.1） |
+| `SvgDocument.childViews()`、`allViews()`、`findView()` | `SvgDocument`（实现 `DocumentView`） | S7 | 只读视图方法（3.6.1） |
+| `ShapeCatalog.providers()` | 接口 `ShapeCatalog` | S6 | 读回分派与测试用（2.1.2） |
+| `ShapeContainer.canRelease(child)` | 接口 `ShapeContainer` | S7 | 保护钩子（3.7） |
+| `EditCommand.checkReleasable(shape)` | `EditCommand` | S7 | 调保护钩子的模板方法 |
+| `CommandContext.markSaved(path)` | `CommandContext` | S7 | 取代 `setFilePath(path)`，并触发 `documentSaved` |
+| `CommandContext.commands()`、`shapes()`、`attributeEdits()`、`treeDecorators()` | `CommandContext` | S6/S7 | 取代 `registry()`、`shapeFactory()`（3.2） |
+| `Repl` 的 `startupMessages` 构造参数 | `Repl` | S8 | banner 之后打印的启动消息 |
+
+---
+
+## 1 边界与目录
+
+### 1.1 三类目录
+
+```text
+仓库根/
+├── package.json              根包 svg-editor：装配处 + 全仓脚本；"workspaces": ["packages/*", "plugins/*"]（S5）
+├── package-lock.json
+├── tsconfig.json             include 改为 glob（S5，见 1.4）
+├── vitest.config.ts          （新，S5）测试范围 glob
+├── plugins.config.json       （新，S8）方式 B 的配置
+├── packages/
+│   └── kernel/               ◆ 内核  @svgframe/kernel（新，S5）
+│       ├── package.json      "exports": { ".": "./src/api.ts", "./host": "./src/host-api.ts" }（exports 在 S6 加）
+│       ├── src/api.ts        公开入口：给插件（S6，P5a）
+│       ├── src/host-api.ts   公开入口：只给装配处（S6，P5a）
+│       ├── src/model/        领域模型 + 图形扩展点 + 属性扩展点
+│       ├── src/io/           SVG 序列化 / 读回分派 / XML 适配 / FileSystem 端口
+│       ├── src/view/         tree / show 排版 + 树标签扩展点
+│       ├── src/commands/     命令框架（抽象类、注册表、解析、History）
+│       ├── src/extension/    （新）插件接口、上下文、安装器、清单、事件订阅
+│       ├── src/app/          Editor（Invoker）、EditorSession、DocumentEvents
+│       └── tests/            内核自己的契约测试（S6 起新增；用测试替身，不依赖任何插件）
+├── src/                      ◇ 装配处（根包 svg-editor）
+│   ├── cli/                  main.ts（进程入口）、Repl、CliArguments
+│   ├── assembly/             （新）CompositionRoot（方式 A 唯一需要改的文件）、EditorAssembler、AssemblyProfile
+│   ├── loader/               （新）方式 B 的加载器，独占一个目录（规格 §6 的 rg 检查对象）
+│   └── adapters/             （新）NodeFileSystem 等平台适配器
+├── plugins/                  ○ 插件（每个子目录一个 workspace 包）
+│   ├── builtin-shapes/       内置插件：rect circle ellipse line text g（S5 搬入，S6 插件化）
+│   ├── builtin-commands/     内置插件：Phase 1 的 19 条命令（同上）
+│   ├── command-stats/        S10
+│   ├── command-dir/          S11
+│   ├── shape-box/            S12
+│   └── tree-star/            S13
+├── tests/                    根测试：Phase 1 的 889 个测试（S5 只改 import 路径）、系统测试、architecture test、装配处测试、加载器夹具
+├── scripts/                  baseline/（已有）、metrics/（S9）、plugin-diff/（S9）
+├── doc/  docs/               doc/：README、设计、会话；docs/metrics/：S9 起的 metrics 产物
+└── vscode-svg/               VSCode 扩展：独立 package.json 与锁文件，不进 workspaces、不进 CLI 的任何统计
+```
+
+**内置插件放在 `plugins/` 下**，与可选插件同级、同格式（有自己的 `package.json` 和 `contributes`）。理由：规格 §1 要求“现有的图形都改为插件式”“内置实现可通过注册机制装配”，§2.1 要求 `stats` 的包“独立于内置命令表所在的包”；内置插件和可选插件走同一条安装路径（3.3），区别只在装配处：内置插件在每一种装配配置里都装，而且总是最先装（4.3）。
+
+**内核做成 workspace 包而不是根包里的一个目录**（决策 X1，ADR-5）。理由：插件要能写 `import … from "@svgframe/kernel"`（规格 §1“插件可依赖内核公开的领域抽象”），`exports` 只暴露 `api.ts`（给插件）与 `host-api.ts`（给装配处，规格 §1“不得依赖……宿主装配模块”的反方向：装配用的类插件看不到，3.10），深层路径 `@svgframe/kernel/src/...` 会被 TypeScript 和 Node 同时拒绝（附录 B 实验 1、2 已确认）。相对路径绕过 `exports` 的情况由 architecture test 兜底（L2）。
+
+**装配处留在根包的 `src/`**：`src/cli/main.ts` 的路径因此不变，`npm run cli`（`tsx src/cli/main.ts`）和基线工具的 `BaselinePaths.CLI_ENTRY`（`scripts/baseline/BaselinePaths.ts:11`）都不用改。
+
+### 1.2 依赖规则与强制手段
+
+#### 1.2.1 分层规则 L1–L10
+
+记号同 README §3.1：`X → Y` 表示 X 中的文件可以 `import` Y。
+
+| # | 规则 | 理由 | 强制手段 | 引入 |
+|---|---|---|---|---|
+| L1 | 内核（`packages/kernel/src/**`）只能 import：内核内部的相对路径、`@xmldom/xmldom`（仅 `io/XmlDomAdapter.ts`，沿用 P1）。**禁止** import `@svgframe/*`、`src/**`、`plugins/**`，禁止 `node:fs`、`node:readline` 等平台模块 | 规格 §1 判据“内核只依赖接口，不依赖任何实现”；DIP | architecture test：解析每条 import 的目标路径，按目录归类 | S6 |
+| L2 | 插件（`plugins/*/src/**`）只能 import：`@svgframe/kernel`（**只能是这个裸名**，不能带子路径）、本包内的相对路径（不得走出本包目录）、`node:*` 内置模块（受 P1 约束，见 L9）。插件的**测试**（`plugins/*/tests/**`）另外可以 import `@svgframe/kernel/host` 与 `vitest`，用来组装只含本插件与测试替身的最小编辑器（9.1），但同样不得 import 其他插件 | 规格 §1“不得依赖其内部实现或宿主装配模块”；§4“插件测试不依赖其他插件” | ① `exports` + TypeScript/Node 的解析规则拒绝深层路径（附录 B 实验 2）；② architecture test 拒绝相对路径走出本包、拒绝 `@svgframe/plugin-*` | S6 |
+| L3 | 插件之间不得互相 import（运行时和类型都不行） | 同上；box 需要的 rect/text 经 `ShapeKit` 按类型名创建（2.1.5） | architecture test（L2 的一部分） | S6 |
+| L4 | 装配处（`src/**`）可以 import `@svgframe/kernel` 与 `@svgframe/kernel/host`；**只有** `src/assembly/CompositionRoot.ts` 可以 import 插件包（裸名，含 `<包名>/package.json`） | 方式 A 只改这一个文件（规格 §6 方式 A 判据） | architecture test | S6 |
+| L5 | 加载器（`src/loader/**`）不得 import 任何插件包；源码中不得出现任何插件的包名或任何 `contributes` 注册名（从 `plugins/*/package.json` 用 glob 收集），不得出现 `switch` | 规格 §6 加载器独立性 | architecture test（名单由 glob 生成，接入新插件不用改测试） | S8 |
+| L6 | 内核中不得出现任何已登记的注册名的字符串字面量（图形类型名、命令名、标签名、处理器名，名单从全部 `plugins/*/package.json` 的 `contributes` 收集） | 规格 §7 节点“内核不按名字枚举” | architecture test | S6 |
+| L7 | 每个 `plugins/*/package.json` 必须：`name` 以 `@svgframe/plugin-` 开头、`"type": "module"`、`exports` 恰为 `{ ".": "<字符串>", "./package.json": "./package.json" }`、`contributes` 合法（3.3.2）；入口文件存在 | 加载器“先解析后导入”与方式 A 的 JSON import 都依赖这一形状（4.6）；`type` 缺失时 tsx 会把 `.ts` 当 CJS 处理（附录 B 实验 2 的意外发现） | architecture test（逐个读 glob 出来的 `package.json`） | S6 |
+| L8 | 插件与内核的源文件顶层只允许 `import`、`export`、类 / 接口 / 类型声明；禁止顶层可执行语句（变量声明、函数调用） | 3.1 “插件不能有模块级副作用”；模块级状态会在同一进程的多个 `Editor` 之间共享 | architecture test（启发式：去掉注释与字符串后，检查列 0 开始的语句首词） | S6 |
+| L9 | P1 的推广：`node:fs`、`node:module` 只允许出现在 `src/adapters/**`、`src/loader/**`，以及插件中**文件名以 `Node` 开头的适配器类**（如 `NodeDirectoryLister.ts`）；`node:readline`、`process.std*`、`console.*` 只允许出现在 `src/cli/**` | IO 隔离：内核与插件逻辑都能在内存里测 | architecture test（改写现有 `RESTRICTED_IMPORTS`、`RESTRICTED_CODE`） | S6/S8 |
+| L10 | 依赖整体无环：`plugins/* → kernel`、`src → kernel`、`src/assembly → plugins/*`；内核内部沿用依赖规则 D1–D8（见下） | 同依赖规则 D8 | architecture test（现有 `moduleCycleViolations` 换成按“区域”计算） | S6 |
+
+#### 1.2.2 依赖规则 D1–D8 在内核内部的延续
+
+README §3.1 的依赖规则 D1–D8 按“`src/` 下的一级目录”定义模块。S5 起，模块改为“内核内部的一级目录”，规则内容不变，增加 `extension` 一个模块：
+
+```text
+src/cli → app → extension → commands → {view, io} → model        （内核内部）
+```
+
+| 依赖规则 | S5 后的含义 | 变化 |
+|---|---|---|
+| D1 | `kernel/model` 不依赖任何其他模块 | 不变 |
+| D2 | `kernel/io` 只依赖 `model` | 不变 |
+| D3 | `kernel/view` 只依赖 `model` | 不变 |
+| D4 | `kernel/commands` 只依赖 `model`、`view`、`io` | 不变 |
+| D5 | `kernel/commands` 对 `io` 只依赖 `FileSystem`、`SvgSerializer`、`SvgImporter` | S6 后内核的 `commands/` 不再含 `ReadCommand`、`SaveCommand`，此规则改为约束 `plugins/builtin-commands`：它从 `@svgframe/kernel` 拿到的 io 类只有这三个（`api.ts` 只导出这三个，见 3.10） |
+| D6 | `kernel/app` 可依赖 `extension`、`commands`、`model`、`io` | 增加 `extension`；**删除 `app → NodeFileSystem` 这条边**（S6 起 `Editor.createDefault` 移到装配处） |
+| D7 | `src/cli` 只依赖 `src/assembly`、`@svgframe/kernel` | 原“`cli` 只依赖 `app`”：`app` 进了内核，装配交给 `src/assembly` |
+| D8 | 内核内部模块无环 | 不变；新模块 `extension` 依赖 `commands`、`view`、`model`、`io`，被 `app` 依赖 |
+
+**S5 的过渡规则**（只搬不改，行为零变化）：S5 时内核的 `model/ShapeFactory.ts` 仍 import 六个图形类，`commands/CommandRegistry.ts` 仍 import 19 条命令，`app/Editor.ts` 仍 import `NodeFileSystem`。为了让 S5 的 architecture test 仍然断言“依赖规则 D1–D8 与 `final` 时完全相同”，S5 的扫描把 `plugins/builtin-shapes/src` 计入模块 `model`，`plugins/builtin-commands/src` 计入模块 `commands`，`src/adapters` 计入模块 `io`，`src/cli` 计入模块 `cli`。这张“路径 → 模块”映射表在 S6 改写，L1–L10 同时生效。
+
+#### 1.2.3 架构测试怎样按 glob 生效
+
+`tests/unit/architecture.test.ts` 现在只扫描 `src/`（`SRC_DIR`，第 29 行），模块 = `src/` 下的一级目录（`analyze`，第 93 行）。S5 改为：
+
+| 改动 | 内容 |
+|---|---|
+| 扫描根 | 三个 glob：`packages/kernel/src/**/*.ts`、`src/**/*.ts`、`plugins/*/src/**/*.ts`；每个文件带上“区域”（kernel / host / plugin:<目录名>）和“区域内模块”两个属性 |
+| 名单 | 插件列表、插件包名、`contributes` 注册名、入口文件都**从 `plugins/*/package.json` 读出来**；不维护任何写死的文件清单 |
+| 防空转 | 现有的“is scanned”断言保留，路径改成新位置；新增“每个区域至少扫描到一个文件”“每个 `plugins/*` 至少扫描到其入口文件” |
+| 合成违规用例 | 现有写法保留：每条规则都是“文件集合 → 违规列表”的函数，测试后半部分喂合成源码证明它能报错。L1–L10 各加一组 |
+
+每条规则在哪些区域生效见 1.2.4。接入新插件时，新目录自动进入扫描，名单自动扩充，**测试本身不改**。
+
+#### 1.2.4 范式规则 P1–P10 在三个区域中的适用范围
+
+S5 起 architecture test 同时扫描内核、装配处、插件三个区域（1.2.3）。现有的范式规则如果不分区域原样套用，有一条会直接挡住插件的本职工作：P3 的“不与图形类型名比较”（`typeNameComparisonViolations`，名单 `BUILT_IN_TYPE_NAMES` 含 `"g"`、`"rect"`、`"text"`）会让 `BoxProvider.matchScore` 中的 `element.name() === "g"` 失败。届时只能改测试或用常量绕开正则，这与“接入新插件时测试本身不改”矛盾。所以每条规则按区域定范围，区域由路径 glob 决定（`packages/kernel/src/**`、`src/**`、`plugins/*/src/**`），不列插件名单：
+
+| 规则 | 内核 | 装配处 | 插件 | 理由与例外 |
+|---|---|---|---|---|
+| P1 IO 隔离 | 适用：不得 import `node:fs`、`node:readline`，不得用 `console.*`、`process.std*`；`@xmldom/xmldom` 只在 `io/XmlDomAdapter.ts` | 适用：`node:fs`、`node:module` 只在 `src/adapters/**`、`src/loader/**`；`node:readline`、`console.*`、`process.std*` 只在 `src/cli/**` | 适用：`node:fs` 只在文件名以 `Node` 开头的适配器类中；不得用 `@xmldom/xmldom`、`node:readline`、`console.*`、`process.std*` | 即 L9；插件的 IO 也要隔离在适配器里，命令逻辑才能用替身测试（规格 §2.3） |
+| P2 以名字查“实现”的 `Map` | 适用：`Map<string, ShapeProvider \| ShapeType \| CommandType>` 只允许出现在 `ShapeRegistry`、`CommandRegistry`；值为函数的 `Map` / `Record` 一律不允许 | 适用，无例外（组合根用数组，加载器不得有名称映射，L5） | 适用，无例外 | 规格 §7“内核不按名字枚举”针对内核；插件与装配处也没有需要“按名字查实现”的地方。数据 `Map`（如 `ShapeTally` 的 `Map<string, number>`）不在此列，与 Phase 1 相同 |
+| P3a 不用 `switch` | 适用 | 适用（加载器另有 L5） | 适用 | 四份演练中没有任何地方需要 `switch` |
+| P3b 不对 `Shape` 的子类用 `instanceof` | 适用 | 适用 | 适用 | 插件识别自己的图形用 `kindName()` 与自己的常量比较（8.3 `BoxAttributeHandler.handles`、`BoxTypeLabel.tagFor`），不需要 `instanceof`；保留这条规则也就挡住了“对别的插件的类做 `instanceof`” |
+| P3c 不与图形类型名的字面量比较 | 适用；另有更严的 L6（内核中不出现任何注册名字面量） | 适用 | **不适用** | “按名字分派”的禁令针对内核：内核不能因为某种图形而走不同分支。插件识别自己的元素、标签名、子部件和属性是它的本职，例如 `BoxProvider.matchScore` 比较 `"g"` 与 `data-kind`、`structureProblem` 检查子元素是不是 `rect`、`text`、`BoxAttributeHandler` 比较 `fill`、`label`。实现方式：`typeNameComparisonViolations` 只对内核与装配处的文件运行；它的类型名名单在 Phase 1 的内置名之外，再加上从全部 `plugins/*/package.json` 的 `contributes.shapes` 收集到的名字 |
+| P4 不在运行时 import 自己的子类；具体图形类不 import 图形注册表 | 适用（`ShapeFactory` 改名后为 `ShapeRegistry`） | 适用 | 适用：插件中的 `Shape` 子类（如 `BoxShape`、内置图形）不得 import `ShapeRegistry`（它本来也不在 `api.ts` 里）；插件内部的类层次同样不得在运行时 import 自己的子类 | 防 ESM 循环导入，与区域无关 |
+| P5 一类一文件、文件名 = 类名、只用具名导出 | 适用；例外 P5a（`api.ts`、`host-api.ts`） | 适用；例外 `src/cli/main.ts`（进程入口） | 适用；例外 P5b（每个插件的入口文件用 `export default class`） | 1.3 |
+| P6 字段私有、不导出自由函数 | 适用 | 适用 | 适用 | P5 的扫描已覆盖“不导出自由函数”；字段私有由代码审查保证（与 Phase 1 相同） |
+| P7 用户错误一律 `EditorError`；`error:` 前缀只在一处加 | 适用 | 适用：前缀只由 `EditorAssembler`（启动）添加，命令时由内核的 `Editor` 添加 | 适用：插件只抛 `EditorError`，不自己拼 `error:` | 4.5 |
+| P8 只有 `ChildList` 调 `attachTo` / `detach` | 适用 | 适用 | 适用：插件组装子树用 `ContainerShape.insertAt`（8.3 `BoxProvider.create`），不直接动父指针 | 父指针与子节点列表必须同处修改 |
+| P9 `view/` 不调用模型的变更方法 | 适用于 `packages/kernel/src/view/**` | 不涉及 | 不按目录适用；树标签与处理器的 `handles` 只拿到只读视图（2.3.5、2.4.2），由 P10 防止强制转换 | P9 是按内核目录定义的规则 |
+| P10 插件中不得出现 `as Shape`、`as SvgDocument`、`as ContainerShape` | 不涉及 | 不涉及 | 适用 | 2.3.5：只读视图只能靠接口形状保证，强制转换是故意违约 |
+
+8.3 草图中的每一处比较都落在“插件 × P3c 不适用”这一格；其余规则在 8.1–8.4 的草图中都能原样通过。
+
+### 1.3 `api.ts` 与“一类一文件”的协调
+
+`api.ts` 是汇总导出文件，P5“一个文件只导出一个类或接口，文件名 = 类名”管不了它；插件入口又必须有默认导出（规格 §6“没有默认导出”是一种失败），而 P5 禁止 `export default`。两处各开一条受控例外：
+
+| # | 例外 | 条件（architecture test 逐条检查） |
+|---|---|---|
+| P5a | 内核 `package.json` 的 `exports` 所指的文件（即 `packages/kernel/src/api.ts`、`packages/kernel/src/host-api.ts`，3.10） | 只允许 `export { X } from "./…/X.js";` 与 `export type { I } from "./…/I.js";` 两种语句；每个被导出的名字必须等于其源文件的文件名（所以“文件名 = 类名”的对应关系在 `api.ts` 里仍然成立）；不得有声明、不得有默认导出、不得 `export *` |
+| P5b | 每个插件 `package.json` 的 `exports["."]` 所指的入口文件 | 恰好一条 `export` 语句，形如 `export default class <文件名> …`；类名必须等于文件名 |
+| — | 其余所有文件 | P5 原样适用（`src/cli/main.ts` 的进程入口例外保留） |
+
+“只有这两类文件能例外”是由 `package.json` 决定的，不是由文件名决定的：例外的范围因此也不需要维护清单。
+
+### 1.4 为插件步骤预先铺好的工程配置
+
+下列配置如果拖到某个插件的接入提交里再做，就会改动共享配置，破坏“零差异”判据。所以全部在 S5–S9 中提前做好：
+
+| 配置 | 内容 | 在哪一步 | 之后接入插件时 |
+|---|---|---|---|
+| npm workspaces | 根 `package.json` 加 `"workspaces": ["packages/*", "plugins/*"]` | **S5** | 根 `package.json` 不变；只有 `package-lock.json` 新增两段（附录 B 实验 1：一段 `node_modules/<包名>` 的 `link: true`，一段 `plugins/<目录>` 的 `name`/`version`/`dependencies`，共 11 行），`node_modules/@svgframe/` 下多一个指向 `../../plugins/<目录>` 的软链接 |
+| `vscode-svg/` 隔离 | glob 只写 `packages/*`、`plugins/*`，不写 `*` 或 `**`，所以 `vscode-svg/` 永远不会被收进 workspaces | S5 | — 附录 B 实验 1 在 `vscode-svg/` 下放了一个 `package.json`，`npm install` 后锁文件里没有它 |
+| 类型检查范围 | `tsconfig.json` 的 `include` 改为 `["src", "tests", "packages/*/src", "packages/*/tests", "plugins/*/src", "plugins/*/tests", "vitest.config.ts"]`；S6 加 `"resolveJsonModule": true`（方式 A 的 JSON import） | S5（include）、S6（resolveJsonModule） | 新插件的 `src/`、`tests/` 自动进入 `npm run typecheck`；`vscode-svg/` 不在任何 glob 里（附录 B 实验 2 放了一个故意写错类型的文件，`tsc` 仍然通过） |
+| 测试范围 | 新增 `vitest.config.ts`：`test.include = ["tests/**/*.test.ts", "packages/*/tests/**/*.test.ts", "plugins/*/tests/**/*.test.ts"]`；`npm test` 由 `vitest run --dir tests` 改为 `vitest run` | S5 | 新插件的测试自动被执行；`vscode-svg/` 的测试不会被扫到（附录 B 实验 2：去掉配置文件、不带 `--dir` 时 vitest 会扫到 `vscode-svg/` 并失败，带配置时不会） |
+| architecture test 的 glob | 见 1.2.3 | S5（扫描根与过渡映射）、S6（L1–L4、L6–L8、L10）、S8（L5、L9 的 loader 部分） | 测试不改 |
+| 插件清单的 lint | L7 | S6 | 测试不改 |
+| metrics 的“职责” | 职责取自每个源文件导出类（或接口）上方 JSDoc 的**第一句**（到第一个句号或空行为止）；S9 加一条 architecture test：kernel/host/plugin 区域的每个源文件都必须有这段注释（`final` 的 82 个文件全部已有） | S9 | metrics 脚本不改；新插件文件只要遵守“有类注释”就有职责一栏 |
+| `plugins.config.json` | 仓库根，内容 `{ "plugins": [] }` | S8 | 方式 B 接入时只改它 |
+| 基线工具的按会话参数 | 4.8 | S9 | 新会话只需加输入、期望输出、`<会话>.runs.json` |
+
+### 1.5 差异判据的真实路径
+
+规格 §6 的三处尖括号在本设计下的取值：
+
+| 占位 | 真实路径 | 说明 |
+|---|---|---|
+| `<内核目录>` | `packages/kernel` | 整个包，包括 `package.json` 和 `tests/` |
+| `<既有插件目录>` | `plugins` | `plugins/` 下全部子目录；新插件用 exclude 排除。git 的路径规格 `plugins` 只匹配目录 `plugins/`，**不**匹配 `plugins.config.json`（附录 B 实验 5 确认） |
+| `<新插件包>` | `plugins/<新目录>` | 例如 `plugins/shape-box` |
+| `<加载器目录>` | `src/loader` | 加载器独占的目录 |
+| 方式 A 的“一个顶层装配文件” | `src/assembly/CompositionRoot.ts` | 只有它可以 import 插件（L4） |
+| 方式 B 的“配置” | `plugins.config.json` | |
+
+**路径必须存在**：`git diff C^ C -- <不存在的路径>` 返回空且退出码为 0（附录 B 实验 5）。所以每条命令前先用 `git cat-file -e <rev>:<path>` 断言路径在 `C^` 和 `C` 中都存在（新插件目录只断言在 `C` 中存在、在 `C^` 中不存在）。S9 的 `PluginDiffCheck` 把这些断言和三条判据做成一条命令：
+
+```bash
+npm run plugin-diff -- <C> plugins/<新目录> --mode A|B
+```
+
+它展开为（以 `C`、`plugins/shape-box` 为例）：
+
+```bash
+# 0. 路径存在性
+for p in packages/kernel src/loader plugins src/assembly/CompositionRoot.ts; do
+  git cat-file -e C^:$p && git cat-file -e C:$p || echo "MISSING $p"
+done
+git cat-file -e C:plugins/shape-box && ! git cat-file -e C^:plugins/shape-box 2>/dev/null || echo "NEW PLUGIN DIR NOT NEW"
+# 1. 文件清单
+git diff --name-status C^ C
+# 2. 共同判据：内核、加载器与既有插件差异为空
+git diff C^ C -- packages/kernel src/loader plugins ':(exclude)plugins/shape-box'
+# 2'. 方式 B 额外判据：全部运行代码（含组合根）差异为空
+git diff C^ C -- packages src plugins ':(exclude)plugins/shape-box'
+# 3. 加载器独立性（辅助人工检查）
+rg -n "import|require|switch" src/loader
+```
+
+共同判据比规格多包含了 `src/loader`：规格方式 A 的判据要求“不得修改加载器”，并入同一条命令。S10–S13 每次接入的完整命令与预测输出见第 8 节各演练的第 3 小节。
+
+### 1.6 接入提交的形状（预测，详见第 8 节）
+
+每个可选插件的接入都拆成**两个提交**，第一个满足方式 A 的判据，第二个只改配置和会话数据：
+
+| 提交 | 内容 | 判据 |
+|---|---|---|
+| C（接入） | `A plugins/<新目录>/**`、`M src/assembly/CompositionRoot.ts`、`M package-lock.json` | 方式 A + 共同判据 |
+| C′（配置） | `M plugins.config.json`，以及该插件需要的会话数据（`doc/transcript/…`） | 不新增插件，只改配置与测试数据 |
+
+`box` 另有演示分支 `demo/box-config` 上的方式 B 提交 C_B：`A plugins/shape-box/**`、`M plugins.config.json`、`M package-lock.json`。
+
+**为什么不把组合根和配置放在同一个提交里**：方式 A 的判据是“只修改一个顶层装配文件”，`plugins.config.json` 是否算“顶层装配文件”有歧义；拆开之后两种解释都满足。文档（README 的扩展点清单、过程记录）放在同一 PR 的后续提交里，不进 C。
+
+**列表里没有出现内核、加载器或既有插件下的任何文件。** 这正是第 2、3 部分要保证的；第 8 节逐个推演。
+
+---
+
+## 2 四个扩展点的接口与契约
+
+### 2.0 总则
+
+- 四个扩展点的接口全部定义在内核里（`packages/kernel/src/model/`、`view/`、`commands/`），经 `api.ts` 导出。
+- 每个扩展点只有**一条注册途径**：`PluginContext`（3.2）。内核的注册表（`ShapeRegistry`、`CommandRegistry` 等）的 `register` 方法不进 `api.ts`，插件看不到。
+- “违约时框架怎样报错”统一按 3.9 的总则：**注册时**能查出来的（名字为空、缺方法）在 `activate` 期间抛出，安装器报 `plugin failed to activate`；**调用时**才能发现的，如果调用处能完整回滚（读回、创建、`set`、渲染树），就转成一行 `error:`，文档与历史不变；不能回滚的（命令的 `execute`、事件监听器）按 Phase 1 的程序错误处理（stderr、退出码 1，`cli/Repl.ts` 现有行为）。
+
+下面的接口草图使用 TypeScript；方法注释里的“前置 / 后置 / 违约”是契约本体，S6/S7 实现时原样写进 JSDoc。
+
+### 2.1 `ShapeProvider`：一种图形类型
+
+#### 2.1.1 从 `ShapeType` 演变
+
+现有的 `ShapeType`（`model/ShapeType.ts`）是**类的静态侧**：`Rect` 等类对象本身满足 `typeName`、`params`、`create`，`ShapeFactory` 直接存类（`model/ShapeFactory.ts:22-27` 在构造函数里写死六种，README K1）。
+
+演变方式：**保留 `ShapeType` 不动**，新增实例化的扩展点接口 `ShapeProvider`（新），再用适配器 `StaticShapeProvider`（新）把任何一个 `ShapeType` 包装成 `ShapeProvider`。六个内置图形类一行不改，由内置插件注册：
+
+```ts
+// plugins/builtin-shapes/src/BuiltinShapesPlugin.ts（S6）
+export default class BuiltinShapesPlugin implements Plugin {
+  constructor(_options: PluginOptions) {}
+  activate(context: PluginContext): void {
+    for (const type of [Rect, Circle, Ellipse, Line, Text, Group]) {
+      context.registerShape(new StaticShapeProvider(type));
+    }
+  }
+}
+```
+
+`ShapeFactory` 改名为 `ShapeRegistry`（新；S6 用 `git mv` 保留历史），构造函数清空，只保留“按名查找、按元素选提供者”；登记入口变成包内可见的 `ExtensionRegistry.commit`（3.3）。`unknown shape type: <name> (is the plugin loaded?)` 的文案原样保留（`ShapeFactory.lookup`，第 39–45 行）。
+
+#### 2.1.2 接口
+
+```ts
+// packages/kernel/src/model/ShapeProvider.ts（新，S6）
+export interface ShapeProvider {
+  /** create 的类型名，也是 contributes.shapes 中的注册名。大小写敏感，非空，不含空白。 */
+  readonly typeName: string;
+
+  /** create 在 id 之后的位置参数（不含 in 子句）；usage 文本由它生成（沿用 ParamSpec）。 */
+  readonly params: readonly ParamSpec[];
+
+  /**
+   * 新子树将占用的全部 id，供 create 一次性查重。
+   * 前置：id 已通过 IdSyntax。后置：返回非空、无重复的数组，第一个元素等于 id。
+   * 违约：调用时（create 的 prepare 中）抛 Error → 3.9 转为 `shape provider failed: <type> (<reason>)`。
+   */
+  claimedIds(id: string): readonly string[];
+
+  /**
+   * 构造一棵游离（无父节点）的子树。values 以 ParamSpec.attributeName() 为键，均为原始字符串。
+   * 子部件必须经 kit 按类型名构造，不得 import 其他插件的类（L3）。
+   * 前置：claimedIds(id) 中的每个 id 都不在文档中。
+   * 后置：返回的子树中出现的 id 集合恰好等于 claimedIds(id)；子树不挂在任何容器上。
+   * 失败：取值非法时抛 EditorError（与 Phase 1 相同：invalid number / invalid value for …），且不留下任何东西。
+   * 违约：后置条件不成立（id 集合不符、已有父节点）→ 调用时由 create 检出，转为 `shape provider failed: <type> (<reason>)`。
+   */
+  create(id: string, values: ReadonlyMap<string, string>, kit: ShapeKit): Shape;
+
+  /**
+   * 创建回显中紧跟 `created` 的附加说明；内置图形返回 ""，box 返回 ` (g#n1 + rect#n1-rect + text#n1-label)`。
+   * 前置：shape 是本提供者刚刚 create 出来的。后置：返回单行字符串（可为空），不改文档。
+   */
+  creationDetail(shape: Shape): string;
+
+  /**
+   * 读回匹配：这个元素由我来读的“具体程度”。0 = 不认识。约定：只匹配标签名给 1，
+   * 标签名 + 一个区分属性（如 data-kind）给 2，更具体的给更大的整数。
+   * 前置：无。后置：返回有限的非负整数；不改任何状态（纯函数）。
+   * 违约（负数、小数、NaN、抛错）：调用时由读回检出 → `cannot parse file: <path> (shape provider <type> failed: <reason>)`，读入失败、原文档不变。
+   */
+  matchScore(element: ElementView): number;
+
+  /**
+   * 由元素构造图形。子元素必须交给 reader 处理（reader.readChildren / readStandard），不得自己解析。
+   * 前置：matchScore(element) 是本次选出的最高分。
+   * 后置：返回一棵游离子树；它的 id 都经 reader 分配（因此满足 F13/F14 与全局唯一）。
+   * 失败：用 `throw reader.reject(detail)` 拒绝整个读入；或 `return reader.readWithNext(element)` 降级（2.1.3、3.8）。
+   * 返回 null 表示“这个元素跳过”（只会来自 readWithNext 找不到次优提供者）。
+   */
+  read(element: ElementView, reader: ShapeReader): Shape | null;
+}
+```
+
+```ts
+// packages/kernel/src/model/StaticShapeProvider.ts（新，S6）：Adapter（Target = ShapeProvider，Adaptee = ShapeType）
+export class StaticShapeProvider implements ShapeProvider {
+  constructor(type: ShapeType)
+  // typeName / params：转发 type
+  // claimedIds(id) = [id]；create(id, values) = type.create(id, values)；creationDetail = ""
+  // matchScore(e) = e.name() === this.type.typeName ? 1 : 0   ← 与变量比较，不是字面量（P3 不受影响）
+  // read(e, reader) = reader.readStandard(this.type, e)        ← Phase 1 的 importElement + build 原样搬进 reader（总是返回 Shape）
+}
+```
+
+`ShapeKit`（新）、`ShapeCatalog`（新）：
+
+```ts
+export interface ShapeKit {
+  /** 按类型名构造一个游离图形：等价于 lookup(typeName).create(id, values, this)。未注册时抛 `unknown shape type: <name> (is the plugin loaded?)`。 */
+  build(typeName: string, id: string, values: ReadonlyMap<string, string>): Shape;
+}
+export interface ShapeCatalog extends ShapeKit {
+  /** 已提交的类型；未注册时抛 EditorError `unknown shape type: <name> (is the plugin loaded?)`。 */
+  lookup(typeName: string): ShapeProvider;
+  has(typeName: string): boolean;
+  /** 注册顺序。 */
+  typeNames(): readonly string[];
+  /** 全部提供者，注册顺序；读回分派（SvgImporter）用它计算 matchScore。 */
+  providers(): readonly ShapeProvider[];
+}
+```
+
+#### 2.1.3 读回分派
+
+现在的分派在 `io/SvgImporter.ts:147`：`this.factory.typeNames().includes(tag)`，按标签名。`box` 的标签也是 `g`，所以改为“问每个提供者的 `matchScore`”：
+
+| 情况 | 规则 |
+|---|---|
+| 所有提供者都给 0 | `warning: skipped unsupported element <tag>`，连同子树跳过（F6，不变） |
+| 唯一最高分 | 由它 `read` |
+| **最高分并列** | 读入失败：`cannot parse file: <path> (ambiguous shape providers for <tag>: <a>, <b>)`，名字按注册顺序。理由：两个插件同样自信地认领同一个元素，说明插件之间有冲突；静默选一个就是规格 §3.4 说的“未定义的覆盖”的读回版本。内置六种图形的标签互不相同，`g`（1 分）与 `box`（`data-kind="box"` 时 2 分）分数不同，所以正常装配不会触发（决策 X22） |
+| 提供者在 `read` 中调用 `reader.readWithNext(element)` | 在**本元素尚未尝试过的**提供者中按同样规则再选一次；没有可选的（全为 0）时按“不支持的元素”跳过 |
+
+**没装 box 时**，`<g data-kind="box">` 只有 `g` 的提供者给分（1 分），自然被读成普通 `g`；`data-kind="box"` 不是 `g` 的参数也不是样式属性，按现有 `build()`（`SvgImporter.ts:175-207`）落进透传属性，保存时原样写回（F7）。**内核里不出现 `data-kind` 或 `box` 字样**（L6 只能保证注册名不出现；`data-kind` 由 S6 的人工检查与 `rg -n "data-kind" packages/kernel` 的空输出佐证）。
+
+**装了 box 时**，`data-kind` 由 box 的 `read` 通过 `reader.applyAttributes(shape, element, ["data-kind"])` 声明为“已消费”，不进透传属性；`BoxShape.svgAttributes()` 自己输出一次 `data-kind="box"`。所以序列化不会写两次（8.3 有对应测试）。
+
+#### 2.1.4 `ShapeReader`：读回时内核提供的服务
+
+```ts
+// packages/kernel/src/model/ShapeReader.ts（新，S6；由 io 中 SvgImporter 的内部会话对象实现）
+export interface ShapeReader {
+  /** Phase 1 的完整通用路径：分配 id → 拆分参数 / 样式 / 透传属性 → 构造 → 容器读子元素、叶子展平或丢弃并警告。 */
+  readStandard(type: ShapeType, element: ElementView): Shape;
+  /** 按 F13/F14 为这个元素分配 id（必要时产生 `assigned id …` / `duplicate id … reassigned …` 警告）。 */
+  allocateId(element: ElementView): string;
+  /** 把 element 的属性写到 shape 上：样式属性经 setAttribute（非法值 → cannot parse file … invalid value …），其余进透传属性；跳过 id 与 consumed 中的名字。 */
+  applyAttributes(shape: Shape, element: ElementView, consumed: readonly string[]): void;
+  /** 逐个子元素做读回分派；返回构造好的游离子树，顺序同文档；不支持的子元素已跳过并警告。 */
+  readChildren(element: ElementView): Shape[];
+  /**
+   * 声明“这个 id 在被导入的元素中至多出现一次”。被导入的元素 = 由某个提供者读取的元素（含降级后由次优提供者读取的），
+   * 不含被跳过的不支持元素及其子树，也不含被叶子丢弃或展平的子元素——与 F14 的口径相同（F14 只在被导入的元素之间判断）。
+   * 只看文件中显式写出的 id。检查推迟到整个读入的最后一步：此时每个元素是否被导入已经确定，不需要预测。
+   * 违反 → 整个读入失败：`cannot parse file: <path> (duplicate id <id>)`，有多个时报声明顺序中的第一个。
+   */
+  requireUnique(id: string): void;
+  /** 追加一条警告（不带 `warning: ` 前缀）。 */
+  warn(message: string): void;
+  /** 降级：把这个元素交给尚未尝试过的次优提供者；没有时返回 null（调用方原样返回 null 即“跳过”）。 */
+  readWithNext(element: ElementView): Shape | null;
+  /** 构造“拒绝整个读入”的错误：`cannot parse file: <path> (<detail>)`；调用方 throw 它。 */
+  reject(detail: string): EditorError;
+}
+```
+
+`ElementView`（新）：`name()`、`attribute(name)`、`attributes()`、`children(): readonly ElementView[]`、`text()`。现有的 `io/XmlElement.ts` 已有这五个只读方法，`implements ElementView` 即可；依赖方向是 `io → model`，符合依赖规则 D2。
+
+**为什么 box 不自己解析子元素**：id 分配（F13/F14 要全文件统一预留）、警告的顺序与文案、透传属性与命名空间声明（`SvgImporter.withNamespaceDeclarations`）、非法值的报错格式都在 `SvgImporter` 里；box 自己写一遍就会和内置图形不一致。`readChildren` 让 box 的子部件走与普通元素完全相同的路径。
+
+#### 2.1.5 创建时子部件从哪里来
+
+box 要 rect 和 text。直接 `import { Rect } from …builtin-shapes…` 违反 L3（插件之间不互相依赖）和规格 §4“插件测试不依赖其他插件”。所以：
+
+- `create(id, values, kit)` 中用 `kit.build("rect", …)`、`kit.build("text", …)` 按**类型名**构造。box 只依赖内核的 `Shape` 抽象；测试时用测试替身 `ShapeKit` 提供假的 rect/text（8.3）。
+- 运行时依赖必须显式检查：`BoxPlugin.activate` 先查 `context.shapeTypes().has("rect") && has("text")`，缺任一个就抛错，安装器报 `error: plugin failed to activate: @svgframe/plugin-shape-box (requires shape types: rect, text)`，box 的全部暂存注册回滚（3.3）。理由：在激活时失败，比在用户第一次 `create box` 时报一条莫名其妙的 `unknown shape type: rect` 好；而且 `shapeTypes()` 只读已提交的注册（3.2），内置插件总是先装（4.3），所以检查结果是确定的。
+- 同样的道理用于 `group`：`GroupCommand`（内置命令插件）用 `context.shapes().lookup(GroupCommand.CONTAINER_TYPE)` 造 `g`，`BuiltinCommandsPlugin.activate` 检查 `g` 已注册（3.5）。
+
+#### 2.1.6 派生 id 查重与创建回显
+
+`CreateCommand.prepare`（现在 `commands/CreateCommand.ts:67-76`）改为：
+
+```text
+provider = context.shapes().lookup(typeName)               // unknown shape type
+values   = matchParams(provider.params)                      // usage: create <type> …（K6 的顺序不变）
+for cid of provider.claimedIds(id): checkNewId(document, cid) // invalid id / id already exists: n1-rect
+container = containerId === null ? document : findContainer(document, containerId)
+shape    = provider.create(id, values, context.shapes())    // 数值格式与取值约束
+assert ids(shape 子树) == claimedIds(id)                     // 违约 → shape provider failed
+```
+
+- 一次性查重：三个 id 中任何一个已存在，`prepare` 就抛错，`apply` 还没有执行，所以**不留下容器也不留下子部件**（规格 §4 边界第 1 条）。
+- 回显：`` `${shape.label()} created${provider.creationDetail(shape)}${where}` ``，`where` 仍是 Phase 1 的 ` in ${container.containerLabel()}`（E1）。内置图形的 `creationDetail` 为空，所以输出与 `final` 完全相同；box 是 `box#n1 created (g#n1 + rect#n1-rect + text#n1-label)`，带 `in` 时是 `box#n3 created (g#n3 + rect#n3-rect + text#n3-label) in box#n1`（决策 X4）。
+- undo 回显：`${shape.label()} removed`，box 为 `box#n1 removed`（E1 的自然推广）。
+
+### 2.2 `Command`：一条命令
+
+#### 2.2.1 注册形式
+
+规格的 `Command` 扩展点在本设计中由**两件东西**组成，都已存在：
+
+| 部件 | 现有名字 | 角色 |
+|---|---|---|
+| 静态侧 / 工厂 | `CommandType`（`commands/CommandType.ts`）：`commandName`、`usage`、`summary`、`category`、`requiresDocument`、`parse(args)` | **注册的对象**：注册名 = `commandName` |
+| 命令对象 | 抽象类 `Command` 及其子类 `EditCommand`、`QueryCommand`、`DocumentCommand`、`HistoryCommand` | `parse` 产出的、带着参数的一次调用 |
+
+**注册的是任何满足 `CommandType` 的对象**（决策 X19 的一部分）：
+
+- 内置命令和 `stats` 注册**类本身**（类对象满足 `CommandType`，现状如此，`CommandRegistry.register(type)` 第 58 行）；
+- `dir` 注册一个**实例**：`new DirCommandType(lister, cwd)`。原因是 `dir` 要注入目录访问接口，而静态侧只能靠静态字段保存它，那就是模块级状态（L8 禁止）。
+
+两种形式都是规格 §1“以类或类的实例的方式实现扩展点”。
+
+`CommandRegistry` 的构造函数清空（K2 消除），`lookup` 的 `unknown command: <name>` 原样保留（第 66–72 行）——这正是规格 §2.3 “未加载时执行相应命令，输出 `error: unknown command: <name>`”。
+
+#### 2.2.2 契约
+
+```ts
+export interface CommandType {            // 现有接口，内容不变，补写契约
+  /** 注册名。前置：非空、小写、不含空白（R4）。违约：注册时抛错 → plugin failed to activate。 */
+  readonly commandName: string;
+  /** help 与 usage 错误共用（R7）。非空单行。 */
+  readonly usage: string;
+  /** help 的一句说明。非空单行。 */
+  readonly summary: string;
+  /** 必须是 CommandCategory 的四个常量之一（引用相等）。违约：注册时抛错。 */
+  readonly category: CommandCategory;
+  /** Invoker 在 parse 之前检查（R10、R11）。 */
+  readonly requiresDocument: boolean;
+  /** 纯函数：只检查语法并构造命令对象，不碰会话。失败抛 EditorError（usage / invalid number）。 */
+  parse(args: ArgList): Command;
+}
+```
+
+`Command.execute(context)` 的契约沿用 Phase 1：失败抛 `EditorError` 且不改变任何状态；抛出非 `EditorError` 是程序错误，`Editor.executeLine`（第 39–51 行）不捕获，`Repl` 写 stderr 并以 1 退出。插件命令与内置命令没有区别。
+
+#### 2.2.3 `help` 的类别与顺序
+
+`help` 的分组与排序不变（`HelpCommand.execute`，第 33–47 行）：按 `CommandCategory.order()` 分组，组内按注册顺序（`Array.prototype.sort` 稳定）。注册顺序 = 安装顺序 = 内置插件在前，可选插件按组合根 / 配置数组的顺序在后（4.3）。所以 `stats`、`dir`（类别 `DISPLAY`）追加在 `Display:` 组的 `help` 之后（决策 X13）。`CommandCategory` 的构造函数保持私有：插件只能选四个已有类别之一，不能新增类别（规格没有这个需求；新增类别要改 `help` 的标题顺序）。
+
+`stats`、`dir` 的 `usage` 都比 `create` 的短，所以 `help` 的对齐列（最长 usage + 2）不变；已有行逐字节不变，只多出两行。
+
+#### 2.2.4 同步还是异步
+
+**命令接口保持同步**（决策 X19）：`Editor.executeLine(line): string[]` 不变，`dir` 的适配器用 `fs.readdirSync`。
+
+| 方案 | 代价 |
+|---|---|
+| 同步（采纳） | 无内核改动；读一个目录的耗时可以忽略；`Repl` 现在逐行同步调用 `executeLine`（`cli/Repl.ts:54-68`），顺序天然正确 |
+| 命令接口支持 `Promise` | `Command.execute`、`Editor.executeLine`、`History`、`Repl`、全部 889 个测试的调用方式都要改；`Repl` 还要自己排队，保证下一行在上一行完成之后才执行 |
+
+这个选择必须现在定：以后再改就是内核改动。如果将来真的需要异步命令，要另起一个内核版本，不在本阶段范围内。
+
+#### 2.2.5 插件命令能看到什么
+
+现在的 `CommandContext`（`commands/CommandContext.ts`）把具体类 `CommandRegistry`（`registry()`，第 37 行）和 `ShapeFactory`（`shapeFactory()`，第 40 行）暴露给命令，任何命令都能往注册表里塞东西。改为（S6/S7）：
+
+```ts
+export interface CommandContext {
+  document(): SvgDocument;                 // 不变
+  hasDocument(): boolean;                  // 不变
+  replaceDocument(document: SvgDocument, path: string | null): void;   // 不变；成功后触发 documentReplaced（3.4）
+  filePath(): string | null;               // 不变
+  markSaved(path: string): void;           // 新：取代 setFilePath；更新默认路径并触发 documentSaved（3.4）
+  fileSystem(): FileSystem;                // 不变（端口）
+  history(): UndoStack;                    // 收窄：只有 undo() / redo()（新接口 UndoStack）
+  commands(): CommandCatalog;              // 取代 registry()：只读，commandTypes() / lookup()
+  shapes(): ShapeCatalog;                  // 取代 shapeFactory()：只读 + 按名构造（2.1.2）
+  attributeEdits(): AttributePlanner;      // 新：set 的处理器管线，只暴露 plan()（2.4.3）
+  treeDecorators(): readonly TreeDecorator[];  // 新：tree 的标签（2.3）
+}
+```
+
+| 插件命令**能**看到 | 插件命令**不能**看到 |
+|---|---|
+| 当前文档（可编辑，编辑类命令需要）、默认路径、文件系统端口 | 任何注册表的 `register`、`PluginInstaller`、`ExtensionRegistry` |
+| `undo` / `redo`（只给 `UndoStack`） | `History.record`、`History.markIoBarrier`：命令对历史的影响只能通过 `Command.recordIn(history)` 的多态声明（Invoker 调用），不能自己动手 |
+| 已注册命令和图形的只读目录 | 事件的派发（只有内核的 `EditorSession` 能发，3.4） |
+| 处理器管线、树标签列表 | 装配处的任何东西：`NodeFileSystem`、加载器、组合根（L2） |
+
+#### 2.2.6 `stats`、`dir` 与历史的关系由什么声明
+
+| 性质 | 机制（现有） | `stats` | `dir` |
+|---|---|---|---|
+| 不进 undo 栈 | 继承 `QueryCommand`：`recordIn` 为空（`commands/QueryCommand.ts:9`） | ✓ | ✓ |
+| 不触发 io 锁 | 同上：只有 `DocumentCommand.recordIn` 调 `History.markIoBarrier()`（`DocumentCommand.ts:13-15`） | ✓ | ✓ |
+| 不解除 io 锁 | 同上：只有 `EditCommand.recordIn` 调 `History.record`，它会解锁（`History.ts:16-20`） | ✓ | ✓ |
+| 不需要文档 | 静态字段 `requiresDocument = false`（同 `HelpCommand`、`InitCommand`、`ReadCommand`） | `true`：没有文档时报 `no document. use 'init' or 'read' first`（决策 X11） | `false` |
+| 类别 | `QueryCommand.category = CommandCategory.DISPLAY` | DISPLAY | DISPLAY |
+| 不改 dirty 状态 | 不调用 `replaceDocument` / `markSaved`，不改文档 → 不触发任何事件（3.4） | ✓ | ✓ |
+
+### 2.3 `TreeDecorator`：结构树每行行尾的标签
+
+#### 2.3.1 接口
+
+```ts
+// packages/kernel/src/view/TreeDecorator.ts（新，S7）
+export interface TreeDecorator {
+  /** contributes.decorators 中的注册名。非空，不含空白。 */
+  readonly name: string;
+  /**
+   * 这一行要追加的标签；null 或 "" 表示不加。
+   * 前置：无。后置：返回单行文本，不以空白开头或结尾、不含换行；不改任何状态。
+   * 违约（返回值不合规、抛错）：调用时（tree 渲染中）检出 → `error: tree decorator failed: <name> (<reason>)`，本次 tree 不输出任何行；文档与历史不受影响（tree 是只读命令）。
+   */
+  tagFor(row: TreeRowView): string | null;
+}
+
+// packages/kernel/src/view/TreeRowView.ts（新，S7）
+export interface TreeRowView {
+  /** 是否文档根行 `svg (800x600)`。 */
+  isDocumentRoot(): boolean;
+  /** 图形行对应的图形（只读视图）；根行为 null。 */
+  shape(): ShapeView | null;
+  /** 整个文档（只读视图）。 */
+  document(): DocumentView;
+}
+```
+
+#### 2.3.2 三种行
+
+| 行 | 来源（现有） | `TreeRowView` |
+|---|---|---|
+| 文档根行 `svg (800x600)` | `TreeRenderer.renderDocument`（`view/TreeRenderer.ts:22-27`） | `isDocumentRoot() = true`，`shape() = null` |
+| `tree <id>` 的第一行（无连接线，如 `g#n1 (box)`） | `TreeRenderer.renderSubtree`（第 30–34 行） | 普通图形行：`shape()` 为该图形 |
+| 普通图形行 | `TreeRenderer.collectChildren`（第 37–45 行） | 同上 |
+
+**`tree <id>` 没有根行**（V4），所以 `modified-star` 在 `tree n1` 里只能给图形行加 `*`。
+
+#### 2.3.3 拼接位置与分隔符
+
+渲染顺序：先按 V1 计算列宽并对齐（`TreeRenderer.align`，第 47–50 行，**不变**），然后对每一行依次询问全部标签，把非空标签以**一个空格**为分隔追加在行尾：
+
+```text
+行 = 对齐后的行 + 每个非空标签各自前缀一个空格
+```
+
+- 标签**不参与**列宽计算（列宽在追加之前已经算完）；
+- 没有摘要的行（`g`）本来不补空格，追加时直接接 ` (box)`；
+- **没有任何标签（或全部返回空）时，什么都不追加**：输出与 `final` 逐字节相同，不会多出尾随空格。
+
+用规格的两个示例核对：
+
+| 示例 | 行 | 按 V1 计算（最宽 + 2） | 追加标签后 |
+|---|---|---|---|
+| 规格 §5 | 最宽的“前缀 + 标签”是 `    │   └── text#n1-label`（25），列号 27 | `rect#n1-rect` 后 3 个空格、`text#n1-label` 后 2 个、`line#arrow1` 后 8 个 | 根行 `svg (800x600) *`；`    ├── g#n1 (box)`；`…fill=#f5a623 *`。与规格 §5 逐字一致 |
+| P1 规格 §6.1B | 同一棵树（无 `*`） | 同上：3/2/8 | 与规格原文（2/1/7）差一个空格，按 V1 输出 3/2/8（约定补充 N4，偏差 T3） |
+| P1 规格 §4.4 `tree n1` | 第一行 `g#n1` 无连接线 | 列号 = `└── text#n1-label`（17 个码元）+ 2 = 19 | 第一行变为 `g#n1 (box)`，摘要列仍是 19，不受标签影响。注：README V1 正文写“`tree n1` 从第 18 列开始”，`tests/unit/view/TreeRenderer.test.ts:135` 的注释也写“(16) + 2 = 18”，但同一测试第 140–141 行的期望字符串实际从第 19 列开始；以代码与期望字符串为准（这是 README 与测试注释的笔误，记在 PR 里，不在本步修改） |
+
+#### 2.3.4 多个标签的拼接顺序
+
+**注册顺序**（决策 X17 的一部分，ADR-3）：同一插件内按 `registerTreeDecorator` 的调用顺序；插件之间按安装顺序（组合根列表 / 配置数组的顺序）。box 在 S12 接入、`modified-star` 在 S13 接入，组合根与配置都按这个顺序追加，所以同一行是 `g#n1 (box) *`。两种装配的顺序相同，才能保证双装配输出逐字节一致（4.7）。
+
+#### 2.3.5 行视图暴露什么
+
+| `modified-star` 需要 | `(box)` 需要 | 由谁提供 |
+|---|---|---|
+| 是不是根行 | — | `TreeRowView.isDocumentRoot()` |
+| 图形的 id、标签名、全部属性、文本、父 id | 图形的种类名 | `ShapeView`（新，3.6）：`getId()`、`tagName()`、`kindName()`、`svgAttributes()`、`textContent()`、`parentId()` |
+| 整份文档的序列化（根行比对） | — | `TreeRowView.document()` 返回 `DocumentView`，交给 `SvgSerializer.serialize(document: DocumentView)`（S7 把参数类型从 `SvgDocument` 放宽为只读视图） |
+
+**标签不能借此修改文档**：`TreeRowView`、`ShapeView`、`DocumentView` 只有返回值类型为原始值或只读视图的方法，没有任何变更方法，也拿不到 `Shape` / `SvgDocument` 本身（`ShapeView.childViews()` 返回 `ShapeView[]` 而不是 `Shape[]`）。TypeScript 的强制转换可以绕过类型，这属于故意违约，不在契约保护范围内；S7 加一条 architecture test：插件中不得出现 `as Shape`、`as SvgDocument`、`as ContainerShape`（P10）。
+
+### 2.4 `AttributeHandler`：某个属性在某种图形上的语义
+
+#### 2.4.1 为什么要重设计
+
+规格 §3.3 的初始接口 `handles(shapeId, attr)` / `apply(shapeId, attr, value)` 只传 id，处理器拿不到文档；也没有优先级、回显和撤销文案。规格要求在 ADR 中回答四个问题，本设计的回答汇总在 ADR-1，接口如下。
+
+#### 2.4.2 接口
+
+```ts
+// packages/kernel/src/model/AttributeHandler.ts（新，S7）
+export interface AttributeHandler {
+  /** contributes.attributes 中的稳定注册名，如 "box-attributes"。非空，不含空白。 */
+  readonly name: string;
+  /** 冲突裁决用的整数；越大越优先。约定 0 为普通处理器。违约（非整数）：注册时抛错。 */
+  readonly priority: number;
+  /**
+   * 是否负责“这个图形的这个属性”。
+   * 前置：无。后置：不改任何状态（纯查询）；只能读 target。
+   * 违约（抛错）：调用时 → `error: attribute handler failed: <name> (<reason>)`，什么都没改。
+   */
+  handles(target: ShapeView, attribute: string): boolean;
+  /**
+   * 执行修改。只能通过 target 改属性，不能改结构（接口里根本没有结构操作）。
+   * 前置：handles(target.view(), attribute) 为 true，且本处理器在裁决中胜出。
+   * 后置：返回 AttributeChange；修改都落在 target 子树内。
+   * 失败：值非法时抛 EditorError（例如 `invalid value for fill: ""`）→ 内核回滚，原样报出这条错误。
+   * 违约（抛出非 EditorError）：内核回滚，报 `error: attribute handler failed: <name> (<reason>)`。
+   * 两种情况都不会回退到白名单（规格 §3.2）。
+   */
+  apply(target: AttributeTarget, attribute: string, value: string): AttributeChange;
+}
+
+// AttributeTarget（新，S7）：受限的“目标子树”
+export interface AttributeTarget {
+  /** 目标图形的只读视图（判断类型、读 id、读子部件）。 */
+  view(): ShapeView;
+  /** 目标子树中 id 为 id 的图形（含目标自身）；不在子树中时抛 Error（违约）。 */
+  part(id: string): AttributeTarget;
+  /** 经 Shape.setAttribute 修改一个白名单属性；非法时抛 EditorError，且该属性不变（模型保证）。 */
+  setAttribute(name: string, value: string): void;
+}
+
+// AttributeChange（新，S7）：处理器提供文案
+export interface AttributeChange {
+  /** 执行后的回显，如 `box#n2 label updated: "处理数据 v2"`。 */
+  appliedMessage(): string;
+  /** 撤销后的回显，如 `box#n2 label restored: "处理数据"`。 */
+  undoneMessage(): string;
+}
+```
+
+**处理器怎样获取目标、判断类型、修改子部件**：内核先按 id 找到目标（`no such shape` 仍由 `SetCommand` 报），把目标的只读视图交给 `handles`，把受限的 `EditableSubtree`（新，`AttributeTarget` 的唯一实现）交给 `apply`。判断类型用 `view().kindName()` 与处理器所在插件自己的常量比较（box：`BoxShape.KIND`）；修改子部件用 `target.part("n2-rect").setAttribute("fill", …)`。处理器和图形属于同一个插件包，所以知道子部件的派生 id。
+
+#### 2.4.3 `set` 的流程
+
+`SetCommand`（内置命令插件）只做一件新事：先问管线。管线对命令只以两个接口出现，二者都经 `api.ts` 以 `type` 导出（3.10）：
+
+```ts
+// packages/kernel/src/model/AttributePlanner.ts（新，S7）——CommandContext.attributeEdits() 的返回类型
+export interface AttributePlanner {
+  /** 裁决并试做；没有处理器命中时返回 null（交回白名单路径）。失败抛 EditorError，文档不变。 */
+  plan(target: Shape, attribute: string, value: string): PlannedAttributeEdit | null;
+}
+// packages/kernel/src/model/PlannedAttributeEdit.ts（新，S7）——SetCommand 保存的字段类型
+export interface PlannedAttributeEdit {
+  redo(): void;              // 恢复“之后”快照
+  undo(): void;              // 恢复“之前”快照
+  appliedMessage(): string;  // plan 时取得的回显
+  undoneMessage(): string;   // plan 时取得的撤销回显
+}
+```
+
+实现类 `AttributeDispatcher`（新，内核，`implements AttributePlanner`）与 `AttributeEdit`（新，内核，`implements PlannedAttributeEdit`）不导出，内置命令插件只依赖这两个接口（L2）：
+
+
+```text
+SetCommand.prepare(document):
+  target = findShape(document, id)                              // no such shape（R10 顺序不变）
+  edit   = context.attributeEdits().plan(target, attribute, value)   // 可能抛 EditorError
+  if edit === null: Phase 1 的白名单路径（现有代码不变：试赋值 → 快照 → 还原，K4）
+  else: 记住 edit                                              // 字段类型 PlannedAttributeEdit
+SetCommand.apply():   edit === null ? target.restore(after) : edit.redo()
+SetCommand.undo():    edit === null ? target.restore(before) + Phase 1 回显 : edit.undo()
+回显：                edit === null ? Phase 1（E8） : edit.appliedMessage() / edit.undoneMessage()
+
+AttributeDispatcher.plan(target, attribute, value):
+  1. candidates = 已注册处理器中 handles(target, attribute) 为 true 的（按注册顺序询问；抛错 → attribute handler failed）
+  2. candidates 为空 → 返回 null（交回白名单路径）
+  3. 取 priority 最大者；最大值上并列 → EditorError `ambiguous attribute handlers for <attribute> on <id>: <a>, <b>`（名字按注册顺序），什么都不改
+  4. before = target.snapshot()；ids = 子树 id 序列
+  5. try { change = winner.apply(new EditableSubtree(target), attribute, value) }
+     catch (e) { target.restore(before); e 是 EditorError ? 原样抛出 : 抛 EditorError `attribute handler failed: <name> (<reason>)` }
+  6. 断言子树 id 序列未变（接口保证结构不变，这里是防御性检查；不成立 → 程序错误）
+  7. applied = change.appliedMessage(); undone = change.undoneMessage()；after = target.snapshot()
+  8. target.restore(before)                         // prepare 结束时文档不变（EditCommand 的两阶段约定）
+  9. 返回 AttributeEdit(target, before, after, applied, undone)
+```
+
+`AttributeEdit`（`PlannedAttributeEdit` 的实现）：`redo()` = `target.restore(after)`，`undo()` = `target.restore(before)`；两条文案在 `plan` 时就算好并保存，撤销与重做时不再调用插件代码，redo 的回显与首次执行相同（U6）。
+
+#### 2.4.4 四个契约问题（规格 §3.3，ADR-1 的要点）
+
+| 问题 | 回答 | 保证机制 |
+|---|---|---|
+| 怎样获取目标并判断类型 | 内核定位目标，交给处理器只读视图（判断）与受限子树（修改）；类型用 `kindName()` 与插件自己的常量比较 | `ShapeView`、`AttributeTarget` 的接口形状 |
+| 多个处理器同时命中 | **按 `priority` 取最大；最大值上并列就拒绝**，报 `ambiguous attribute handlers …`，不执行任何修改。不组合执行 | 第 3 步；规格 §3.4“不发生未定义的覆盖” |
+| 一次 `set` 是一个 undo 单元 | `SetCommand` 是一个 `EditCommand`，`History` 只存整个命令对象（`History.ts:6-8` 已有的性质）；`AttributeEdit` 用**目标子树**的前后两个快照实现 undo/redo，修改多少个子部件都一样 | `ShapeMemento` 递归覆盖子树的样式、几何与文本（`model/ShapeMemento.ts:4-9`，`Group.snapshot` 第 64–70 行） |
+| 部分修改后抛错时怎样恢复、历史不变 | 第 5 步立即 `restore(before)`；异常沿 `prepare` 抛出，`Editor` 只在 `execute` 正常返回后才调 `recordIn`（`Editor.ts:58-60`），所以 undo/redo 栈和 io 锁都不变 | 快照事务 + Invoker 的现有顺序 |
+
+**“处理器不能改结构”靠接口形状保证**：`Group.restore` 在子节点数目不一致时直接抛错（`model/Group.ts:76-78`），如果处理器能增删子节点，回滚本身就会炸。`AttributeTarget` 没有任何结构操作（没有 `insertAt` / `remove`，也拿不到 `ContainerShape`），`part()` 返回的仍是 `AttributeTarget`；快照能覆盖的东西（样式、几何、文本）恰好就是 `setAttribute` 能改的东西，透传属性不可编辑（`ExtraAttributes` 的现有约定，F7）。
+
+#### 2.4.5 与白名单的衔接
+
+| 情况 | 行为 |
+|---|---|
+| 没有处理器命中 | `plan` 返回 `null`，`SetCommand` 走 Phase 1 的白名单路径，代码不变：允许的属性照常修改，未定义的属性报 `unknown attribute: <attr>`（`Shape.setAttribute`，第 62–67 行）。例：`set r1 fill red`、`set r1 label x`（→ `unknown attribute: label`）、没装 box 时 `set n1 label x`（→ `unknown attribute: label`） |
+| 处理器命中并成功 | 走处理器；不再调用白名单 |
+| 处理器命中但失败 | 回滚后报错；**不回退到白名单**（规格 §3.2“以免掩盖错误或重复修改”） |
+| 装了 box、对 box 设置处理器不管的属性（如 `stroke`） | 没有处理器命中 → 白名单路径，设置在 `<g>` 自身上：`box#n1 updated: stroke=red`（决策 X8） |
+
+K4（`SetCommand` 用“试赋值”校验）在新流程中保留并推广：处理器路径同样是“试做 → 快照 → 还原”，因为处理器没有“只校验不修改”的方法，也不应该要求它有。
+
+#### 2.4.6 回显
+
+| 命令 | 回显 | 来源 |
+|---|---|---|
+| `set n2 fill #f5a623` | `box#n2 fill propagated to n2-rect` | P1 规格 §6.1B；`BoxFillChange.appliedMessage()` |
+| 其 undo | `box#n2 fill restored on n2-rect` | 规格未给，本文决定（决策 X10，约定补充 N10） |
+| `set n2 label "处理数据 v2"` | `box#n2 label updated: "处理数据 v2"` | P1 规格 §6.1B；`BoxLabelChange.appliedMessage()` |
+| 其 undo | `box#n2 label restored: "处理数据"` | P1 规格 §6.1B；`BoxLabelChange.undoneMessage()`（旧值在 `apply` 时取得） |
+| 其 redo | 与首次执行相同 | U6 |
+
+---
+
+## 3 支撑设施的接口
+
+### 3.1 插件接口与 `activate` 契约
+
+```ts
+// packages/kernel/src/extension/Plugin.ts（新，S6）
+export interface Plugin {
+  /**
+   * 通过 context 登记本插件的全部贡献。
+   * 前置：context 是一个尚未封存的暂存上下文（3.3）。
+   * 后置：同步返回；全部注册都已交给 context。
+   * 约束：只能通过 context 产生效果——不得写模块级变量、不得启动定时器或监听进程事件、
+   *       不得保留 context 供以后使用（返回后 context 即封存，再调用会抛错）。
+   * 失败：抛出任何异常 → `plugin failed to activate: <name> (<reason>)`，全部暂存注册丢弃。
+   * 返回 thenable（异步 activate）同样算失败：reason 为 `activate must be synchronous`。
+   */
+  activate(context: PluginContext): void;
+}
+
+// packages/kernel/src/extension/PluginClass.ts（新，S6）：插件入口的默认导出必须满足它
+export interface PluginClass {
+  new (options: PluginOptions): Plugin;
+}
+```
+
+| 约定 | 内容 | 理由 |
+|---|---|---|
+| 默认导出是**类** | 入口文件 `export default class XxxPlugin implements Plugin`（P5b），由安装器 `new` | 每个 `Editor` 拿到自己的插件实例：同一进程里先后造两个 `Editor`（测试、双装配运行）时，`modified-star` 的状态不会串（规格 §5 “不得用模块级变量”的同一要求）。导出实例就是模块级单例（决策 X15） |
+| options 经**构造参数**传入 | `new XxxPlugin(options)`；`PluginOptions`（新）是不可变值对象，提供 `get(name): unknown`、`string(name, fallback)`、`number(name, fallback)`、`boolean(name, fallback)` 与 `isEmpty()`；没写 `options` 时是 `PluginOptions.EMPTY` | options 变成插件实例的私有字段（字段封装）；`activate` 的签名对所有插件一样 |
+| 构造函数也在安装器的保护之下 | 方式 A 不在组合根里 `new`，而是把**类**交给安装器（4.2），所以构造函数抛错与 `activate` 抛错同样回滚、同样报 `plugin failed to activate` | 两种装配走同一条路径（规格 §6 加载契约第 1 条） |
+| 不得有模块级副作用 | 由 L8（architecture test）启发式检查：插件与内核源文件的顶层只有 import / export / 声明 | 回滚只能撤销经 context 产生的效果；模块级副作用撤销不了 |
+
+### 3.2 插件上下文
+
+```ts
+// packages/kernel/src/extension/PluginContext.ts（新，S6；事件订阅 S7）
+export interface PluginContext {
+  registerShape(provider: ShapeProvider): void;            // 注册名 provider.typeName，类别 shapes
+  registerCommand(type: CommandType): void;                // 注册名 type.commandName，类别 commands
+  registerTreeDecorator(decorator: TreeDecorator): void;   // 注册名 decorator.name，类别 decorators（S7）
+  registerAttributeHandler(handler: AttributeHandler): void; // 注册名 handler.name，类别 attributes（S7）
+  subscribe(listener: DocumentListener): void;             // 文档事件（3.4）；不属于 contributes 的类别（S7）
+  /** 已提交（此前安装成功的插件）的图形类型，只读；用于检查运行时依赖（2.1.5）。不含本插件自己暂存的注册。 */
+  shapeTypes(): ShapeCatalog;
+}
+```
+
+这六个方法就是**向插件暴露的全部能力**。插件拿不到：已提交注册表的写入口、安装器、其他插件的实例、`Editor` / `EditorSession`、文件系统（命令执行时经 `CommandContext.fileSystem()` 拿到的是端口，不是上下文的能力）。
+
+每个 `register*` 在调用时就做**形状校验**（违约在注册时报出）：注册名是非空、不含空白的字符串；必需的方法都是函数；`CommandType.category` 是四个 `CommandCategory` 常量之一；`AttributeHandler.priority` 是整数。不合格时 `register*` 抛 `Error`，`activate` 因此失败。
+
+### 3.3 事务式注册
+
+#### 3.3.1 安装路径
+
+`PluginInstaller.install(candidate: PluginCandidate): InstallOutcome`（新，内核 `extension/`）是**唯一**的安装路径：内置插件、方式 A 的可选插件、方式 B 的插件都调用它（4.2）。
+
+```text
+install(candidate):
+  0. manifest = PluginManifest.parse(candidate.manifestJson)
+       失败 → `invalid plugin manifest: <label> (<reason>)`                       （新文案，N12）
+  1. staging = new StagingContext(registry)                                       ← 暂存
+     try { plugin = new candidate.pluginClass(candidate.options); r = plugin.activate(staging) }
+     catch (e) → `plugin failed to activate: <name> (<reason>)`                  （规格）
+     r 是 thenable → `plugin failed to activate: <name> (activate must be synchronous)`
+     staging.seal()                                                              ← 此后对 staging 的任何调用都抛 Error
+  2. 查重：按类别顺序 shapes → commands → decorators → attributes，类别内按注册顺序，
+     与已提交的注册比、与本次暂存中更早的注册比；第一个重复
+       → `duplicate registration: <category>/<name>`                              （规格）
+  3. 清单比对：四个类别分别比较“声明的名字集合”与“暂存的名字集合”；任一类别不等
+       → `plugin manifest mismatch: <name> (declared: <列表>, registered: <列表>)`  （规格）
+  4. 提交：registry.commit(staging)——按暂存顺序追加到已提交的注册表与订阅列表
+  任何一步失败：丢弃 staging（回滚），返回 InstallOutcome.failure(<一行文案>)；已提交的注册不受影响
+```
+
+- `<label>`：方式 B 是配置里写的 `module` 字符串；方式 A 与内置插件是组合根传入的包名（4.2）。`<name>`：清单里的 `name`（第 0 步之后一定可用）。
+- `<reason>`：异常是 `Error` 时取 `message` 的第一行；否则取 `String(值)`。同一台机器、同一输入下确定；可能含 Node 给出的绝对路径（偏差 T4）。
+- 清单比对的列表格式：`<类别>/<名字>` 用空格连接，类别按固定顺序，类别内声明侧按 `contributes` 中的书写顺序、注册侧按注册顺序；一侧为空写 `(none)`。例：`plugin manifest mismatch: @svgframe/plugin-shape-box (declared: shapes/box attributes/box-attributes, registered: shapes/box decorators/box-type-label attributes/box-attributes)`。
+- **一个插件同时违反多条时**，只报按 0 → 1 → 2 → 3 顺序遇到的第一条（ADR-4）。理由：激活失败时暂存内容不可信，查重和比对没有意义；重复注册比清单不符更能说明问题（声明了 `box` 也注册了 `box`，但 `box` 已被别的插件占了）。
+
+#### 3.3.2 清单（`contributes`）
+
+```json
+{
+  "name": "@svgframe/plugin-shape-box",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/BoxPlugin.ts", "./package.json": "./package.json" },
+  "dependencies": { "@svgframe/kernel": "0.1.0" },
+  "contributes": {
+    "shapes": ["box"],
+    "attributes": ["box-attributes"],
+    "decorators": ["box-type-label"]
+  }
+}
+```
+
+`PluginManifest.parse` 的校验（严格，决策 X29 的一部分，约定补充 N11）：`name` 是非空字符串；`contributes` 缺省视为 `{}`；`contributes` 只能有 `shapes`、`commands`、`decorators`、`attributes` 四个键（拼错的键报 `unknown contributes key: <key>`，而不是被静默忽略）；每个值是字符串数组，元素非空、互不重复。缺省的类别视为空列表（规格 §6 加载契约第 2 条）。`package.json` 的其他字段不看。
+
+#### 3.3.3 回滚覆盖哪些能力
+
+| 插件能做的事 | 暂存在哪里 | 回滚 |
+|---|---|---|
+| 注册图形 | `StagingContext` 的 shapes 列表 | 丢弃列表；`ShapeRegistry` 从未被写 |
+| 注册命令 | commands 列表 | 同上 |
+| 注册树标签 | decorators 列表 | 同上 |
+| 注册属性处理器 | attributes 列表 | 同上 |
+| 订阅文档事件 | listeners 列表 | 同上：订阅只在提交时才进入 `ExtensionRegistry` |
+| 构造函数、`activate` 中的其他副作用 | — | 契约禁止（3.1），L8 检查 |
+
+提交是“把暂存列表追加进已提交列表”的内存操作，前面的检查已经排除了重复，所以提交本身不会失败：**不存在“提交了一半”的状态**。
+
+**内置能力也走这条路径**：`BuiltinShapesPlugin`、`BuiltinCommandsPlugin` 有自己的 `package.json`（`contributes.shapes` 列六种图形，`contributes.commands` 列 19 条命令名），由 `EditorAssembler` 交给同一个 `PluginInstaller`。区别只有一处：内置插件安装失败是程序错误（`EditorAssembler` 抛 `Error`，`main.ts` 写 stderr、退出码 1），而可选插件安装失败只打印一行 `error:` 并继续（4.5）。
+
+### 3.4 文档事件
+
+`modified-star` 选定的 dirty 语义是“内容与上次保存（或载入）不一致”（ADR-3）：渲染时比对当前内容与保存点，所以它只需要知道**保存点在什么时候产生**。为了让 ADR-3 的备选语义（“发生过编辑命令”）将来也能不改内核实现，再加一个编辑事件。
+
+```ts
+// packages/kernel/src/extension/DocumentListener.ts（新，S7）
+export interface DocumentListener {
+  /** init 或 read 成功：document 成为当前文档；path 是默认保存路径（init 时为 null）。 */
+  documentReplaced(document: DocumentView, path: string | null): void;
+  /** save 成功（含另存为新路径）：document 的当前内容已写入 path。 */
+  documentSaved(document: DocumentView, path: string): void;
+  /** 一条编辑命令执行成功，或 undo / redo 成功。 */
+  documentEdited(document: DocumentView): void;
+}
+```
+
+| 事件 | 发出者（内核） | 触发点 | 何时**不**发 |
+|---|---|---|---|
+| `documentReplaced` | `EditorSession.replaceDocument`（`InitCommand`、`ReadCommand` 调用） | `init` 成功、`read` 成功 | `read` 失败：`ReadCommand` 在读入完成之前不调用 `replaceDocument`（F20，现有行为），所以根本没有事件 |
+| `documentSaved` | `EditorSession.markSaved`（新，取代 `setFilePath`；`SaveCommand` 在写文件成功后调用，与现在调 `setFilePath` 的位置相同，`SaveCommand.ts:42-43`） | `save` 成功（无参数或另存为） | `save` 失败（`cannot write file`、`no file path`）：写文件抛错在先，`markSaved` 不会被调用 |
+| `documentEdited` | `History` 在 `record`、`undo`、`redo` 成功后回调 `EditorSession`（`History` 构造时传入回调） | 编辑命令成功；`undo` / `redo` 成功 | `undo` / `redo` 失败（`nothing to undo`、io 锁）：`History.top` 先抛错（`History.ts:59-68`），没有回调；`canvas` 改尺寸是文档类命令，不算编辑 |
+
+**只在命令成功之后派发**：上面三个触发点都只把事件放进 `DocumentEvents`（新，内核 `app/`）的缓冲区。`Editor.run`（`Editor.ts:53-62`）在 `execute` 和 `recordIn` 都正常返回之后调 `session.flushEvents()`，按产生顺序、按订阅顺序依次调用监听器；`executeLine` 捕获到 `EditorError` 时调 `session.discardEvents()`。所以任何失败的命令都不会派发事件，即使它在失败之前已经调过 `replaceDocument`。
+
+**监听器抛错**：命令已经成功、无法回滚，按程序错误处理（异常从 `executeLine` 传出，`Repl` 写 stderr、退出码 1）。契约要求监听器不抛错。
+
+### 3.5 容器抽象
+
+现状：接口 `ShapeContainer`（`model/ShapeContainer.ts`）由 `Group` 与 `SvgDocument` 实现，但 Composite 的行为都写在具体类 `Group` 里，而且内核多处直接依赖它：`Shape.asContainer(): Group | null`（`model/Shape.ts:79`）、`EditCommand.findContainer(): Group`（`commands/EditCommand.ts:66`）、`new Group(this.groupId)`（`commands/GroupCommand.ts:85`）、`AddToCommand` 与 `UngroupCommand` 的字段类型 `Group`、`Group.canUngroup()`（`model/Group.ts:60`）。`g` 变成内置插件之后，这些都会成为“内核依赖插件”。
+
+改法（S6）：
+
+| 现有 | 改为 |
+|---|---|
+| `Group` 中的 Composite 行为（`ChildList` 字段、`moveBy` / `scaleBy` 转发、`summary() = ""`、`moveDescription` 的 `by (dx,dy)`、`snapshot` / `restore` 的递归、`childList` / `indexOf` / `insertAt` / `remove`、`containerLabel`、`canUngroup`） | 搬进内核的抽象类 `ContainerShape`（新）`extends Shape implements ShapeContainer`；`Group` 留在内置插件里，只剩 `typeName = "g"`、`params = []`、`create` 和 `tagName()`，`extends ContainerShape` |
+| `Shape.asContainer(): Group \| null` | `asContainer(): ContainerShape \| null` |
+| `EditCommand.findContainer(): Group` | 返回 `ContainerShape`；`in` 的目标因此可以是任何容器图形，包括 box（约定补充 N1） |
+| `GroupCommand` 里的 `new Group(id)` | `context.shapes().lookup(GroupCommand.CONTAINER_TYPE).create(id, 空 Map, context.shapes())`，再 `asContainer()`；`CONTAINER_TYPE = "g"` 是内置命令插件里的常量 |
+| `AddToCommand`、`UngroupCommand` 的字段类型 `Group` | `ContainerShape` |
+| `Group.canUngroup()` | `ContainerShape.canUngroup()`，默认 `true`；box 覆写为 `false`。`UngroupCommand.prepare`（第 54 行）调用方式不变，文案 `cannot ungroup composite shape: <id>` 原样保留 |
+| — | `ContainerShape.canRelease(child)`（新，3.7） |
+
+`ShapeContainer`（接口，“能挂子节点的东西”，含文档根）与 `ContainerShape`（抽象类，“是图形的容器”）名字相近，含义不同：前者是 `TreePosition`、`ChildList` 用的最小协议，后者是 Composite 的组件实现。
+
+**`group` 时 `g` 的提供者没装会怎样**：`BuiltinCommandsPlugin.activate` 检查 `context.shapeTypes().has("g")`，没有就抛错（`requires shape type: g`）。内置插件的安装顺序固定为先图形后命令（4.3），所以在任何装配配置下这条检查都通过；它的作用是把“内置命令依赖内置图形”这件事写成代码而不是只写在注释里。如果有人改了安装顺序，启动时就会以程序错误失败，而不是等到用户第一次 `group` 才报 `unknown shape type: g (is the plugin loaded?)`。
+
+### 3.6 回显名与树名的拆分
+
+box 的回显是 `box#n2 moved by …`，树里却是 `g#n1 (box)`；而 `Shape.label()`（`model/Shape.ts:33`，`tagName#id`）和 `containerLabel()` 现在被回显、树、`show`、警告和程序错误共用。拆分方式（S6，决策 X2）：
+
+| 名字 | 定义 | 用途 |
+|---|---|---|
+| `Shape.kindName()`（新） | 默认返回 `tagName()`；box 返回 `"box"` | 类型的用户可见名字；`stats` 的计数键也用它（8.1） |
+| `Shape.label()`（**语义改变**） | `` `${kindName()}#${id}` `` | 命令回显、`show`、警告、程序错误 |
+| `Shape.treeLabel()`（新） | `` `${tagName()}#${id}` `` | **只用于** `tree` 的行 |
+| `ContainerShape.containerLabel()` | `label()` | 回显中的 `in …` / `into …`、`show` 的 `parent=` |
+| `SvgDocument.containerLabel()` | `"svg"`（不变） | 同上 |
+
+内置图形的 `kindName()` 都等于 `tagName()`，所以 `label()` 与 `treeLabel()` 对它们完全相同：**内置图形的全部输出与 `final` 逐字节相同**（基线会话验证）。
+
+`src/` 中每一处调用 `label()` / `containerLabel()` 的位置（`fe10441`，共 32 处调用 + 3 处定义）：
+
+| # | 位置 | 用途类别 | S6 后调用 | box 在这里显示 |
+|---|---|---|---|---|
+| 1 | `model/Shape.ts:33` | 定义 | — | — |
+| 2 | `model/Shape.ts:139` | 程序错误（memento 归属） | `label()` | `box#n1` |
+| 3 | `model/Group.ts:77` | 程序错误（memento 子节点数） | `label()`（搬进 `ContainerShape`） | `box#n1` |
+| 4 | `model/Group.ts:102` | 程序错误（插入成环） | 同上 | `box#n1` |
+| 5 | `model/Group.ts:111-112` | 定义 `containerLabel()` | 搬进 `ContainerShape`，返回 `label()` | `box#n1` |
+| 6 | `model/Text.ts:57` | 程序错误 | `label()` | —（text 不是 box） |
+| 7 | `model/LeafShape.ts:66` | 程序错误 | `label()` | — |
+| 8 | `model/SvgDocument.ts:59` | 定义（根） | 不变 | — |
+| 9 | `model/TreePosition.ts:22` | 程序错误 | `label()` | `box#n1` |
+| 10 | `model/ChildList.ts:32` | 程序错误 | `label()` | `box#n1` |
+| 11 | `model/ChildList.ts:44` | 程序错误（含 `containerLabel()`） | 不变 | `… is not a child of box#n1` |
+| 12 | `io/SvgImporter.ts:164` | 导入警告 `flattened <x> in …` | `label()` | 不会出现：只有带文本内容的叶子会展平，box 是容器 |
+| 13 | `view/ShapeDetailRenderer.ts:18` | 程序错误 | `label()` | `box#n1` |
+| 14 | `view/ShapeDetailRenderer.ts:20` | `show` 第 1 行与 `parent=` | `label()`、`containerLabel()` | `show n1` → `box#n1  parent=svg`；`show n1-rect` → `rect#n1-rect  parent=box#n1`（决策 X20） |
+| 15 | `view/TreeRenderer.ts:31` | `tree <id>` 第一行 | **`treeLabel()`** | `g#n1`（再由标签追加 ` (box)`） |
+| 16 | `view/TreeRenderer.ts:41` | `tree` 图形行 | **`treeLabel()`** | `g#n1` |
+| 17 | `commands/SetCommand.ts:72` | 回显 `updated:` | `label()` | `box#n1 updated: stroke=red` |
+| 18 | `commands/DeleteCommand.ts:38` | undo 回显 `into …` | `containerLabel()` | `rect#x restored into box#n1` |
+| 19 | `commands/DeleteCommand.ts:39` | undo 回显 | `label()` | `box#n1 restored` |
+| 20 | `commands/DeleteCommand.ts:53` | 回显 | `label()` | `box#n1 deleted` |
+| 21 | `commands/UngroupCommand.ts:44` | undo 回显 | `label()` | 不会出现（box 不能 ungroup） |
+| 22 | `commands/UngroupCommand.ts:77` | 回显 | `label()` | 同上 |
+| 23 | `commands/UngroupCommand.ts:83` | 警告 `attributes of … discarded` | `label()` | 同上 |
+| 24 | `commands/GroupCommand.ts:58` | undo 回显 | `label()` | 新容器总是 `g` |
+| 25 | `commands/GroupCommand.ts:96` | 回显 | `label()` | 同上 |
+| 26 | `commands/AddToCommand.ts:43` | undo 回显 `moved back into …` | `containerLabel()` | `rect#r1 moved back into box#n1` |
+| 27 | `commands/AddToCommand.ts:65` | 回显 `added to …` | `label()` | `rect#r1 added to box#n1` |
+| 28 | `commands/MoveCommand.ts:39` | undo 回显 | `label()` | `box#n2 moved back by (0,-100)` |
+| 29 | `commands/MoveCommand.ts:53` | 回显 | `label()` | `box#n2 moved by (0,100)` |
+| 30 | `commands/ZOrderCommand.ts:27` | undo 回显 | `label()` | `box#n1 z-order restored` |
+| 31 | `commands/ZOrderCommand.ts:43` | 回显 | `label()` | `box#n1 brought to front` |
+| 32 | `commands/ScaleCommand.ts:41` | undo 回显 | `label()` | `box#n1 scaled back by 0.5` |
+| 33 | `commands/ScaleCommand.ts:59` | 回显 | `label()` | `box#n1 scaled by 2` |
+| 34 | `commands/CreateCommand.ts:64` | undo 回显 | `label()` | `box#n1 removed` |
+| 35 | `commands/CreateCommand.ts:84-85` | 回显（含 `containerLabel()`） | `label()`、`containerLabel()` | `box#n1 created (…)`、`… in box#n1` |
+
+只有第 15、16 两处改调用；其余调用点的**代码不变**，变的是 `label()` 的定义。`show` 选回显名而不是树名：`show` 是给用户看的对象明细，`parent=box#n1` 与回显的 `added to box#n1` 一致；树是 SVG 的结构视图，类型标注由 `(box)` 标签负责（规格 §5）。
+
+#### 3.6.1 只读视图 `ShapeView`、`DocumentView`（S7）
+
+标签、处理器的 `handles` 与事件监听器只拿到只读视图（2.3.5、2.4.2、3.4）：
+
+```ts
+// packages/kernel/src/model/ShapeView.ts（新）——Shape 实现它
+export interface ShapeView {
+  getId(): string;
+  tagName(): string;                      // SVG 元素名
+  kindName(): string;                     // 类型名（3.6）
+  label(): string;                        // kindName#id
+  treeLabel(): string;                    // tagName#id
+  summary(): string;                      // tree 的内联摘要
+  svgAttributes(): Array<[string, string]>;   // 序列化的全部属性（副本）
+  textContent(): string | null;
+  parentId(): string | null;              // 父图形的 id；挂在文档根下或游离时为 null
+  isContainer(): boolean;
+  childViews(): readonly ShapeView[];     // 叶子为空数组
+}
+
+// packages/kernel/src/model/DocumentView.ts（新）——SvgDocument 实现它
+export interface DocumentView {
+  canvasSize(): CanvasSize;               // 不可变值对象（现有）
+  childViews(): readonly ShapeView[];     // 根的直接子节点
+  allViews(): ShapeView[];                // 先序遍历的全部图形（SvgDocument.allShapes 的只读版本）
+  findView(id: string): ShapeView | null;
+  elementCount(): number;
+}
+```
+
+`Shape`、`SvgDocument` 现有的同名方法（`getId`、`tagName`、`summary`、`svgAttributes`、`textContent`、`canvasSize`、`elementCount`）直接满足接口；新增的 `parentId`、`isContainer`、`childViews`、`allViews`、`findView` 都是对现有字段的只读包装。`SvgSerializer.serialize` 的参数改为 `DocumentView`，内部只用视图方法遍历（`childViews` 取代 `asContainer()?.childList()`），输出不变（序列化测试与基线验证）。
+
+### 3.7 必要子部件的保护钩子
+
+`delete n1-rect`、`addto other n1-label`、`group x n1-rect` 都会把 box 的必要子部件移出 box，破坏“box 内部含一个矩形与一个文本”的不变量。设计（S7）：
+
+```ts
+// 接口 ShapeContainer 新增（SvgDocument 返回 true）
+/** 是否允许把直接子节点 child 移出本容器（删除或移到别的容器）。纯查询。 */
+canRelease(child: Shape): boolean;
+// ContainerShape 的默认实现返回 true；BoxShape 对 <id>-rect、<id>-label 返回 false
+
+// EditCommand 新增（内核）
+/** shape 的父容器不允许移走它时抛 `cannot detach required part of composite shape: <id>`。 */
+protected checkReleasable(shape: Shape): void;
+```
+
+| 命令 | 何时调用 `checkReleasable` | 检查位置（R10 顺序） | 例 |
+|---|---|---|---|
+| `delete <id>` | 总是（目标会离开父容器） | 在 `no such shape` 之后 | `delete n1-rect` → `error: cannot detach required part of composite shape: n1-rect`；`delete n1` 正常（box 整体删除，一个 undo 单元） |
+| `addto <gid> <id>` | 只在目标的当前父容器**不是** `gid` 时 | 在现有的容器、图形、成环三项检查之后 | `addto other n1-label` → 拒绝；`addto n1 n1-rect`（同一个 box 内移到末尾）允许 |
+| `group <gid> <id…>` | 对每个成员（按参数顺序） | 在现有的新 id、成员存在与重复、祖先关系三项检查之后 | `group x n1-rect` → 拒绝；`group cluster n1 n2` 正常 |
+| `ungroup` | 不需要：被解散的容器总是 `g`（box 的 `canUngroup` 为 false），子节点移到 `g` 的父容器，`g` 允许 | — | 解散 box 内部的一个 `g` 时，它的子节点进入 box，box 的部件不受影响 |
+| `front` / `back` | 不需要 | — | 在 box 内部调整部件的绘制顺序**不算**破坏不变量：部件仍在 box 内；读回按 id 识别部件，不按位置（ADR-2） |
+| `create … in <boxId>`、`addto <boxId> <id>` | 不需要 | — | **允许**往 box 里放其他图形，包括另一个 box（规格允许 box 嵌套 box；P1 规格 §4.4 `create box n3 … in n1`） |
+| `move` / `scale` / `set` 部件 | 不需要 | — | 改几何或样式，不改结构 |
+
+检查都放在 Phase 1 已有检查**之后**：内置容器的 `canRelease` 总是 true，所以 Phase 1 的报错优先级与输出不变。文案（决策 X5）的格式与 §4.2 一致：`<描述>: <id>`；“detach”覆盖删除与移走两种情况。拒绝发生在 `prepare` 中，所以“状态完全不变”由 `EditCommand` 的两阶段约定保证（S7 的契约测试逐一验证）。
+
+### 3.8 读回规则
+
+| 规则 | 内容 | 机制 |
+|---|---|---|
+| 选提供者 | 2.1.3：最高 `matchScore`；并列拒绝整个读入；全 0 跳过 | `ShapeRegistry`（读回时由 `SvgImporter` 的内部会话调用） |
+| 子元素 | 一律经 `ShapeReader.readChildren` / `readStandard` 分派 | 2.1.4 |
+| box 子部件不完整（装了 box 插件） | **警告并降级为普通 `g`**：`warning: box <id> read as plain g: <原因>`，然后 `reader.readWithNext(element)`；`data-kind="box"` 落进透传属性，保存时原样写回 | ADR-2；预检查只看 `ElementView`，在分配任何 id、产生任何其他警告之前完成，所以降级不会留下副作用 |
+| 重复 id | 涉及 box 的重复 id **拒绝整个读入**：`cannot parse file: <path> (duplicate id <id>)`；不涉及 box 的重复 id 沿用 F14（改名并警告）。“重复”只在被导入的元素之间判断（与 F14 同一口径）：box 的 `read` 用 `requireUnique` 声明自己的三个 id，读入结束时统一检查；被跳过的 `<path id="n1-rect">` 不算重复 | ADR-2；偏差 T1 |
+| 读入失败 | 原文档、默认路径、历史都不变，不打印警告 | 现有 F20：`ReadCommand.execute` 在 `SvgImporter.read` 完成之后才调用 `replaceDocument`（`ReadCommand.ts:34-40`）；失败时也没有事件（3.4） |
+
+### 3.9 违约处理总则
+
+| 违约发生在 | 何时检出 | 报告 | 状态 |
+|---|---|---|---|
+| `register*` 的参数形状 | 注册时（`activate` 中） | `error: plugin failed to activate: <name> (<reason>)` | 本插件全部暂存注册回滚 |
+| 构造函数 / `activate` 抛错、异步 `activate` | 安装时 | 同上 | 同上 |
+| 重复注册 | 安装时（第 2 步） | `error: duplicate registration: <category>/<name>` | 同上 |
+| 清单与注册不符 | 安装时（第 3 步） | `error: plugin manifest mismatch: …` | 同上 |
+| `matchScore` / `read` 抛错或返回非法值 | 调用时（读回） | `error: cannot parse file: <path> (shape provider <type> failed: <reason>)` | 读入失败，原文档不变 |
+| `claimedIds` / `create` 抛出非 `EditorError`，或后置条件不成立 | 调用时（`create` 的 `prepare`） | `error: shape provider failed: <type> (<reason>)` | `prepare` 尚未改文档 |
+| `handles` / `apply` 抛出非 `EditorError` | 调用时（`set` 的 `prepare`） | `error: attribute handler failed: <name> (<reason>)` | 已回滚，历史不变 |
+| `tagFor` 抛错或返回非法值 | 调用时（`tree`） | `error: tree decorator failed: <name> (<reason>)` | `tree` 只读，不影响状态 |
+| 命令 `execute` 抛出非 `EditorError` | 调用时 | 程序错误：stderr `internal error: …`，退出码 1（现有 `Repl` 行为） | 文档可能已改一半，所以停止 |
+| 事件监听器抛错 | 派发时 | 同上 | 命令已成功，无法回滚 |
+| 插件绕过接口（强制转换、模块级副作用） | 静态检查 | architecture test（P10、L8）失败 | — |
+
+原则：**能完整回滚的调用点，把插件的违约变成一行 `error:`，编辑器继续可用；不能回滚的，沿用 Phase 1 的程序错误处理**。`EditorError`（预期内的用户错误，例如非法值）永远原样报出，不被包装。
+
+### 3.10 内核公开 API
+
+内核 `package.json` 的 `exports`（S6）：
+
+```json
+"exports": { ".": "./src/api.ts", "./host": "./src/host-api.ts" }
+```
+
+| 入口 | 谁可以 import | 导出（S7 完成时；全部是现有或本文已定义的名字） |
+|---|---|---|
+| `@svgframe/kernel`（`api.ts`） | 插件、装配处、根测试 | **model**：`Shape`、`LeafShape`、`ContainerShape`、`ShapeContainer`(type)、`SvgDocument`、`CanvasSize`、`ShapeMemento`(type)、`TreePosition`、`ParamSpec`、`ShapeType`(type)、`ShapeProvider`(type)、`StaticShapeProvider`、`ShapeKit`(type)、`ShapeCatalog`(type)、`ShapeReader`(type)、`ElementView`(type)、`ShapeView`(type)、`DocumentView`(type)、`AttributeHandler`(type)、`AttributeTarget`(type)、`AttributeChange`(type)、`AttributePlanner`(type)、`PlannedAttributeEdit`(type)、`EditorError`、`NumberFormat`、`IdSyntax`、`GeometryAttribute`、`CoordinateRole`(type)、`XCoordinate`、`YCoordinate`、`Extent`；**io**：`FileSystem`(type)、`SvgImporter`、`SvgSerializer`；**view**：`TreeRenderer`、`ShapeDetailRenderer`、`TreeDecorator`(type)、`TreeRowView`(type)；**commands**：`Command`、`EditCommand`、`QueryCommand`、`DocumentCommand`、`HistoryCommand`、`CommandType`(type)、`CommandCategory`、`CommandContext`(type)、`CommandResult`、`ArgList`、`History`(type)、`UndoStack`(type)、`CommandCatalog`(type)；**extension**：`Plugin`(type)、`PluginClass`(type)、`PluginContext`(type)、`PluginOptions`、`DocumentListener`(type) |
+| `@svgframe/kernel/host`（`host-api.ts`） | **只有**装配处（L2 禁止插件 import 它） | `Editor`、`EditorSession`、`ExtensionRegistry`、`PluginInstaller`、`PluginCandidate`、`PluginManifest`、`InstallOutcome` |
+
+不导出（内核内部实现）：`ChildList`、`StyleAttributes`、`StyleProperty`、`ColorProperty`、`StrokeWidthProperty`、`ExtraAttributes`、`ShapeRegistry`、`CommandRegistry`、`CommandParser`、`CommandLine`、`Token`、`Tokenizer`、`XmlDomAdapter`、`XmlElement`、`IdAllocator`、`ImportResult`、`AttributeDispatcher`、`AttributeEdit`（二者经 `AttributePlanner`、`PlannedAttributeEdit` 两个接口暴露给命令）、`EditableSubtree`、`TreeRow`、`StagingContext`、`ContributionCategory`、`DocumentEvents`。根测试（`tests/`）不是插件，可以用相对路径 import 内部类（它们本来就这样做）。
+
+### 3.11 图
+
+渲染方式：本机 PlantUML 1.2026.10，`PLANTUML_LIMIT_SIZE=8192`；渲染结果不入库。
+
+#### 3.11.1 重构后的模块与依赖
+
+```plantuml
+@startuml p2-modules
+set separator none
+skinparam componentStyle rectangle
+skinparam packageStyle folder
+left to right direction
+
+package "src（装配处，根包 svg-editor）" as host {
+  [cli/main.ts] as main
+  [cli/Repl] as repl
+  [cli/CliArguments] as cliargs
+  [assembly/CompositionRoot] as root
+  [assembly/EditorAssembler] as assembler
+  [loader/PluginLoader] as loader
+  [adapters/NodeFileSystem] as nodefs
+}
+
+package "packages/kernel（@svgframe/kernel）" as kernel {
+  [api.ts] as api
+  [host-api.ts] as hostapi
+  package "app" as kapp {
+    [Editor] as editor
+    [EditorSession] as session
+    [DocumentEvents] as events
+  }
+  package "extension" as kext {
+    [PluginInstaller] as installer
+    [ExtensionRegistry] as extreg
+    [PluginContext] as ctx
+  }
+  package "commands" as kcmd {
+    [CommandRegistry] as cmdreg
+    [Command / EditCommand] as cmd
+  }
+  package "view" as kview {
+    [TreeRenderer] as tree
+    [TreeDecorator] as dec
+  }
+  package "io" as kio {
+    [SvgImporter] as importer
+    [SvgSerializer] as serializer
+  }
+  package "model" as kmodel {
+    [Shape / ContainerShape] as shape
+    [ShapeRegistry] as shapereg
+    [AttributeDispatcher] as attrs
+  }
+}
+
+package "plugins（每个子目录一个 workspace 包）" as plugins {
+  [builtin-shapes] as bshapes
+  [builtin-commands] as bcmds
+  [command-stats] as stats
+  [command-dir] as dir
+  [shape-box] as box
+  [tree-star] as star
+}
+
+main --> cliargs
+main --> assembler
+main --> repl
+assembler --> root
+assembler --> loader
+assembler --> hostapi
+assembler --> nodefs
+root --> plugins : 方式 A：按包名 import（L4）
+loader ..> plugins : 方式 B：import(文件 URL)，无字面量（L5）
+plugins --> api : 只依赖公开 API（L2、L3）
+kapp --> kext
+kext --> kcmd
+kcmd --> kview
+kcmd --> kio
+kview --> kmodel
+kio --> kmodel
+kcmd --> kmodel
+installer --> ctx
+installer --> extreg
+importer --> shapereg
+tree --> dec
+@enduml
+```
+
+#### 3.11.2 四个扩展点
+
+```plantuml
+@startuml p2-extension-points
+set separator none
+hide empty members
+
+package "kernel" {
+  interface PluginContext {
+    +registerShape(provider: ShapeProvider)
+    +registerCommand(type: CommandType)
+    +registerTreeDecorator(decorator: TreeDecorator)
+    +registerAttributeHandler(handler: AttributeHandler)
+    +subscribe(listener: DocumentListener)
+    +shapeTypes(): ShapeCatalog
+  }
+  interface Plugin {
+    +activate(context: PluginContext)
+  }
+  interface ShapeProvider {
+    +typeName: string
+    +params: ParamSpec[]
+    +claimedIds(id): string[]
+    +create(id, values, kit: ShapeKit): Shape
+    +creationDetail(shape): string
+    +matchScore(element: ElementView): number
+    +read(element, reader: ShapeReader): Shape | null
+  }
+  interface CommandType {
+    +commandName / usage / summary
+    +category: CommandCategory
+    +requiresDocument: boolean
+    +parse(args: ArgList): Command
+  }
+  interface TreeDecorator {
+    +name: string
+    +tagFor(row: TreeRowView): string | null
+  }
+  interface AttributeHandler {
+    +name: string
+    +priority: number
+    +handles(target: ShapeView, attribute): boolean
+    +apply(target: AttributeTarget, attribute, value): AttributeChange
+  }
+  interface ShapeType {
+    +typeName / params
+    +create(id, values): Shape
+  }
+  class StaticShapeProvider
+  abstract class Command
+  abstract class Shape
+  abstract class ContainerShape {
+    +canUngroup(): boolean
+    +canRelease(child): boolean
+  }
+  class ShapeRegistry
+  class CommandRegistry
+  interface AttributePlanner {
+    +plan(target, attribute, value): PlannedAttributeEdit | null
+  }
+  class AttributeDispatcher
+  class TreeRenderer
+  class PluginInstaller
+  class StagingContext
+
+  StaticShapeProvider ..|> ShapeProvider
+  StaticShapeProvider o--> ShapeType : 适配
+  ContainerShape --|> Shape
+  StagingContext ..|> PluginContext
+  PluginInstaller --> StagingContext : 暂存 / 校验 / 提交
+  PluginInstaller --> Plugin : new + activate
+  ShapeRegistry o--> "*" ShapeProvider
+  CommandRegistry o--> "*" CommandType
+  CommandType ..> Command : parse
+  AttributeDispatcher o--> "*" AttributeHandler
+  AttributeDispatcher ..|> AttributePlanner
+  TreeRenderer o--> "*" TreeDecorator
+}
+
+package "plugins/builtin-shapes" {
+  class Group
+  class Rect
+  class BuiltinShapesPlugin
+}
+package "plugins/shape-box" {
+  class BoxShape
+  class BoxProvider
+  class BoxAttributeHandler
+  class BoxTypeLabel
+}
+package "plugins/command-dir" {
+  class DirCommandType
+}
+package "plugins/tree-star" {
+  class ModifiedStar
+}
+Group --|> ContainerShape
+Rect --|> Shape
+BuiltinShapesPlugin ..|> Plugin
+BoxShape --|> ContainerShape
+BoxProvider ..|> ShapeProvider
+BoxAttributeHandler ..|> AttributeHandler
+BoxTypeLabel ..|> TreeDecorator
+DirCommandType ..|> CommandType
+ModifiedStar ..|> TreeDecorator
+@enduml
+```
+
+#### 3.11.3 `set` 经过处理器的事务（含事件）
+
+```plantuml
+@startuml p2-set-transaction
+autonumber
+actor 用户
+participant Editor
+participant SetCommand as "SetCommand\n(builtin-commands)"
+participant AttributeDispatcher
+participant "BoxAttributeHandler\n(shape-box)" as H
+participant "BoxShape n2\n(子树)" as T
+participant History
+participant DocumentEvents
+participant "ModifiedStar\n(tree-star)" as Star
+
+用户 -> Editor : set n2 fill #f5a623
+Editor -> SetCommand : parse → execute(session)
+SetCommand -> AttributeDispatcher : plan(n2, "fill", "#f5a623")
+AttributeDispatcher -> H : handles(view(n2), "fill")
+H --> AttributeDispatcher : true
+AttributeDispatcher -> T : snapshot() → before
+AttributeDispatcher -> H : apply(EditableSubtree(n2), "fill", "#f5a623")
+H -> T : part("n2-rect").setAttribute("fill", "#f5a623")
+alt apply 抛错
+  AttributeDispatcher -> T : restore(before)
+  AttributeDispatcher --> SetCommand : throw EditorError
+  SetCommand --> Editor : throw
+  Editor -> DocumentEvents : discard()
+  Editor --> 用户 : error: …（历史、文档不变）
+else 成功
+  H --> AttributeDispatcher : BoxFillChange
+  AttributeDispatcher -> T : snapshot() → after；restore(before)
+  AttributeDispatcher --> SetCommand : AttributeEdit(before, after, 两条文案)
+  SetCommand -> T : apply：restore(after)
+  Editor -> History : recordIn → record(SetCommand)
+  History -> DocumentEvents : edited（缓冲）
+  Editor -> DocumentEvents : flush()
+  DocumentEvents -> Star : documentEdited(view)
+  Editor --> 用户 : box#n2 fill propagated to n2-rect
+end
+@enduml
+```
+
+---
+
+## 4 两种装配与加载器
+
+### 4.1 一条路径
+
+规格 §6 示例里的 `shapeBox.activate(ctx)` 只是示意。按“加载契约”第 1 条，方式 A 与方式 B 都必须经过同一条注册与校验路径，不能绕过回滚。本设计里两种方式只在**怎样得到 `PluginCandidate`** 上不同，之后都交给同一个 `PluginInstaller.install`（3.3）：
+
+| | 方式 A（组合根） | 方式 B（加载器） |
+|---|---|---|
+| 谁决定装哪些 | `CompositionRoot.optional()` 中的列表（代码） | `plugins.config.json` 的 `plugins` 数组（配置） |
+| 谁得到插件类 | 静态 `import XxxPlugin from "@svgframe/plugin-xxx"` | `ModuleLocator` 解析 → `import(文件 URL)` → `default` |
+| 谁得到清单 | 静态 `import manifest from "@svgframe/plugin-xxx/package.json" with { type: "json" }` | `ModuleLocator` 读同一个 `package.json` |
+| options | 组合根里写 `PluginOptions.of({...})` | 配置项的 `options` |
+| `<label>` | 组合根传入的包名字面量 | 配置项的 `module` 字符串 |
+| 之后 | `PluginInstaller.install(candidate)`：构造 → 激活 → 查重 → 清单比对 → 提交 | **同左** |
+
+**两种方式读的是同一份 `package.json`**：方式 A 经 JSON import（tsx 与 `tsc` 7 均可用，附录 B 实验 2；需要 `resolveJsonModule`，S6 加），方式 B 经 `ModuleLocator` 读文件。所以 `contributes` 只写一次。
+
+```plantuml
+@startuml p2-assembly-paths
+autonumber
+participant "cli/main.ts" as Main
+participant CliArguments
+participant EditorAssembler
+participant CompositionRoot
+participant PluginLoader
+participant ModuleLocator
+participant PluginInstaller
+participant StagingContext
+participant ExtensionRegistry
+
+Main -> CliArguments : parse(argv)
+CliArguments --> Main : AssemblyProfile
+Main -> EditorAssembler : assemble(profile)
+EditorAssembler -> CompositionRoot : builtins()
+loop 内置插件（先图形后命令）
+  EditorAssembler -> PluginInstaller : install(candidate)
+  note right : 失败 = 程序错误
+end
+alt 方式 A（无参数 / --only）
+  EditorAssembler -> CompositionRoot : optional()
+  CompositionRoot --> EditorAssembler : PluginCandidate[]（静态 import 的类 + JSON 清单）
+else 方式 B（--config <file>）
+  EditorAssembler -> PluginLoader : candidates(configFile)
+  PluginLoader -> PluginLoader : PluginConfig.parse（非法 → invalid plugin config，返回空）
+  loop 每个 enabled 项（数组顺序）
+    PluginLoader -> ModuleLocator : locate(module, configDir)
+    note right : 失败 → plugin not found
+    PluginLoader -> PluginLoader : import(entry URL)
+    note right : 抛错 → plugin failed to load\n无 default → plugin has no default export
+  end
+  PluginLoader --> EditorAssembler : PluginCandidate[] + 失败消息
+end
+loop 每个候选（同一条路径）
+  EditorAssembler -> PluginInstaller : install(candidate)
+  PluginInstaller -> StagingContext : new StagingContext；new Plugin(options)；activate(staging)
+  PluginInstaller -> PluginInstaller : 查重 → 清单比对
+  alt 全部通过
+    PluginInstaller -> ExtensionRegistry : commit(staging)
+  else 任一步失败
+    PluginInstaller -> StagingContext : 丢弃（回滚）
+    PluginInstaller --> EditorAssembler : InstallOutcome.failure(一行)
+  end
+end
+EditorAssembler --> Main : AssemblyResult(Editor, 启动消息)
+@enduml
+```
+
+### 4.2 组合根（方式 A）
+
+```ts
+// src/assembly/CompositionRoot.ts（新，S6 只有 builtins；S10 起每接入一个插件，optional() 加一项、文件头加两行 import）
+import BuiltinShapesPlugin from "@svgframe/plugin-builtin-shapes";
+import builtinShapesManifest from "@svgframe/plugin-builtin-shapes/package.json" with { type: "json" };
+import BuiltinCommandsPlugin from "@svgframe/plugin-builtin-commands";
+import builtinCommandsManifest from "@svgframe/plugin-builtin-commands/package.json" with { type: "json" };
+import { PluginCandidate } from "@svgframe/kernel/host";
+import { PluginOptions } from "@svgframe/kernel";
+
+/** 方式 A：用代码列出要装的插件。接入新插件只改本文件（L4）。 */
+export class CompositionRoot {
+  /** 每一种装配配置都先装的内置插件；顺序固定：先图形，后命令（3.5）。 */
+  builtins(): PluginCandidate[] {
+    return [
+      new PluginCandidate("@svgframe/plugin-builtin-shapes", BuiltinShapesPlugin, builtinShapesManifest, PluginOptions.EMPTY),
+      new PluginCandidate("@svgframe/plugin-builtin-commands", BuiltinCommandsPlugin, builtinCommandsManifest, PluginOptions.EMPTY),
+    ];
+  }
+  /** 方式 A 的可选插件，按安装顺序。 */
+  optional(): PluginCandidate[] {
+    return [];
+  }
+}
+```
+
+`CompositionRoot` 只是一张表，不含任何逻辑；“按装配配置挑选、安装、造 `Editor`”在 `EditorAssembler`（新）里，接入插件时不改它。
+
+### 4.3 三种装配配置
+
+`--config` 必须表示“**内置能力 + 配置里的插件**”，不能是“完整组合根 + 配置”：否则主线在 S12 把 box 同时加进组合根和配置之后，带 `--config` 启动时 box 会被安装两次，第二次报 `duplicate registration: shapes/box`。
+
+| 装配配置（`AssemblyProfile`） | 命令行 | 安装的插件（按顺序） | 用途 |
+|---|---|---|---|
+| **bare** | `--bare` | 内置图形、内置命令 | 基线对照（与 `final` 逐字节相同）；规格 §1“禁用任何插件框架仍能启动，默认装配继续提供 Phase 1 的内置命令和六种图形”（约定补充 N14） |
+| **full**（方式 A） | 不带参数 | 内置 + `CompositionRoot.optional()` 全部 | 日常使用；规格 §6 示例 `<启动入口> < cli-1.txt  # 方式 A` |
+| **only**（方式 A 的子集） | `--only <包名>`（可重复） | 内置 + `optional()` 中 `name` 在给定集合里的（顺序仍按 `optional()`） | 需要“部分可选插件”的方式 A 运行，例如 §6.1B 要 box 但不要 `modified-star`（4.7） |
+| **config**（方式 B） | `--config <file>` | 内置 + 配置中 `enabled` 不为 `false` 的项（按数组顺序） | 方式 B；`--config` 指向空列表时等价于 bare |
+
+- **不带参数启动 = full**（规格 §6 判据的写法）。
+- 三个选项互斥；出现多个、出现未知参数、`--config` / `--only` 缺少值时：stderr 输出 `usage: svg-editor [--bare | --only <plugin>… | --config <file>]`，退出码 2，不打印 banner（这是用户敲错了命令行，不是插件加载失败）。`--only` 给了 `optional()` 里没有的包名：stderr `error: --only: no such plugin in the code assembly: <name>`，退出码 2。
+- **配置非法时“以默认内置能力启动”，指 bare**：打印 `error: invalid plugin config` 之后，不装配置里的任何插件，也不退回 full（`--config` 的含义里本来就没有组合根的可选插件）。
+
+### 4.4 配置文件格式
+
+```json
+{
+  "plugins": [
+    { "module": "@svgframe/plugin-shape-box" },
+    { "module": "./plugins/tree-star" },
+    { "module": "@svgframe/plugin-shape-diamond", "options": { "fill": "#f5a623" } },
+    { "module": "@svgframe/plugin-export-png", "enabled": false }
+  ]
+}
+```
+
+`PluginConfig.parse`（新）的规则（严格校验，决策 X29）：
+
+| 项 | 规则 | 违反时 |
+|---|---|---|
+| 文件 | 能读取 | `error: cannot read plugin config: <path>`（`<path>` 为命令行原样给出的字符串），以 bare 启动 |
+| 语法 | 合法 JSON | `error: invalid plugin config`，以 bare 启动 |
+| 顶层 | 对象，**只有** `plugins` 一个键，值是数组 | 同上 |
+| 每一项 | 对象，键只能是 `module`、`enabled`、`options`；`module` 是非空字符串；`enabled` 若有必须是布尔；`options` 若有必须是对象（不是数组、不是 null） | 同上：**任何一项不合法，整个配置都不用**（不做“部分加载”，否则同一份坏配置在不同位置坏掉会得到难以预料的插件集合） |
+| 顺序 | 按数组顺序加载与安装 | — |
+| `enabled: false` | 完全跳过：不解析、不导入、不输出任何内容 | — |
+| 重复的 `module` | 不在配置层检查；第二次安装时由查重报 `duplicate registration`（与内置能力冲突同理） | — |
+
+options 的传递：`options` 对象（缺省为 `{}`）深拷贝并冻结后包成 `PluginOptions`，作为插件类构造函数的唯一参数（3.1）。方式 A 在组合根里用 `PluginOptions.of({...})` 构造同一种对象，所以两种方式下插件收到的 options 完全相同。
+
+### 4.5 失败文案
+
+全部写到 **stdout**，每条一行，以 `error: ` 开头（P7 的推广：`error:` 前缀由 `Editor`（命令）和 `EditorAssembler`（启动）两处添加，安装器与加载器只产出不带前缀的消息）；位置是 **banner 之后、第一条命令的输出之前**，按配置数组顺序（方式 A 按 `optional()` 顺序），每个插件至多一行。出错后**继续启动**，进程最终的退出码不受影响（输入正常结束时为 0）。
+
+| # | 情况 | 文案 | 来源 | 规格 |
+|---|---|---|---|---|
+| 1 | 模块找不到（解析阶段失败） | `error: plugin not found: <module>` | `PluginLoader` | 规格给出 |
+| 2 | 没有默认导出（`default` 不存在或为 `undefined`） | `error: plugin has no default export: <module>` | `PluginLoader` | 规格给出 |
+| 3 | 模块存在，但导入时求值失败（含插件自身的依赖缺失），或默认导出不是函数 | `error: plugin failed to load: <module> (<reason>)` | `PluginLoader` | **规格未给格式**，本文决定（决策 X14） |
+| 4 | 清单不合法 | `error: invalid plugin manifest: <module> (<reason>)` | `PluginInstaller` 第 0 步 | 本文决定 |
+| 5 | 构造或 `activate` 抛错 | `error: plugin failed to activate: <name> (<reason>)` | 第 1 步 | 规格给出 |
+| 6 | 重复注册 | `error: duplicate registration: <category>/<name>` | 第 2 步 | 规格给出 |
+| 7 | 清单与注册不一致 | `error: plugin manifest mismatch: <name> (declared: …, registered: …)` | 第 3 步 | 规格给出（列表格式本文决定，3.3.1） |
+| 8 | 配置语法或结构不合法 | `error: invalid plugin config` | `PluginConfig` | 规格给出 |
+| 9 | `--config` 指向的文件不存在或不可读 | `error: cannot read plugin config: <path>` | `PluginConfig` | 本文决定（与 §4.2 的 `cannot read file:` 同一风格） |
+| — | 命令行用法错误 | stderr `usage: …`，退出码 2，无 banner | `CliArguments` | 本文决定 |
+| — | 内置插件安装失败 | stderr `internal error: …`，退出码 1 | `EditorAssembler` 抛 `Error` | 程序错误 |
+
+示例（配置里依次是一个找不到的包、一个正常的 box）：
+
+```text
+svg-editor 0.1 — type 'help' for commands
+error: plugin not found: @svgframe/plugin-nope
+canvas 800x600 created
+```
+
+### 4.6 模块名解析：先解析，后导入
+
+“模块不存在”与“模块存在但它自己的依赖缺失”在 Node 中**抛同一个错误码** `ERR_MODULE_NOT_FOUND`（附录 B 实验 3），只看错误分不开。所以加载分两个阶段，**阶段决定文案**：
+
+| 阶段 | 做什么 | 这一阶段的任何失败报 |
+|---|---|---|
+| 1 解析（`ModuleLocator.locate`） | 相对路径（以 `./`、`../` 开头）或绝对路径：以**配置文件所在目录**为基准解析成目录，要求它是目录且含 `package.json`。包名：`createRequire(<配置文件路径>).resolve("<包名>/package.json")`，即按 Node 规则从配置文件所在目录向上找 `node_modules`（workspace 包在那里是软链接）。然后读 `package.json`，取 `exports["."]`（必须是字符串），拼出入口文件的绝对路径并确认存在 | `plugin not found: <module>` |
+| 2 导入 | `import(pathToFileURL(入口).href)` | `plugin failed to load: <module> (<reason>)` |
+| 3 检查默认导出 | `"default"` 不在命名空间里或为 `undefined` → 文案 2；不是函数 → 文案 3 | 见 4.5 |
+
+为什么用 `"<包名>/package.json"` 而不是直接 `resolve("<包名>")`：`createRequire().resolve` 走的是 CJS 条件（`require`、`node`、`default`），`exports` 若只写了 `import` 条件就会被误判为找不到（附录 B 实验 2：`@spike/import-only` 得到 `ERR_PACKAGE_PATH_NOT_EXPORTED`）。本设计只用它定位 `package.json`，入口由加载器自己从 `exports["."]` 取；插件包的 `exports` 因此规定为（L7 检查）：
+
+```json
+"exports": { ".": "./src/XxxPlugin.ts", "./package.json": "./package.json" }
+```
+
+- `"."` 是字符串：对 `import()`、`createRequire().resolve()`、TypeScript 的 NodeNext 解析都成立；
+- `"./package.json"`：方式 B 的定位与方式 A 的 JSON import 都需要（附录 B 实验 2：缺少时两者都失败）；
+- 插件包必须 `"type": "module"`：否则 tsx 把 `.ts` 当 CJS 编译（附录 B 实验 2 的意外发现）。
+
+为什么不直接 `import("<包名>")`：裸包名的 `import()` 以**加载器文件**所在位置为基准解析，而规格要求“包名按运行环境的模块解析规则解析”，基准应当是配置文件。实验 2 也确认：`cwd` 是无关的临时目录（与基线运行相同）时，从配置文件目录解析与导入都成功。
+
+CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文件 URL)` 同样生效（实验 2 的 `@svgframe/plugin-command-stats` 用例）。
+
+动态 `import()` 返回 `Promise`，所以 `PluginLoader.candidates` 与 `EditorAssembler.assemble` 是异步的；`src/cli/main.ts` 已经用顶层 `await`（`process.exitCode = await repl.run()`），在启动 REPL 之前 `await` 装配即可。**只有启动是异步的**，命令接口仍然同步（决策 X19）：装配完成之后才读第一行输入。
+
+### 4.7 会话与装配配置的对照矩阵
+
+| # | 运行 | 会话 | 方式 A 的参数 | 方式 B 的参数 | 插件集合 | 比较对象 | 新插件要改代码吗 |
+|---|---|---|---|---|---|---|---|
+| 1 | 基线兼容 | `cli-1`、`cli-1-1a`、`regression` | `--bare` | `--config {transcript}/configs/empty.json`（`{"plugins": []}`） | 只有内置（规格 §6“禁用新增插件（包括树标签）”） | `expected/<会话>/`（`final` 的输出），A、B 两次运行都要与之逐字节相同 | 不要：两种参数都不包含任何可选插件 |
+| 2 | §6.1B 复现 | `cli-1-1b` | `--only @svgframe/plugin-shape-box` | `--config {transcript}/configs/box.json` | 内置 + box（**不带 `modified-star`**，否则 `tree` 多出 `*`） | `expected/cli-1-1b/`（逐行对照 P1 规格 §6.1B 手工核对，见 9.2 S12） | 不要：S13 接入 `modified-star` 后，`--only` 与 `box.json` 都不包含它 |
+| 3 | 双装配一致：基础 | `cli-1` | 不带参数（full） | `--config {repo}/plugins.config.json` | 内置 + `optional()` 全部（= 配置全部，4.9 的一致性测试保证） | A 的输出 = B 的输出（不存期望输出） | 不要：新插件进组合根和配置，两边同时增加 |
+| 4 | 双装配一致：§6.1B | `cli-1-1b` | 同 #2 | 同 #2 | 同 #2 | 同 #2（期望输出 + A = B） | 不要 |
+| 5 | 双装配一致：新增命令 | `cli-2`（含 `stats`、`dir`） | 不带参数（full） | `--config {repo}/plugins.config.json` | 全部 | `expected/cli-2/`（手工核对）+ A = B | 不要 |
+
+**各行在哪一步加入**：#1 在 S9；#2、#4 在 S12 的配置提交；#5 的双装配组（只比较 A = B）在 S11 的配置提交，期望输出在 S14 补；#3 在 **S14**。#3 不能更早：S10–S13 每次接入都是“先改组合根（C）、再改配置（C′）”，在 C 与 C′ 之间方式 A 比方式 B 多一个插件，`cli-1` 的 `tree` 会在 S13 的 C 上多出 `*`。`cli-2` 不含 `tree`、不含 box，所以 S12、S13 的 C 不会让 #5 失配。S14 之后再接入会影响双装配会话的插件时，C 上的基线失配是预期的，C′ 恢复；或者把 C、C′ 合成一个提交（决策 X24 的例外，PR 中说明）。
+
+`dir` 的会话（#5）：`SessionRunner` 已经在新建的临时目录里运行 CLI 并以它为 cwd（`SessionRunner.ts:19-31`），fixtures 复制进去后目录内容是固定的；stdout、stderr 经管道收集，**不写进这个目录**，所以日志不会改变目录列表。`cli-2` 的输入把 `dir` 放在任何 `save` 之前（`save` 产出的文件会出现在列表里）。fixtures 里放 `.hidden`、一个子目录（目录里放一个文件，因为 git 存不了空目录）和几个普通文件。
+
+### 4.8 基线工具的扩展（S9）
+
+现在 `SessionRunner.run`（`scripts/baseline/SessionRunner.ts:26`）以 `spawnSync(BaselinePaths.TSX, [BaselinePaths.entryAbsolute()], { cwd: workDir … })` 无参数启动 CLI。扩展方式：**不另写第二个 runner**，只让同一个 `SessionRunner` 接受参数。
+
+| 改动 | 内容 |
+|---|---|
+| `SessionRunner.run(session, args)` | `args` 追加在入口路径之后；其余（临时目录、fixtures、收集输出与文件）不变 |
+| 会话声明自己的运行 | 新文件 `doc/transcript/<会话>.runs.json`（可选）：`{ "groups": [ { "expected": "<expected 下的目录名>" \| null, "runs": [[参数…], …] } ] }`。参数中的 `{repo}`、`{transcript}` 由 `BaselinePaths` 替换为**绝对路径**（cwd 是临时目录，相对路径会失效） |
+| 缺省 | 没有 `.runs.json` 的会话等价于 `{ "groups": [ { "expected": "<会话名>", "runs": [[]] } ] }`，即现在的行为 |
+| 比对规则（`RunGroup`，新） | 组内每一次运行都与 `expected` 逐字节比较（`expected` 不为 null 时）；组内各次运行之间也两两比较（双装配一致）；差异报告注明是哪两次运行 |
+| `--update` | 只写 `expected` 不为 null 的组；要求组内各次运行结果相同，否则一个文件都不写；仍然需要用户事先明确同意 |
+| 孤儿检查 | `TranscriptSession.baselineNames()` 的“已知”集合改为所有 `.runs.json` 引用到的 `expected` 名 |
+| 双装配运行器 | 就是上面的组：S9 不再写别的脚本 |
+
+**这部分在 S9 实现**。理由：S8 的“允许修改”不含 `scripts/`；而在 S10 之前，不带参数启动等于 bare（`optional()` 为空），现有基线不受影响。S9 给三个已有会话加上 4.7 #1 的 `.runs.json`（`--bare` 与空配置），从此不带参数的 full 怎样增长都不影响基线。S8 的验收“空配置和不用配置两种方式启动，基线会话都与 `final` 逐字节一致”在 S8 用一次性命令手工验证，S9 把它固定成 `.runs.json`。S4（本节）、S8、S9（9.2）三处说法一致。
+
+### 4.9 两种装配的一致性保证
+
+| 保证 | 机制 | 何时生效 |
+|---|---|---|
+| 同一插件实现 | 两种方式最终都是 `new <默认导出的类>(options)`，类来自同一个包 | S8 |
+| 同一注册与校验路径 | `PluginInstaller.install`（4.1） | S6（A）、S8（B） |
+| 插件集合与顺序相同 | 系统测试：`CompositionRoot.optional()` 的包名序列 = `plugins.config.json` 中 `enabled` 项的 `module` 序列（包名形式） | **S14**（S10–S13 的接入提交 C 与配置提交 C′ 之间，两边会短暂不一致，所以这条测试不能早于 S13 结束） |
+| options 相同 | 同上测试比较 options | S14 |
+| 输出逐字节相同 | 4.7 #3–#5 | S9（工具）、S12/S14（会话） |
+
+---
+
+## 5 决定、约定补充与已知偏差
+
+### 5.1 决策 X1–X18（对应分析 §7 的 D1–D18）
+
+每条：决定、至少一个真实的备选、理由、落在哪一步、用什么测试验证。
+
+| 决策 | 决定 | 备选（未采纳） | 理由 | 步骤 / 验证 |
+|---|---|---|---|---|
+| **X1**（分析 D1）目录边界 | 内核 = workspace 包 `packages/kernel`（`@svgframe/kernel`，`exports` 只暴露 `api.ts` 与 `host-api.ts`）；装配处 = 根包 `src/`；插件 = `plugins/*` 各一个 workspace 包；加载器独占 `src/loader/`（1.1） | ① 三个顶层目录都在根包里，只靠 architecture test；② 装配处也做成 workspace 包 `packages/host` | `exports` 让 TypeScript 与 Node 在解析阶段就拒绝深层 import（附录 B 实验 2），比扫描更硬；装配处留在根包，`npm run cli` 与基线工具的入口路径都不变（备选②要改 `CLI_ENTRY`，并让根包变空） | S5 搬迁、S6 加 `exports`；验证：architecture test L1–L4、`npm run typecheck`、基线 0 差异 |
+| **X2**（D2）回显名与树名 | `kindName()`（新）默认 = `tagName()`；`label()` 改为 `kindName#id`（回显、`show`、警告、错误）；新增 `treeLabel()` = `tagName#id`，只给 `tree`（3.6） | 保持 `label()` = `tagName#id`，新增 `echoLabel()` 给回显 | 35 处中只有 `tree` 的 2 处要换成树名，其余 30 多处都是回显或错误；改定义比改 30 个调用点的差异小得多 | S6；验证：基线 0 差异（内置图形不变）、S12 的 `box#n2 moved by` 与 `g#n1 (box)` 测试 |
+| **X3**（D3）box 的模板 | 矩形：`x y w h` 原样，`fill = #4a90d9`；标题文字位于 $\left(x + \tfrac{w}{8},\ y + \tfrac{h}{2} + 5\right)$，数值按 V3 格式化 | $(x + 20,\ y + h/2 + 5)$ | 两个公式都拟合 P1 规格仅有的两个数据点（(120,100,160,60) → (140,135)，(520,100,160,60) → (540,135)），也都不会让文字真正居中；选 $w/8$ 只是让水平偏移随框宽等比变化，两者之间没有更强的依据 | S12；验证：box 单元测试、`cli-1-1b` 会话 |
+| **X4**（D4）`create box … in` 的回显 | `box#n3 created (g#n3 + rect#n3-rect + text#n3-label) in box#n1`：`<label> created<creationDetail><where>`（2.1.6） | `box#n3 created in box#n1 (g#n3 + …)` | 括号说明的是新建的 box，紧跟在它后面不会被误读为说明 `box#n1`；内置图形的 `creationDetail` 为空，Phase 1 的格式不变 | S6（机制）、S12（文案）；验证：`CreateCommand` 契约测试、box 测试 |
+| **X5**（D5）移走必要子部件 | 拒绝，`error: cannot detach required part of composite shape: <id>`；钩子 `canRelease` 在 `delete`、`addto`（换容器时）、`group` 中检查（3.7） | ① 删除部件时连带删除整个 box；② 允许并把 box 降级为 `g` | ①让 `delete n1-rect` 的回显与 undo 都变得出人意料；②运行时改变对象类型，`Shape` 的子类不能就地变身。拒绝最简单、可预期、undo 语义不受影响 | S7（钩子）、S12（box 覆写）；验证：钩子契约测试（替身容器）、box 测试 |
+| **X6**（D6）box 读回不完整 | 装了插件：**警告并降级为普通 `g`**；涉及 box 的重复 id：**拒绝整个读入**（ADR-2） | 不完整也拒绝整个读入 | 装插件不应让一个原本能打开的文件变得打不开；降级与“未装插件时降级”一致，`data-kind` 原样保留，保存后再读结果相同；重复 id 违反全局唯一，规格明确要求拒绝 | S6（`readWithNext`、`reject`、`requireUnique`）、S12；验证：box 读回测试 |
+| **X7**（D7）怎样识别子部件 | 按**派生 id**：box 元素必须有显式 id `I`，直接子元素中恰有一个 `<rect id="I-rect">` 和一个 `<text id="I-label">`；位置不限；允许其他子元素（含嵌套 box）；子部件 id 若是自动分配的（文件里没写）则不算 | 按位置：第一个 rect、第一个 text | 创建时就按派生 id 命名，读回用同一规则才能 round-trip；按位置识别会把 `front n1-rect` 之后保存的文件读错 | S12；验证：读回测试（顺序调换、缺部件、类型不符、多出子元素） |
+| **X8**（D8）box 上的其他属性 | 没有处理器 → 白名单路径，设在 `<g>` 自身：`set n1 stroke red` → `box#n1 updated: stroke=red` | 把 `stroke` 等也传播到矩形 | 规格只要求 `fill`、`label` 两个领域语义；其余属性保持 Phase 1 对 `g` 的语义（E6），README 中注明这与 `fill` 不对称 | S12；验证：box 测试 |
+| **X9**（D9）处理器冲突 | 取 `priority` 最大者；最大值上并列 → `error: ambiguous attribute handlers for <attr> on <id>: <a>, <b>`，不修改（2.4.4） | ① 先注册者胜；② 全部按顺序组合执行 | ①是“未定义的覆盖”的一种，换个加载顺序结果就变；②语义不清（两个处理器都改 fill 时谁的值留下？），回显也不好写 | S7；验证：替身处理器的冲突测试 |
+| **X10**（D10）处理器的回显 | 由处理器返回的 `AttributeChange` 提供，`plan` 时取得并保存；`fill` 的 undo 为 `box#n2 fill restored on n2-rect` | `fill` 的 undo 沿用 Phase 1 的 `box#n2 updated: fill=#4a90d9` | 与 apply 回显 `fill propagated to n2-rect` 对称，说明改的是哪个部件；P1 规格给的 `label` undo（`label restored: "…"`）也是“restored”句式 | S7（机制）、S12（文案）；验证：box 测试、`cli-1-1b` |
+| **X11**（D11）没有文档时 `stats` | `requiresDocument = true`：报 `no document. use 'init' or 'read' first` | 输出 `(total 0, containers 0)` | 规格把“空文档”与“没有文档”区分开（`dir` 特别说明“未执行 init 或 read 时也可使用”，`stats` 没有这句）；与 Phase 1 的 `tree` 一致 | S10；验证：`stats` 单元测试 |
+| **X12**（D12）`dir` 的细节 | 排序：按 UTF-16 码元比较（`a < b`），不用 `localeCompare`；符号链接跟随一层后按目标归类，断链与其他特殊项（FIFO、socket、设备）一律 `[FILE]`；错误中的 `<path>` 是当前工作目录的绝对路径；有参数时报 `usage: dir` | 符号链接单独标 `[LINK]` | 规格的输出格式只有两种标记；对用户而言指向目录的链接就是目录；`stat` 一层不算“遍历其目标”。码元排序与 locale 无关，保证逐字节一致 | S11；验证：替身测试、真实临时目录测试（含符号链接） |
+| **X13**（D13）`stats` / `dir` 在 `help` 中的位置 | 类别 `Display`（`QueryCommand` 的默认），组内按注册顺序：排在 `help` 之后；插件不能新增类别 | 新增 `Plugins:` 类别 | 不改 `help` 的实现与已有输出；按功能分组比按来源分组对用户有用 | S10、S11；验证：S9 的装配契约测试（9.2） |
+| **X14**（D14）加载器的输出 | stdout、banner 之后、第一条命令之前；求值失败为 `plugin failed to load: <module> (<reason>)`；一个插件只报第一条（4.5、ADR-4） | 写 stderr | Phase 1 的 `error:` 一律走 stdout（R12），基线比对 stdout；只有程序错误走 stderr | S8；验证：加载器失败路径测试（每条一个夹具） |
+| **X15**（D15）默认导出 | **类**；options 经构造参数传入（3.1） | 实例；options 经 `activate(ctx, options)` | 实例是模块级单例，同一进程里的多个 `Editor` 会共享插件状态（`modified-star` 的保存点就会串）；构造参数让 options 成为私有字段 | S6（接口）、S8（加载器）；验证：加载器测试“同一插件装进两个 Editor 状态独立” |
+| **X16**（D16）只装内置的启动方式 | `--bare`；另有 `--only` 与 `--config`，四种装配配置见 4.3 | ① 环境变量；② 另一个入口脚本 | 命令行参数在基线工具里最容易逐会话声明（4.8）；不增加入口文件，`CLI_ENTRY` 不变 | S8；验证：`CliArguments` 测试、S9 的基线 `.runs.json` |
+| **X17**（D17）`modified-star` | dirty = 与上次保存（或 `read`、`init`）的内容不一致；不向祖先传播，根行汇总；同一行多个标签按注册顺序；新建节点立即标 `*`；`init` 之后以空画布为保存点（ADR-3） | dirty = 自上次保存以来执行过编辑命令 | `undo` 回到保存点时 `*` 消失才符合“未保存的变化”的字面意思；只需要两个事件，不需要命令上报改了哪些 id | S7（事件）、S13；验证：状态机测试（8.4 的表逐行一条） |
+| **X18**（D18）圈复杂度 | 见 5.3 | `@babel/parser`；`typescript@5` 别名依赖 | 见 5.3 | S9；验证：脚本自检（已知函数的 M 值） |
+
+### 5.2 新增决策 X19–X30
+
+| 决策 | 决定 | 备选（未采纳） | 理由 | 步骤 / 验证 |
+|---|---|---|---|---|
+| **X19** 命令同步 | 命令接口保持同步，`dir` 用 `readdirSync`（2.2.4、ADR-6）；注册对象是任何满足 `CommandType` 的类或实例 | 命令接口支持 `Promise` | 以后再改就是内核改动；异步要改 `Editor`、`Repl`、全部测试的调用方式 | S6；验证：现有测试不变 |
+| **X20** `show` 用回显名 | `show n1` → `box#n1  parent=svg`；`show n1-rect` → `parent=box#n1`（3.6） | `show` 用树名 `g#n1` | `show` 是对象明细，与回显（`added to box#n1`）保持一致；树的类型信息由 `(box)` 标签提供 | S6；验证：box 测试 |
+| **X21** 违约转换 | 能完整回滚的调用点（读回、创建、`set`、`tree`）把插件的非 `EditorError` 异常转成一行 `error:`；不能回滚的（命令 `execute`、事件监听器）按程序错误（3.9） | 一律按程序错误退出 | 规格 §3.2 要求处理器失败时“报告错误并回滚”；回滚已有保证时没有理由让整个编辑器退出 | S6/S7；验证：每种违约一个替身测试 |
+| **X22** 读回并列 | 最高 `matchScore` 并列 → 拒绝整个读入（2.1.3） | 先注册者胜 | 与 X9 同理：不允许未定义的覆盖 | S6；验证：替身提供者测试 |
+| **X23** 事件 | 三个事件（`documentReplaced`、`documentSaved`、`documentEdited`）；先缓冲，命令成功后才派发（3.4） | 只要前两个 | 第三个让 ADR-3 的备选语义将来也能不改内核实现；代价是几行代码 | S7；验证：事件时机测试 |
+| **X24** 两段式接入 | 每个可选插件：接入提交 C（插件 + 组合根 + 锁文件）+ 配置提交 C′（配置 + 会话数据）；文档另起提交（1.6） | 一个提交同时改组合根和配置 | 方式 A 判据“只修改一个顶层装配文件”，`plugins.config.json` 是否算有歧义；拆开后两种解释都满足 | S10–S13；验证：`plugin-diff` 脚本 |
+| **X25** 测试的位置 | Phase 1 的 889 个测试留在根 `tests/`；S6 起新增的测试按归属放进 `packages/kernel/tests/`、`plugins/*/tests/`、`tests/unit/host/`（附录 A.1） | S5 把全部测试拆进各包 | 旧测试同时用内核与内置图形，拆进包里会违反“插件测试不依赖其他插件”；S5 要求测试数不变、只搬不改 | S5；验证：S5 测试数 = 889 |
+| **X26** 第二个公开入口 | `@svgframe/kernel/host`（`host-api.ts`）只给装配处（3.10） | 全部放进 `api.ts` | 规格 §1“插件不得依赖……宿主装配模块”：装配用的类（`PluginInstaller` 等）对插件不可见 | S6；验证：L2 |
+| **X27** `dir` 的对齐 | `[DIR]  docs`、`[FILE] demo.svg`：标记补齐到 6 个字符后加一个空格，名字从第 7 列开始（约定补充 N2、偏差 T2） | 按正文“标记后两个空格”：`[FILE]  demo.svg` | 规格的示例是逐字节的输出；正文说的是 `[DIR]` 的情形 | S11；验证：替身测试 |
+| **X28** 重复 id 的范围 | 只有涉及 box 的重复 id 拒绝整个读入；其余沿用 F14（偏差 T1） | 任何重复 id 都拒绝整个读入 | 规格 §4 的这句话在 box 的“边界”一节里；全局改成拒绝会改变 Phase 1 的读入行为（F14），违反“不修改 Phase 1 的行为”和基线兼容 | S6（`requireUnique`）、S12；验证：box 读回测试（重复 id 拒绝）；F14 不变由 `tests/unit/io/IdAllocator.test.ts`、`tests/unit/io/SvgImporter.test.ts`（“F14: the first holder keeps a duplicate id …”）验证 |
+| **X29** 严格校验 | 配置文件与 `contributes` 都严格校验：未知键、类型不对都算非法（3.3.2、4.4） | 忽略未知键 | 拼错的 `"enable": false` 被静默忽略，插件就会被意外加载 | S6、S8；验证：清单与配置的单元测试 |
+| **X30** 基线的按会话参数 | `doc/transcript/<会话>.runs.json` 声明运行组，在 S9 实现（4.8） | 在输入文件里用注释写参数 | 规格要求输入文件只含命令与注释；把装配方式写进注释就把两件事混在一起了 | S9；验证：`npm run baseline` |
+
+### 5.3 决策 X18 详述：圈复杂度的口径
+
+**解析方式：`typescript/unstable/sync`**（仓库现有 devDependency `typescript@7.0.2`，不新增依赖）。
+
+| 候选 | 结论 |
+|---|---|
+| `typescript/unstable/sync` + `unstable/ast` | **采纳**。附录 B 实验 4：`new API({ cwd })` 启动内置的原生 tsgo，`updateSnapshot({ openProjects: [tsconfig] })` 取得工程，`project.program.getSourceFile(file)` 得到语法树，节点有 `kind` 和 `forEachChild`；`SyntaxKind` 来自 `typescript/unstable/ast`。`final` 的 82 个文件全部解析成功，耗时约 0.26 秒；手算核对了两个函数 |
+| `@babel/parser` | 可行，但要新增 devDependency 并联网安装 |
+| `typescript@5` 的别名依赖 | 可行，但同一仓库里两个 TypeScript 版本，且 5.x 的 API 与仓库实际用的编译器不一致 |
+
+风险：`unstable` 表示接口可能随版本变化。缓解：版本由锁文件固定为 7.0.2；脚本启动时先对一份内置的小样本（`Tokenizer.readQuoted` 的副本，期望 $M = 8$）自检，不符就以非零退出码失败，而不是生成错误的数字。
+
+**口径**：
+
+| 项 | 定死的规则 |
+|---|---|
+| 函数 | 下列节点各算一个函数：`FunctionDeclaration`、`MethodDeclaration`、`Constructor`、`GetAccessor`、`SetAccessor`、`FunctionExpression`、`ArrowFunction`。嵌套函数单独计算，不计入外层函数 |
+| 判定点 $d$ | `IfStatement`、`ForStatement`、`ForInStatement`、`ForOfStatement`、`WhileStatement`、`DoStatement`、`CaseClause`（`default` 不算）、`CatchClause`、`ConditionalExpression`，以及运算符为 `&&`、`\|\|`、`??`、`&&=`、`\|\|=`、`??=` 的二元表达式各算 1。可选链 `?.` 不算 |
+| 单个函数 | $M_f = 1 + d_f$ |
+| 文件 | $M_{\text{file}} = \sum_{f} M_f$；同时报函数个数与 $\max_f M_f$ |
+| 范围 | 只算运行代码：`packages/kernel/src/**`、`src/**`、`plugins/*/src/**`。**测试文件与 `scripts/` 不算圈复杂度**（只在行数表里单列），`vscode-svg/src/**` 单独一张表，不计入 CLI 的任何合计 |
+| 三类汇总 | 按路径前缀：内核 = `packages/kernel/src/`，装配处 = `src/`，插件 = `plugins/*/src/`（再按“内置 / 可选”与每个插件分别小计） |
+| 取数来源 | 对每个修订版 `R`（`final`、当前提交或 `p2`）执行 `git archive R` 解包到临时目录，在那里生成临时 `tsconfig.json` 再解析，所以数字只来自 git 历史，与工作区无关 |
+| `final` 怎样归类 | `final` 时还没有三类目录。用 `git diff --find-renames --name-status final R` 把 `final` 的每个文件映射到它在 `R` 中的路径，按目标路径归类；在 `R` 中已删除的文件归入“已删除”一类 |
+| 增量 | 每一类 $\Delta M_c = M_c^{R} - M_c^{\text{final}}$，以及总计 $\Delta M = \sum_c \Delta M_c$；另列每个文件的 $M^{\text{final}}$、$M^{R}$ 与差值 |
+| 行数 | 每个文件的物理行数与代码行数（去掉空行与只含注释的行）；三类加测试、脚本分别汇总 |
+| 输出 | `docs/metrics/` 下的 Markdown 表与一份 JSON；排序按路径的码元顺序，保证同一输入逐字节相同 |
+
+### 5.4 Phase 1 已知偏差 K1–K6 的去向
+
+| # | 内容（README §5） | Phase 2 中 | 步骤 |
+|---|---|---|---|
+| K1 | `ShapeFactory` 构造函数写死六种图形 | **消除**：改名 `ShapeRegistry`，构造函数为空；六种图形由 `BuiltinShapesPlugin` 经 `PluginInstaller` 注册（2.1.1） | S6 |
+| K2 | `CommandRegistry` 构造函数写死 19 条命令 | **消除**：由 `BuiltinCommandsPlugin` 注册；命令名冲突由安装器报 `duplicate registration: commands/<name>`（README 原文说“需要补的只有命令名冲突策略”，即此） | S6 |
+| K3 | `help` 的排版在 `HelpCommand` 里 | **保留**：`HelpCommand` 进入内置命令插件，排版跟着它走；把排版移进内核的 view 要新增一个内核接口，不属于本阶段目标 | — |
+| K4 | `SetCommand` 用“试赋值”校验 | **保留并推广**：处理器路径同样“试做 → 快照 → 还原”（2.4.5）。不再视为偏差，而是 `set` 事务的设计 | S7 |
+| K5 | `warning:` 前缀在两个类里加 | **保留**：box 的读回警告走 `ImportResult`，不新增第三处 | — |
+| K6 | `create` 的检查顺序 | **保留**：顺序变为“类型 → 个数 → 全部 `claimedIds` 的 id 检查 → 容器 → 取值”，K6 描述的现象不变 | S6 |
+
+### 5.5 约定补充 N1–N16（对规格的解释）
+
+| # | 规格的不清之处 | 约定 | 理由 |
+|---|---|---|---|
+| N1 | P1 规格 §4.1 说 `in` 的目标“必须为 g 类型”；规格 §4 要求 box 支持 `in` | `in` 与 `addto` 的目标可以是任何 `ContainerShape`（`g`、box）。对 Phase 1 已有的输入行为不变；`in <box>` 是新输入 | 规格开头“不修改它们的行为”指已有行为 |
+| N2 | `dir` 的标记与名字之间几个空格：正文说两个，示例 `[FILE] demo.svg` 是一个 | 按示例：名字从第 7 列对齐（决策 X27，偏差 T2） | 示例是逐字节的输出 |
+| N3 | `dir` 对符号链接等特殊项 | 跟随一层；目标是目录 → `[DIR]`，其余（含断链、FIFO、socket）→ `[FILE]`；不递归 | 决策 X12 |
+| N4 | §6.1B 树的对齐与 V1 规则差一位 | 按 V1：3/2/8 个空格；与规格 §5 的示例一致（偏差 T3） | V1 是 Phase 1 已定的统一规则 |
+| N5 | `create box … in` 的回显 | `box#n3 created (g#n3 + rect#n3-rect + text#n3-label) in box#n1` | 决策 X4 |
+| N6 | 没有文档时 `stats` | `no document` 错误 | 决策 X11 |
+| N7 | `dir` 读取失败时的 `<path>` | 当前工作目录的绝对路径（`process.cwd()` 的返回值） | `dir` 没有参数，目标只能是当前目录；绝对路径无歧义 |
+| N8 | box 上 `fill`、`label` 以外的属性 | 白名单路径，设在 `<g>` 上 | 决策 X8 |
+| N9 | box 在 `show` 中的名字 | `box#n1`，`parent=box#n1` | 决策 X20 |
+| N10 | box `fill` 的 undo 回显 | `box#n2 fill restored on n2-rect` | 决策 X10 |
+| N11 | `contributes` 与配置的未知键 | 非法 | 决策 X29 |
+| N12 | 规格没给格式的失败 | `plugin failed to load: <module> (<reason>)`、`invalid plugin manifest: <module> (<reason>)`、`cannot read plugin config: <path>`、`ambiguous attribute handlers for <attr> on <id>: <a>, <b>`、`attribute handler failed: <name> (<reason>)`、`shape provider failed: <type> (<reason>)`、`tree decorator failed: <name> (<reason>)`、`cannot detach required part of composite shape: <id>`、读回中的 `ambiguous shape providers for <tag>: …`、`shape provider <type> failed: <reason>`、`duplicate id <id>`、警告 `box <id> read as plain g: <原因>` | 风格与 §4.2 一致：小写开头、`<描述>: <对象>`、附加信息放括号 |
+| N13 | 加载失败消息的位置 | stdout，banner 之后、第一条命令之前（4.5） | 决策 X14 |
+| N14 | “禁用任何插件框架仍能启动”“禁用可选扩展时的行为” | 内置能力本身也经注册机制装配，任何装配配置都先装内置；`--bare` = 禁用全部可选扩展 | 规格 §1“内置实现可通过注册机制装配” |
+| N15 | `modified-star` 的新建节点与 `init` | 新建节点立即标 `*`；`init` 之后以空画布为保存点（`tree` 立即执行时没有 `*`） | ADR-3 |
+| N16 | `stats` 的类型名用哪个名字；空文档的格式 | 叶子按 `kindName()` 计数（内置叶子与 `tagName()` 相同）；空文档输出恰为 `(total 0, containers 0)`，前面没有空格 | 规格示例 |
+
+### 5.6 已知偏差 T1–T4（对规格的偏离）
+
+| # | 规格原文 | 本设计 | 原因 | 怎样核验 |
+|---|---|---|---|---|
+| T1 | §4 边界：“重复 id 违反全局唯一性，不能仅靠降级消除，必须拒绝整个读入” | 只有涉及 box 的重复 id（box 自身或其派生的两个部件 id 在**被导入的元素**中出现不止一次）才拒绝；其余重复 id 沿用 Phase 1 F14：保留第一个，后续改名并警告。口径与 F14 相同：被跳过的不支持元素（及其子树）上的 id 不计入，所以 box 部件与一个 `<path id="n1-rect">` 同名时照常读入（`requireUnique`，2.1.4） | 全局拒绝会改变 Phase 1 已实现并已被测试固定的读入行为（`IdAllocator.idFor`，`io/IdAllocator.ts:29-42`）；该句位于 box 一节的“边界”里 | 涉及 box 的部分：box 读回测试（8.3）。F14 不变的部分：`tests/unit/io/IdAllocator.test.ts`（期望 `duplicate id rect1, reassigned to rect3`）与 `tests/unit/io/SvgImporter.test.ts` 中的 “F14: the first holder keeps a duplicate id, later ones are reassigned with a warning”，S6 之后这两组测试保持不变并通过。注意：`doc/transcript/` 与 `tests/` 的 SVG 夹具里都没有重复 id，基线会话不能作为 F14 的证据 |
+| T2 | §2.2：“标记后用两个空格连接名称” | `[FILE]` 后只有一个空格（名字与 `[DIR]  ` 之后的名字对齐） | 与同节示例逐字节一致；正文与示例矛盾时取示例 | `dir` 替身测试 |
+| T3 | P1 规格 §6.1B 树中三处摘要前 2/1/7 个空格 | 3/2/8 个空格 | V1（最宽 + 2）；规格 §5 的示例本身就是 3/2/8 | `cli-1-1b` 会话；`doc/transcript/README.md` 加注 |
+| T4 | 失败文案应当确定 | `<reason>` 取异常消息的第一行，Node 的模块错误消息含绝对路径，所以换一台机器或换一个目录，消息会不同 | 不改写 Node 的消息才能保留排错信息；同一机器、同一输入下仍然确定；会话文件中不含加载失败的用例，加载失败只在单元测试里按前缀断言 | 加载器测试 |
+
+---
+
+## 6 ADR 草稿
+
+S15 把这些草稿整理进 README。
+
+### ADR-1 属性扩展点的契约
+
+- **背景**：规格 §3.3 的初始接口只传 `shapeId`，处理器拿不到文档；没有冲突规则；修改多个子部件时怎样成为一个 undo 单元、部分修改后抛错怎样恢复，都未定义。Phase 1 的 `Group.restore` 在子节点数不一致时直接抛错（`model/Group.ts:76-78`），处理器一旦改了结构，回滚就会失败。
+- **备选**：① 处理器自己负责撤销（返回一个 undo 闭包）；② 处理器在命令层注册成独立命令；③ 内核做快照事务，处理器只能经受限视图改属性（采纳）。冲突规则的备选：先注册者胜；全部组合执行；按优先级、并列拒绝（采纳）。
+- **决定**：`handles(view, attr)` 只读；`apply(target, attr, value)` 拿到 `AttributeTarget`，只能 `part(id)` 与 `setAttribute`；内核在 `apply` 前后对**目标子树**取 `ShapeMemento`，`set` 的 undo/redo 就是恢复这两个快照；`apply` 抛错立即恢复并报错，`EditorError` 原样、其他异常包装为 `attribute handler failed`；不回退到白名单；冲突按 `priority` 取最大、并列报 `ambiguous attribute handlers`；无处理器命中时回到 Phase 1 白名单。
+- **后果**：① 一次 `set` 天然是一个 undo 单元，与改了几个部件无关；② 回滚不依赖处理器写对撤销逻辑；③ 处理器不能做结构性修改（例如“设置 label 时顺便新建一个 text”），需要结构修改的语义只能做成命令；④ 透传属性不能经处理器修改（快照不覆盖它们，`AttributeTarget` 也不提供）。
+
+### ADR-2 读回：选提供者与降级
+
+- **背景**：`box` 的元素也是 `<g>`，按标签名分派（`SvgImporter.ts:147`）无法区分；没装 box 时要自然降级为 `g`，内核里不能出现 `data-kind`；装了 box 但元素不完整怎么办；重复 id 必须拒绝。
+- **备选**：① 内核先查 `data-kind` 再查标签名（内核出现 `data-kind`，违反规格 §4）；② 每个提供者给 `matchScore`，最高者读（采纳）。不完整时：拒绝整个读入；警告并降级（采纳）。
+- **决定**：`matchScore` 0 = 不认识，1 = 标签名，2 = 标签名 + 区分属性；最高分并列拒绝整个读入；box 的 `read` 先对自己的三个 id（有显式 id 时）调用 `reader.requireUnique`——**无论随后是否降级都声明**，所以重复 id 不会因降级而被 F14 悄悄改名；读入结束时，若其中任何一个在被导入的元素中出现不止一次，内核拒绝整个读入（`cannot parse file: <path> (duplicate id …)`）。“被导入”与 F14 同一口径，被跳过的不支持元素不计。接着只看 `ElementView` 检查结构：不完整（缺显式 id、缺 `<id>-rect` 或 `<id>-label`、部件标签不符）→ `reader.warn("box <id> read as plain g: <原因>")` 并 `return reader.readWithNext(element)`；都通过才分配 id、读子元素、构造 `BoxShape`。部件按派生 id 识别，位置不限，允许多余子元素。
+- **后果**：① 未装插件时降级是分数规则的自然结果，内核零特例；② 装插件不会让原来能打开的文件打不开；③ 降级后的 `g` 带着 `data-kind="box"` 透传属性，保存再读结果相同；④ 预检查必须在任何副作用之前完成，所以 box 的检查只能基于 XML 元素，不能基于构造好的对象；⑤ 两个插件同时认领一类元素时，用户会得到明确的读入错误而不是随机结果。
+
+### ADR-3 `modified-star` 的 dirty 语义、祖先传播与拼接顺序
+
+- **背景**：规格 §5 要求在 ADR 中说明三处取舍，并说明新建节点是否立即标记；状态必须封装在标签实例的字段里。
+- **备选**：dirty 判定——① 发生过编辑命令（`undo` 后 `*` 不消失）；② 内容与上次保存不一致（采纳）。祖先传播——① 子图形改了，所有祖先容器行都标；② 不传播，只标改动的节点和根行（采纳）。拼接顺序——① 按注册顺序（采纳）；② 按标签名字母序；③ 每个标签自带权重。
+- **决定**：`ModifiedStar` 在 `documentReplaced`、`documentSaved` 时记录保存点：每个图形的指纹（`tagName`、全部 `svgAttributes()`、`textContent()`、父 id）与整份文档的序列化文本。渲染时：图形行的指纹与保存点不同、或保存点里没有这个 id → `*`；根行的序列化文本与保存点不同 → `*`。`init` 的保存点是空画布。多个标签按注册顺序拼接，所以是 `g#n1 (box) *`。
+- **后果**：① `undo` 回到保存点时 `*` 全部消失，`redo` 又出现；② 只依赖两个事件，不需要命令上报改了哪些 id；③ 删除节点、调整 z-order 不会让任何图形行带 `*`，只体现在根行上（根行比较的是整份序列化）；④ 父容器不因子节点改动而带 `*`，与规格 §5 示例一致（`rect#n1-rect` 有 `*`，`g#n1` 没有）；⑤ 每次 `tree` 都要序列化一次文档，代价与文档大小成正比，对 CLI 可以忽略；⑥ 两种装配的顺序必须一致，由 4.9 的测试保证。
+
+### ADR-4 配置清单的校验时机
+
+- **背景**：`contributes` 声明与实际注册可能不一致；规格要求不一致、激活失败、重复注册时撤销该插件的全部暂存注册，并继续加载后续插件。
+- **备选**：① 激活**前**只看清单查重、激活后再比对；② 激活后统一校验（采纳）；③ 不暂存，直接写入注册表，失败时逐项撤销。
+- **决定**：顺序固定为 清单解析 → 构造并激活（写进暂存区）→ 查重（暂存区内部与已提交的注册）→ 清单比对 → 提交。只报第一条失败。内置插件、方式 A、方式 B 用同一个 `PluginInstaller`。
+- **后果**：① 查重以实际注册为准，清单写错不会导致漏查；② 提交前任何一步失败都只需丢弃暂存区，不存在“提交了一半”；③ 清单比对放在查重之后，同时违反两条的插件报的是重复注册（更能说明冲突在哪）；④ 插件在激活时能做的事必须全部经过上下文，否则无法回滚，所以 `activate` 契约禁止其他副作用，L8 做静态检查。
+
+### ADR-5 内核做成 workspace 包，用 `exports` 划定公开 API
+
+- **背景**：规格 §1 要求插件只依赖内核公开的抽象，§6 要求包名按 Node 规则解析；判据 `git diff -- <内核目录>` 需要清楚的目录边界。
+- **备选**：① 内核留在根包的 `src/kernel/`，只靠 architecture test；② 内核、装配处都做成 workspace 包；③ 内核做成 workspace 包，装配处留在根包（采纳）。
+- **决定**：`packages/kernel`（`@svgframe/kernel`），`exports` 只有 `.`（`api.ts`，给插件）与 `./host`（`host-api.ts`，给装配处）；插件只写裸名 import；P5 为这两个汇总文件开受控例外（P5a）。
+- **后果**：① 深层 import 在 `tsc` 与运行时都会失败，architecture test 只需兜底相对路径；② 新增内核公开类型要改 `api.ts`（这是内核改动，接入插件时不应发生）；③ 根测试仍可用相对路径测内部类；④ `npm install` 会在 `node_modules/@svgframe/` 下建软链接，CI 的 `npm ci` 同样处理。
+
+### ADR-6 命令接口保持同步
+
+- **背景**：`dir` 要读文件系统；`Editor.executeLine` 是同步的，`Repl` 逐行同步调用它。
+- **备选**：① 命令支持异步（`execute` 返回 `Promise`）；② 保持同步，`dir` 用 `readdirSync`（采纳）。
+- **决定**：保持同步。
+- **后果**：① 内核、`Repl` 与全部现有测试不变；② 将来真正需要异步的插件（网络、长耗时导出）无法接入，需要另起内核版本；③ 读一个目录的阻塞时间对交互式 CLI 可以忽略。
+
+---
+
+## 7 规格追溯表
+
+规格第二部分 §1–§7 的每一条要求一行（“效果”的每一条、“判据”、“边界”、“设计要求”、“加载契约”的每一条、§6 的每条判据命令、§7 的交付物与过程节点、验收清单表格中每一个打 ✅ 或写明内容的格子），外加 P1 规格 §4.4 的 box 语义与 §6.1B 的每一条回显。“机制”一列指向本文章节；“验证”一列写测试、脚本或会话。没有空格子；“—（设计本身）”表示该要求是对文档的要求，由本文对应章节直接满足。
+
+| 编号 | 规格位置 | 要求摘要 | 满足它的机制 | 步骤 | 验证 |
+|---|---|---|---|---|---|
+| TR-001 | §1 效果 | 四个扩展点在内核一侧各是一个接口 | 2.1–2.4 的接口定义在 `packages/kernel`，经 `api.ts` 导出（3.10） | S6、S7 | L1；`npm run typecheck` |
+| TR-002 | §1 效果 | `ShapeProvider`：现有图形都改为插件式 | `BuiltinShapesPlugin` + `StaticShapeProvider`（2.1.1） | S6 | 基线 0 差异；`ShapeRegistry` 契约测试 |
+| TR-003 | §1 效果 | `ShapeProvider`：另加 `box` | 8.3 | S12 | box 插件测试 |
+| TR-004 | §1 效果 | `Command`：`stats`、`dir` | 8.1、8.2 | S10、S11 | 插件测试 |
+| TR-005 | §1 效果 | `TreeDecorator`：`modified-star`、`(box)`；渲染器与内核都不改 | 2.3；8.3 `BoxTypeLabel`；8.4 | S7、S12、S13 | `plugin-diff`（S12、S13） |
+| TR-006 | §1 效果 | `AttributeHandler`：box 的 `fill` 与 `label`，不扩张白名单 | 2.4；8.3 `BoxAttributeHandler` | S7、S12 | box 处理器测试；L6 |
+| TR-007 | §1 效果 | 四个扩展点各至少一个插件实现 | 图形：builtin-shapes、shape-box；命令：builtin-commands、command-stats、command-dir；标签：shape-box、tree-star；处理器：shape-box | S6–S13 | 各插件测试 |
+| TR-008 | §1 效果 | 分别验证注册、调用和缺省行为 | 内核契约测试，全部用替身（9.2 S6、S7） | S6、S7 | `packages/kernel/tests/` |
+| TR-009 | §1 判据 | 接口在内核一侧，内核只依赖接口 | L1、L6 | S6 | architecture test |
+| TR-010 | §1 判据 | 插件以类或类的实例实现扩展点 | 默认导出类（3.1）；`CommandType` 可为类或实例（2.2.1） | S6 | P5b、L7 |
+| TR-011 | §1 判据 | 插件只依赖内核公开抽象，不依赖内部实现或宿主装配模块 | L2、L3；`exports` 两个入口（3.10，决策 X26） | S6 | architecture test；`tsc` 拒绝深层 import（附录 B.2） |
+| TR-012 | §1 判据 | 禁用任何插件仍能启动，默认装配提供 Phase 1 的命令和六种图形，输出不变 | bare 装配配置（4.3，N14） | S6、S8、S9 | 基线 `--bare` 运行 0 差异 |
+| TR-013 | §1 判据 | 内置实现可通过注册机制装配 | 内置插件走 `PluginInstaller`（3.3.3） | S6 | 基线 0 差异 |
+| TR-014 | §1 交付物 | 扩展点清单：接口名、职责、内核调用位置（文件 + 函数）、已有实现、禁用时行为、违约报错 | 本文 2.1–2.4（调用位置：`CreateCommand.prepare`、`SvgImporter` 读回会话、`HelpCommand` / `CommandParser.resolve`、`TreeRenderer`、`SetCommand.prepare` → `AttributeDispatcher.plan`）+ 3.9 | S9 起草、S10–S13 补充、S15 定稿 | README 人工核对 |
+| TR-015 | §2 | 命令名、参数规则与 help 文案由插件提供；内核经注册表分发 | `CommandType`（2.2.2）；`CommandRegistry.lookup` | S10、S11 | S9 装配契约测试 |
+| TR-016 | §2 | `stats`、`dir` 都支持代码装配与配置装配 | 接入提交 C + 配置提交 C′（决策 X24） | S10、S11 | 两次提交的 `plugin-diff`；`cli-2` 双装配组 |
+| TR-017 | §2.1 效果 | 输出 `rect: 3  circle: 1  text: 2  (total 6, containers 2)` | `ShapeTally.render`（8.1） | S10 | `ShapeTally` 测试 |
+| TR-018 | §2.1 效果 | 按子节点顺序深度优先；类型按首次出现顺序 | `ShapeTally.visit`，`Map` 的插入顺序 | S10 | 同上 |
+| TR-019 | §2.1 效果 | `g` 与 `box` 只计入 containers，根不计入 | `asContainer()`（3.5） | S10 | 同上（替身容器） |
+| TR-020 | §2.1 效果 | box 内部叶子照常计数；total 为全部叶子 | 递归进入容器 | S10 | 同上 |
+| TR-021 | §2.1 效果 | 空文档输出 `(total 0, containers 0)` | N16 | S10 | 同上 |
+| TR-022 | §2.1 效果 | `help` 列出 `stats`，执行不报未知命令 | 2.2.3 | S10 | 装配契约测试 |
+| TR-023 | §2.1 效果 | 统计不进入 undo 栈 | `QueryCommand`（2.2.6） | S10 | `StatsCommand` 测试 |
+| TR-024 | §2.1 判据 | `stats` 包独立于内置命令表所在的包 | `plugins/command-stats` 与 `plugins/builtin-commands` 是两个包；L3 | S10 | architecture test |
+| TR-025 | §2.2 效果 | 列出当前工作目录下的文件和子目录 | `DirCommand`（8.2） | S11 | 替身测试 |
+| TR-026 | §2.2 效果 | 工作目录是启动目录，`read`、`save` 不改变它 | `WorkingDirectory`（8.2） | S11 | `DirInEditor`：`read` 前后 `dir` 结果相同 |
+| TR-027 | §2.2 效果 | 不接收参数 | `args.expectEnd()` → `usage: dir`（X12） | S11 | 替身测试 |
+| TR-028 | §2.2 效果 | 只列直接子项，不递归 | `NodeDirectoryLister` | S11 | 真实临时目录测试 |
+| TR-029 | §2.2 效果 | 包含隐藏项，不列 `.`、`..` | 8.2 | S11 | 两类测试 |
+| TR-030 | §2.2 效果 | `[DIR]`、`[FILE]` 标记与名称的连接 | X27、N2、T2 | S11 | 替身测试 |
+| TR-031 | §2.2 效果 | 目录在前、文件在后，各组按名称升序，顺序稳定 | UTF-16 码元比较（X12） | S11 | 替身测试（乱序输入、大小写、非 ASCII） |
+| TR-032 | §2.2 效果 | 符号链接等特殊项的显示方式在文档中说明 | N3、X12 | S11 | 真实临时目录测试（链接到目录、链接到文件、断链） |
+| TR-033 | §2.2 效果 | 空目录输出 `(empty directory)` | 8.2 | S11 | 两类测试 |
+| TR-034 | §2.2 效果 | 读取失败 `error: cannot read directory: <path>`，之后仍可执行其他命令 | N7；`EditorError` | S11 | 替身抛错；`DirInEditor` |
+| TR-035 | §2.2 效果 | 不依赖文档 | `requiresDocument = false` | S11 | `DirInEditor` |
+| TR-036 | §2.2 效果 | 不改文档内容、dirty 状态、工作目录、undo/redo，不触发撤销限制 | 2.2.6 | S11 | `DirInEditor`：序列化、undo/redo 深度、io 锁前后相同 |
+| TR-037 | §2.2 设计要求 | 用适配器模式访问文件系统；说明接口、类与角色的对应 | 8.2 角色表 | S11、S15 | README 适配器说明 |
+| TR-038 | §2.3 | 两个命令由独立于内置命令表的插件包提供，可单独启用或禁用 | 两个包；`--only`、配置项 | S10、S11 | 装配契约测试 |
+| TR-039 | §2.3 | 已加载时出现在 `help`；未加载时 `error: unknown command: <name>` | 2.2.1、2.2.3 | S9（测试） | 装配契约测试（9.2） |
+| TR-040 | §2.3 | 接入 `dir` 不修改内核或既有插件 | 8.2 第 3 小节 | S11 | `plugin-diff` |
+| TR-041 | §2.3 | 两种装配调用同一个命令实现和同一个目录访问接口 | 8.2；4.1 | S11 | `cli-2` 双装配组 |
+| TR-042 | §2.3 | 替身测试覆盖混合、空目录、隐藏项、读取失败、稳定排序 | 8.2 | S11 | `DirCommand.test.ts` |
+| TR-043 | §2.3 | 临时目录验证真实适配器与命令组合 | 8.2 | S11 | `NodeDirectoryLister.test.ts` |
+| TR-044 | §2.3 | 无文档时可用；有文档时成功或失败都不改文档及 undo/redo | 8.2 | S11 | `DirInEditor.test.ts` |
+| TR-045 | §2.3 | 两种装配对同一固定目录执行 `dir`，输出逐字节一致，目录内容不变 | 4.7 #5 | S11、S14 | `npm run baseline`（`cli-2`） |
+| TR-046 | §3.1 | 处理器定义“对某类图形设置某属性时执行什么修改”，不是新增命令 | 2.4 | S7 | 契约测试 |
+| TR-047 | §3.1 | `set n1 fill red` 改 `n1-rect`；`set n1 label` 改 `n1-label` | 8.3 | S12 | box 处理器测试 |
+| TR-048 | §3.1 | `set` 中不加 box、fill、label 的分支，不把 label 加进白名单 | 2.4.3；L6 | S7 | S12 的 `plugin-diff`；L6 |
+| TR-049 | §3.1 | 处理器调用图形公开方法，字段保持封装 | `AttributeTarget.setAttribute` → `Shape.setAttribute` | S7 | P6（现有） |
+| TR-050 | §3.2 第 1 步 | 定位目标，查询是否有处理器支持 | 2.4.3 | S7 | `AttributeDispatcher` 测试 |
+| TR-051 | §3.2 第 2 步 | 多个处理器按冲突规则处理 | X9 | S7 | 冲突测试 |
+| TR-052 | §3.2 第 3 步 | 无处理器 → Phase 1 白名单；不在白名单报 `unknown attribute` | 2.4.5 | S7 | 未命中测试；基线 `regression` |
+| TR-053 | §3.2 | 处理器失败时报告错误并回滚，不转入默认处理 | 2.4.3 第 5 步 | S7 | 失败测试 |
+| TR-054 | §3.3 | 完善接口及调用契约，并在文档中说明 | 2.4.2 | S7 | —（设计本身） |
+| TR-055 | §3.3 ADR 问 1 | 处理器怎样获取目标、判断类型、修改子部件 | 2.4.4；ADR-1 | S7、S15 | box 处理器测试 |
+| TR-056 | §3.3 ADR 问 2 | 多个处理器同时命中 | X9；ADR-1 | S7 | 冲突测试 |
+| TR-057 | §3.3 ADR 问 3 | 一次 `set` 是一个 undo 单元 | ADR-1 | S7 | undo / redo 测试 |
+| TR-058 | §3.3 ADR 问 4 | 部分修改后抛错时恢复文档、历史不变 | ADR-1 | S7 | 失败测试 |
+| TR-059 | §3.4 | `set n1 fill #f5a623` 改矩形，`set n1 label "处理数据 v2"` 改文字，各一个 undo 单元 | 8.3 | S12 | `BoxInEditor` |
+| TR-060 | §3.4 | 一次 `undo` 恢复，一次 `redo` 重做 | `AttributeEdit`（2.4.3） | S7、S12 | 同上 |
+| TR-061 | §3.4 | 无处理器命中时允许的属性仍能改，未定义属性按约定报错 | 2.4.5 | S7 | 契约测试；基线 |
+| TR-062 | §3.4 | 多处理器命中时符合 ADR 的规则 | X9 | S7 | 冲突测试 |
+| TR-063 | §3.4 | 模拟处理器部分修改后抛错，文档与 undo/redo 历史不变 | 2.4.3 | S7 | 失败测试（替身处理器） |
+| TR-064 | §4 效果 | 新增 `box`，内核改动为 0 | 8.3 | S12 | `plugin-diff` |
+| TR-065 | §4 效果 | box 是容器，内含一个矩形与一个文本 | `BoxShape`、`BoxProvider.create` | S12 | `BoxProvider` 测试 |
+| TR-066 | §4 效果 | 支持 `in` 子句 | N1；`findContainer` 返回 `ContainerShape` | S6、S12 | `BoxInEditor` |
+| TR-067 | §4 效果 | 整体 `move` | `ContainerShape.moveBy` | S12 | `BoxInEditor` |
+| TR-068 | §4 效果 | 可以再嵌套 | 3.7 | S12 | `BoxInEditor` |
+| TR-069 | §4 效果 | `ungroup` 拒绝 | `canUngroup()`（3.5） | S12 | `BoxInEditor` |
+| TR-070 | §4 效果 | `set` 的 `fill` 传播到矩形，`label` 改写文本 | 2.4 | S12 | box 处理器测试 |
+| TR-071 | §4 效果 | 序列化带 `data-kind="box"` | `BoxShape.svgAttributes` | S12 | `BoxReadBack` |
+| TR-072 | §4 效果 | 读回时未装插件降级为普通 `g` | 2.1.3 | S6、S12 | 根 `tests/system/` 降级测试 |
+| TR-073 | §4 效果 | id 派生、读回降级、属性契约的取舍按 §7 记 ADR | ADR-1、ADR-2、X7 | S15 | README |
+| TR-074 | §4 边界 | 子部件 id 为 `<id>-rect`、`<id>-label` | `claimedIds` | S12 | `BoxProvider` 测试 |
+| TR-075 | §4 边界 | 创建前检查整个子树的 id，冲突则整条失败，不留下任何部分 | 2.1.6 | S6、S12 | `BoxInEditor` |
+| TR-076 | §4 边界 | 装了插件但缺部件或类型错误：拒绝或警告降级，ADR 说明，不生成不完整的 box | ADR-2、X6 | S12 | `BoxReadBack` |
+| TR-077 | §4 边界 | 读入失败保持原文档 | 3.8 | S12 | `BoxInEditor` |
+| TR-078 | §4 边界 | 重复 id 必须拒绝整个读入 | ADR-2；偏差 T1 | S12 | `BoxReadBack` |
+| TR-079 | §4 边界 | 直接删除或移走必要子部件：拒绝或保证不变量，并记录与测试 | 3.7、X5 | S7、S12 | 钩子契约测试；`BoxInEditor` |
+| TR-080 | §4 判据 | 接入 box 的提交不改内核与既有插件 | 8.3 第 5 小节 | S12 | `plugin-diff` |
+| TR-081 | §4 判据 | P1 §6.1 的 box 会话完整复现 | 8.3 第 4 小节；`cli-1-1b` | S12 | `npm run baseline` |
+| TR-082 | §4 判据 | 插件测试独立运行，可用替身，不依赖其他插件 | 9.1 | S12 | box 测试；L3 |
+| TR-083 | §5 效果 | 树每行行尾可追加标签，由插件提供，渲染器与内核不改 | 2.3 | S7 | `plugin-diff`（S12、S13） |
+| TR-084 | §5 效果 | 两个标签并存且互不感知 | 2.3.4；`BoxTypeLabel` 只认自己的种类 | S13 | `StarInEditor` |
+| TR-085 | §5 效果 | `modified-star` 按 dirty 语义追加 `*`；说明新建节点是否立即标记 | ADR-3；N15 | S13 | `ModifiedStar` 测试 |
+| TR-086 | §5 效果 | `(box)` 给 box 容器行追加类型标注 | `BoxTypeLabel` | S12 | `BoxTypeLabel` 测试 |
+| TR-087 | §5 效果 | 标签格式：根行 `svg (800x600) *`、`g#n1 (box)`、`… fill=#f5a623 *` | 2.3.3 | S7、S13 | `TreeRenderer` 测试 |
+| TR-088 | §5 效果 | 标签状态封装在实例字段，不用模块级变量 | 8.4；L8；X15 | S13 | L8；两个 `Editor` 状态独立的测试 |
+| TR-089 | §5 ADR | dirty 判定：内容不一致 vs 发生过编辑 | ADR-3 | S13、S15 | 状态机测试第 6 行 |
+| TR-090 | §5 ADR | 子图形修改时祖先容器是否标 `*` | ADR-3 | S13 | 状态机测试第 11 行 |
+| TR-091 | §5 ADR | 同一行多个标签的拼接顺序 | ADR-3；2.3.4 | S7、S13 | `TreeRenderer` 测试；状态机第 20 行 |
+| TR-092 | §5 判据 | 新增任一标签时内核与渲染器差异为 0 | 8.4 | S13 | `plugin-diff` |
+| TR-093 | §5 判据 | 无标签时 `tree` 基线逐字节不变 | 2.3.3 | S7 | 基线 `--bare` |
+| TR-094 | §5 判据 | 状态机独立测试：编辑 → 保存 → 再编辑 → `undo` 回到保存点，各分支 | 8.4 状态机表 | S13 | `ModifiedStar.test.ts` |
+| TR-095 | §6 效果 | 两种方式共用同一套接口与注册路径，装入后行为完全相同 | 4.1 | S8 | 双装配会话 |
+| TR-096 | §6 效果 | 差别只在谁实例化、谁决定装哪些 | 4.1 对照表 | S8 | —（设计本身） |
+| TR-097 | §6 方式 A | 装配写在组合根 | 4.2 | S6、S10–S13 | `plugin-diff --mode A` |
+| TR-098 | §6 方式 B | 运行源码不动，只在 `plugins.config.json` 加一项 | 4.4 | S8、S12 | `plugin-diff --mode B` |
+| TR-099 | §6 方式 B | 插件用 `package.json` 的 `contributes` 声明 | 3.3.2 | S6 | L7 |
+| TR-100 | §6 | 加载器在装配一侧，不属于内核 | `src/loader/`（1.1） | S8 | L1 |
+| TR-101 | §6 | 加载器按字符串模块名解析加载，不硬编码导入、名称映射或分支；接入新插件不改加载器 | 4.6；L5 | S8 | L5；`rg` |
+| TR-102 | §6 失败表 | 模块找不到 → `error: plugin not found: <module>` | 4.5 #1 | S8 | 加载器测试 |
+| TR-103 | §6 失败表 | 没有默认导出 → `error: plugin has no default export: <module>` | 4.5 #2 | S8 | 加载器测试 |
+| TR-104 | §6 失败表 | 清单不一致 → `error: plugin manifest mismatch: …` | 4.5 #7；3.3.1 | S6、S8 | 安装器测试、加载器测试 |
+| TR-105 | §6 失败表 | `activate` 抛错 → `error: plugin failed to activate: <name> (<reason>)` | 4.5 #5 | S6、S8 | 同上 |
+| TR-106 | §6 | 以上失败继续启动，主程序不退出 | 4.5 | S8 | 加载器测试（失败后照常执行命令） |
+| TR-107 | §6 加载契约 1 | A、B 经过同一注册与校验路径，`activate` 不能绕过回滚 | 4.1；3.3 | S6、S8 | 同一插件 A、B 两种安装的测试 |
+| TR-108 | §6 加载契约 2 | `contributes` 四类名称、缺省为空；处理器有稳定注册名；比较类别与名称集合 | 3.3.2；`AttributeHandler.name` | S6 | `PluginManifest`、安装器测试 |
+| TR-109 | §6 加载契约 3 | 按配置数组顺序加载；`enabled: false` 完全跳过 | 4.4 | S8 | 加载器测试 |
+| TR-110 | §6 加载契约 3 | 相对路径以配置文件目录为基准；包名按 Node 规则解析 | 4.6 | S8 | `ModuleLocator` 测试 |
+| TR-111 | §6 加载契约 3 | 说明 options 如何传递 | 3.1；4.4 | S8 | options 测试 |
+| TR-112 | §6 加载契约 4 | 同类注册名不重复，重复时拒绝当前插件并报 `duplicate registration` | 3.3.1 第 2 步 | S6 | 安装器测试 |
+| TR-113 | §6 加载契约 4 | 清单不一致或激活失败撤销该插件全部暂存注册，保留已成功插件，继续加载 | 3.3 | S6、S8 | 回滚测试 |
+| TR-114 | §6 加载契约 5 | 配置不合法 → `error: invalid plugin config`，以默认内置能力启动 | 4.3（bare）、4.4 | S8 | `PluginConfig` 测试 |
+| TR-115 | §6 加载契约 5 | 模块存在但求值或其依赖失败，不误报为找不到 | 4.6 | S8 | 夹具：求值抛错、依赖缺失 |
+| TR-116 | §6 判据 A | 只新增插件，只修改一个顶层装配文件 | 1.6；X24 | S10–S13 | `plugin-diff --mode A` |
+| TR-117 | §6 判据 B | 已有运行代码不修改；新增插件并修改配置；依赖元数据须说明 | 8.3 第 5 小节 | S12 | `plugin-diff --mode B` |
+| TR-118 | §6 判据 | 测试、文档、`package.json`、锁文件的变化逐项说明 | 8.1–8.4 各表 | S10–S13 | PR 描述 |
+| TR-119 | §6 判据 | A、B 可用两个独立的演示分支或提交 | `demo/box-config` | S12 | 远程分支保留 |
+| TR-120 | §6 判据 共同 | 排除新插件后内核与既有插件差异为空 | 1.5 | S10–S13 | `plugin-diff` |
+| TR-121 | §6 判据 | 加载器独立性：`rg -n "import\|require\|switch" <加载器目录>` | 1.5；第 8 节开头 | S10–S13 | PR 中贴输出 |
+| TR-122 | §6 判据 | 双装配：插件集合、顺序、options、初始文件、运行目录一致，输出逐字节相同 | 4.7、4.9 | S9、S14 | `npm run baseline` |
+| TR-123 | §6 判据 | 输入只存命令与注释，预期输出和 SVG 单独保存 | 沿用 S0 的格式；`.runs.json` 不改输入（4.8） | S9 | 基线工具 |
+| TR-124 | §6 判据 | 覆盖 §6 基础、§6.1B、`stats` + `dir` 会话 | 4.7 #3–#5 | S12、S14 | `npm run baseline` |
+| TR-125 | §6 判据 | 验证 `dir` 用内容固定的临时目录，日志写在目录外 | 4.7 | S11 | `cli-2` |
+| TR-126 | §6 判据 | 基础兼容：禁用新增插件（含树标签），对照 `final` | 4.7 #1 | S9 | 基线 `--bare` |
+| TR-127 | §6 判据 | 启动入口：方式 A 不带参数，方式 B `--config plugins.config.json` | 4.3 | S8 | `CliArguments` 测试 |
+| TR-128 | §6 判据 | 检查差异时排除新增目录，并确认路径实际存在 | 1.5（`git cat-file -e`） | S9 | `PluginDiffCheck` 测试 |
+| TR-129 | §7 交付物 1 | 同一远程仓库，tag `p2` | 9.3 S15 | S15 | `git tag` |
+| TR-130 | §7 交付物 2 | 源码：VSCode 扩展、CLI 的内核、扩展点接口、插件、宿主与装配处 | 1.1 | S1–S13 | 目录与 architecture test |
+| TR-131 | §7 交付物 3 | README：扩展点清单、两种装配与配置格式、重构前后依赖图、ADR、`dir` 适配器说明、A.3 | 2、4、6、8.2、3.11 | S9、S15 | README |
+| TR-132 | §7 交付物 4 | `docs/metrics/`：文件清单与职责、行数三类拆分、圈复杂度增量，脚本从 git 历史生成 | 5.3；1.4 | S9、S15 | `npm run metrics` 可复现 |
+| TR-133 | §7 交付物 5 | ADR ≥ 3 条 | 第 6 节（6 条） | S15 | README |
+| TR-134 | §7 交付物 6 | 测试：插件独立可测；`dir` 替身与真实适配器；加载器四条失败路径、重复注册、回滚；VSCode 证据 | 9.2；VSCode 在 S1–S3 已交付 | S8–S13 | 测试 |
+| TR-135 | §7 | 指标按 CLI 范围，VSCode 单列，排除依赖与构建产物 | 5.3 | S9 | metrics |
+| TR-136 | §7 节点 | VSCode 实践 | 已完成：`dcd5f37` | S3 | `git log` |
+| TR-137 | §7 节点 | 框架可扩展：四个扩展点就位、内核不按名字枚举、Phase 1 回归通过、metrics 首次产出 | S6–S9 | S9（`milestone(2/6)`） | L6；基线；metrics |
+| TR-138 | §7 节点 | 命令插件完成 | S10、S11 | S11（`milestone(3/6)`） | `git log` |
+| TR-139 | §7 节点 | `box` 接入：两种装配各演示一次 | S12 | S12（`milestone(4/6)`） | 两次 `plugin-diff` |
+| TR-140 | §7 节点 | 标签完成：`modified-star` 与 `(box)` 并存 | S13 | S13（`milestone(5/6)`） | `StarInEditor` |
+| TR-141 | §7 节点 | 收尾：迭代报告、架构对比图，tag `p2` | S15 | S15（`milestone(6/6)`） | README |
+| TR-142 | §7 验收清单：接口在内核侧 × 扩展点 | ✅ 四个齐备 | 四个接口都在 `packages/kernel`（2.1–2.4） | S6、S7 | L1；`api.ts` 导出 |
+| TR-143 | §7 验收清单：接口在内核侧 × 命令插件 | ✅ | `CommandType`、`QueryCommand` 在内核 | S6 | L2 |
+| TR-144 | §7 验收清单：接口在内核侧 × box | ✅ | `ShapeProvider`、`AttributeHandler`、`TreeDecorator`、`ContainerShape` 在内核 | S6、S7 | L2 |
+| TR-145 | §7 验收清单：接口在内核侧 × 标签 | ✅ | `TreeDecorator`、`DocumentListener` 在内核 | S7 | L2 |
+| TR-146 | §7 验收清单：以类实现扩展点 × 扩展点 | ✅ | 默认导出类（3.1）；`StaticShapeProvider` 等都是类 | S6 | P5b |
+| TR-147 | §7 验收清单：以类实现扩展点 × 命令插件 | ✅ | `StatsCommand`（类）、`DirCommandType`（类的实例） | S10、S11 | 代码审查；P5 |
+| TR-148 | §7 验收清单：以类实现扩展点 × box | ✅ | `BoxProvider`、`BoxAttributeHandler`、`BoxTypeLabel` | S12 | 代码审查；P5 |
+| TR-149 | §7 验收清单：以类实现扩展点 × 标签 | ✅ | `ModifiedStar` | S13 | 代码审查；P5 |
+| TR-150 | §7 验收清单：不反向依赖内核实现 × 扩展点 | ✅ | L1：内核不 import 插件与装配处 | S6 | architecture test |
+| TR-151 | §7 验收清单：不反向依赖内核实现 × 命令插件 | ✅ | L2、L3 | S10、S11 | architecture test；`tsc` |
+| TR-152 | §7 验收清单：不反向依赖内核实现 × box | ✅ | L2、L3 | S12 | 同上 |
+| TR-153 | §7 验收清单：不反向依赖内核实现 × 标签 | ✅ | L2、L3 | S13 | 同上 |
+| TR-154 | §7 验收清单：不反向依赖内核实现 × 两种装配 | ✅ loader | L5；加载器只经 `@svgframe/kernel/host` 使用安装器 | S8 | L5 |
+| TR-155 | §7 验收清单：内核与既有插件差异 = 0 × 扩展点 | ✅ | S7 之后每次接入提交 `packages/kernel` 差异为空 | S10–S13 | `plugin-diff` |
+| TR-156 | §7 验收清单：内核与既有插件差异 = 0 × 命令插件 | ✅ | 8.1、8.2 第 3 小节 | S10、S11 | `plugin-diff` |
+| TR-157 | §7 验收清单：内核与既有插件差异 = 0 × box | ✅ | 8.3 第 5 小节 | S12 | `plugin-diff` |
+| TR-158 | §7 验收清单：内核与既有插件差异 = 0 × 标签 | ✅ | 8.4 第 4 小节 | S13 | `plugin-diff` |
+| TR-159 | §7 验收清单：内核与既有插件差异 = 0 × 两种装配 | ✅ 两条判据 | C_A、C_B（8.3） | S12 | `plugin-diff --mode A/B` |
+| TR-160 | §7 验收清单：禁用可选扩展时的缺省行为 × 扩展点 | ✅ 四个都有 | 未注册图形 → `unknown shape type`；未注册命令 → `unknown command`；无标签 → 逐字节不变；无处理器 → 白名单 | S6、S7 | 内核契约测试 |
+| TR-161 | §7 验收清单：禁用可选扩展时的缺省行为 × 命令插件 | ✅ | 未加载 → `unknown command: <name>` | S9 | 装配契约测试 |
+| TR-162 | §7 验收清单：禁用可选扩展时的缺省行为 × 标签 | ✅ 无标签时逐字节不变 | 2.3.3 | S7 | 基线 `--bare`；`TreeRenderer` 测试 |
+| TR-163 | §7 验收清单：独立可测 × 命令插件 | ✅ `dir` 含替身及真实适配器测试 | 8.2 | S11 | 插件测试 |
+| TR-164 | §7 验收清单：独立可测 × box | ✅ | 替身 rect/text/g + 最小编辑器（8.3） | S12 | 插件测试 |
+| TR-165 | §7 验收清单：独立可测 × 标签 | ✅ | 8.4 | S13 | 插件测试 |
+| TR-166 | §7 验收清单：独立可测 × 两种装配 | ✅ 四条失败路径 | 9.2 S8 | S8 | 加载器测试 |
+| TR-167 | §7 验收清单：插件间协作 × box | `(box)` 标注 | `BoxTypeLabel` 在 box 插件中 | S12 | `BoxTypeLabel` 测试 |
+| TR-168 | §7 验收清单：插件间协作 × 标签 | 两个标签并存 | 2.3.4；8.4 第 20 行 | S13 | `StarInEditor` |
+| TR-169 | §7 验收清单：插件间协作 × 两种装配 | 同一插件两种装法 | C_A、C_B（8.3） | S12 | `git diff C_A C_B -- plugins/shape-box` 为空 |
+| TR-170 | §7 验收清单：输出逐字节一致 × 两种装配 | ✅ 双装配 | 4.7 | S12、S14 | `npm run baseline` |
+| TR-171 | §7 验收清单：适配器模式 × 命令插件 | ✅ `dir` 通过目录访问接口 | 8.2 | S11 | README；替身测试 |
+| TR-172 | §7 验收清单：适配器模式 × 两种装配 | ✅ 两种装配使用同一接口 | 8.2：两种方式都 `new DirPlugin` | S11 | `cli-2` 双装配组 |
+| TR-173 | P1 §4.4 | 语法 `create box <id> <x> <y> <w> <h> "<标题>" [in <containerId>]` | `BoxProvider.params` | S12 | `BoxProvider` 测试 |
+| TR-174 | P1 §4.4 | 子部件 id 自动派生 `<id>-rect`、`<id>-label` | `claimedIds` | S12 | 同上 |
+| TR-175 | P1 §4.4 | `box#n1 created (g#n1 + rect#n1-rect + text#n1-label)` | 2.1.6 | S12 | `BoxInEditor` |
+| TR-176 | P1 §4.4 | `tree n1` 第一行 `g#n1 (box)`，其下 rect、text 两行 | 2.3 | S12 | `BoxTypeLabel`、`BoxInEditor` |
+| TR-177 | P1 §4.4 | `move n1 0 100` 整体平移 | `ContainerShape` | S12 | `BoxInEditor` |
+| TR-178 | P1 §4.4 | `set n1 fill #f5a623` 转发给 `n1-rect` | 2.4 | S12 | box 处理器测试 |
+| TR-179 | P1 §4.4 | `set n1 label "处理数据"` 改写 `n1-label` | 2.4 | S12 | 同上 |
+| TR-180 | P1 §4.4 | `delete n1` 删除整个 box，一个 undo 单元 | `DeleteCommand`（现有） | S12 | `BoxInEditor` |
+| TR-181 | P1 §4.4 | `group cluster n1 n2`：box 可以被收编 | 3.5 | S12 | `BoxInEditor` |
+| TR-182 | P1 §4.4 | `create box n3 … in n1`：可再嵌套 | N1 | S12 | `BoxInEditor` |
+| TR-183 | P1 §4.4 | `ungroup n1` → `error: cannot ungroup composite shape: n1` | `canUngroup`（3.5） | S12 | `BoxInEditor` |
+| TR-184 | P1 §4.4 | 序列化为 `<g id="n1" data-kind="box">` + rect + text | `BoxShape.svgAttributes` | S12 | `BoxReadBack` |
+| TR-185 | P1 §4.4 | 读回：装了插件还原为 box，未装降级为 `g` | 2.1.3 | S12 | `BoxReadBack`；系统测试 |
+| TR-186 | P1 §4.4 | 插件要做的五件事；内核为此新增的代码为 0 | 8.3 第 6 小节 | S12 | `plugin-diff` |
+| TR-187 | P1 §4.2 | 未注册类型 `unknown shape type: hexagon (is the plugin loaded?)` | 2.1.1（文案不变） | S6 | 基线 `regression` |
+| TR-188 | P1 §6.1B | `init 800 600` → `canvas 800x600 created` | `InitCommand`（现有）（8.3 第 4 小节逐行表） | S12 | `cli-1-1b` 会话 |
+| TR-189 | P1 §6.1B | `create box n1 …` → `box#n1 created (g#n1 + rect#n1-rect + text#n1-label)` | `CreateCommand` + `BoxProvider.creationDetail`（8.3 第 4 小节逐行表） | S12 | `cli-1-1b` 会话 |
+| TR-190 | P1 §6.1B | `create box n2 …` → `box#n2 created (g#n2 + rect#n2-rect + text#n2-label)` | 同上（8.3 第 4 小节逐行表） | S12 | `cli-1-1b` 会话 |
+| TR-191 | P1 §6.1B | `create line arrow1 280 130 520 130 black` → `line#arrow1 created` | 内置 `line`（8.3 第 4 小节逐行表） | S12 | `cli-1-1b` 会话 |
+| TR-192 | P1 §6.1B | `group flowchart n1 n2 arrow1` → `g#flowchart created with 3 children` | `GroupCommand`（3.5）（8.3 第 4 小节逐行表） | S12 | `cli-1-1b` 会话 |
+| TR-193 | P1 §6.1B | `move n2 0 100` → `box#n2 moved by (0,100)` | `label()`（3.6）（8.3 第 4 小节逐行表） | S12 | `cli-1-1b` 会话 |
+| TR-194 | P1 §6.1B | `undo` → `box#n2 moved back by (0,-100)` | `MoveCommand.undo`（8.3 第 4 小节逐行表） | S12 | `cli-1-1b` 会话 |
+| TR-195 | P1 §6.1B | `set n2 fill #f5a623` → `box#n2 fill propagated to n2-rect` | `BoxFillChange`（8.3 第 4 小节逐行表） | S12 | `cli-1-1b` 会话 |
+| TR-196 | P1 §6.1B | `set n2 label "处理数据 v2"` → `box#n2 label updated: "处理数据 v2"` | `BoxLabelChange`（8.3 第 4 小节逐行表） | S12 | `cli-1-1b` 会话 |
+| TR-197 | P1 §6.1B | `undo` → `box#n2 label restored: "处理数据"` | `AttributeEdit.undo` + 保存的文案（8.3 第 4 小节逐行表） | S12 | `cli-1-1b` 会话 |
+| TR-198 | P1 §6.1B | `tree` → 九行树：`g#n1 (box)`、`g#n2 (box)`，V1 对齐（3/2/8） | `TreeRenderer` + `BoxTypeLabel`；N4、T3（8.3 第 4 小节逐行表） | S12 | `cli-1-1b` 会话 |
+| TR-199 | P1 §6.1B | `save flowchart-box.svg` → `saved to flowchart-box.svg (8 elements)` | `SaveCommand`；`elementCount`（8.3 第 4 小节逐行表） | S12 | `cli-1-1b` 会话 |
+
+共 199 行：规格第二部分 172 行（其中验收清单格子 31 行），P1 规格 §4.4 / §4.2 15 行，§6.1B 12 行。
+
+---
+
+## 8 接入演练
+
+每一节按同样的四步：① 插件包的文件清单；② 代码草图（只 import `@svgframe/kernel`，每个用到的内核接口后面用 `// §x.y` 标出定义它的章节）；③ 接入提交的预测 `git diff --name-status`、三条判据命令与推演的输出；④ 逐项论证内核零改动。演练中发现、已回填进第 2–4 部分的缺口统一列在 8.5。
+
+三条判据命令里的 `rg -n "import|require|switch" src/loader`，在 S10–S13 的每一次接入中输出都相同（加载器在 S8 写成之后不再改动，`git diff C^ C -- src/loader` 为空）。按 4.6 的设计，预计输出只有这几类行，没有任何插件名、映射表或 `switch`：
+
+```text
+src/loader/ModuleLocator.ts:1:import { createRequire } from "node:module";
+src/loader/ModuleLocator.ts:…:import { existsSync, readFileSync, statSync } from "node:fs";
+src/loader/ModuleLocator.ts:…:import path from "node:path";
+src/loader/ModuleLocator.ts:…:    const packageJson = createRequire(this.configFile).resolve(`${moduleName}/package.json`);
+src/loader/PluginConfig.ts:…:import { readFileSync } from "node:fs";
+src/loader/PluginConfigEntry.ts:…:import { PluginOptions } from "@svgframe/kernel";
+src/loader/PluginLoader.ts:…:import { pathToFileURL } from "node:url";
+src/loader/PluginLoader.ts:…:import { PluginCandidate } from "@svgframe/kernel/host";
+src/loader/PluginLoader.ts:…:      namespace = await import(pathToFileURL(located.entryFile()).href);
+```
+
+（行号在 S8 实现后才确定；L5 的 architecture test 机械地保证其中不出现任何插件包名与注册名。）
+
+### 8.1 `stats`（S10）
+
+**1. 文件清单**
+
+| 文件 | 内容 |
+|---|---|
+| `plugins/command-stats/package.json` | `name: "@svgframe/plugin-command-stats"`，`type: module`，`exports: { ".": "./src/StatsPlugin.ts", "./package.json": "./package.json" }`，`dependencies: { "@svgframe/kernel": "0.1.0" }`，`contributes: { "commands": ["stats"] }` |
+| `src/StatsPlugin.ts` | 入口，`export default class StatsPlugin`（P5b） |
+| `src/StatsCommand.ts` | 命令：静态侧 + 命令对象（与内置命令同一写法） |
+| `src/ShapeTally.ts` | 计数器：按首次出现的顺序累计叶子、统计容器 |
+| `tests/FakeLeaf.ts`、`tests/FakeContainer.ts` | 测试替身：分别继承内核的 `LeafShape`、`ContainerShape`，`kindName` 可指定，用来搭任意文档（不依赖内置图形插件） |
+| `tests/FakeCommandContext.ts` | 测试替身：`CommandContext` 的内存实现 |
+| `tests/ShapeTally.test.ts`、`tests/StatsCommand.test.ts`、`tests/StatsPlugin.test.ts` | 见下 |
+
+**2. 草图**
+
+```ts
+// src/StatsPlugin.ts
+import type { Plugin, PluginContext, PluginOptions } from "@svgframe/kernel";
+import { StatsCommand } from "./StatsCommand.js";
+
+/** Registers the `stats` command. */
+export default class StatsPlugin implements Plugin {          // Plugin §3.1；P5b §1.3
+  constructor(_options: PluginOptions) {}                     // PluginOptions §3.1
+  activate(context: PluginContext): void {
+    context.registerCommand(StatsCommand);                    // registerCommand §3.2；注册类本身 §2.2.1
+  }
+}
+
+// src/StatsCommand.ts
+import { ArgList, CommandContext, CommandResult, QueryCommand } from "@svgframe/kernel";   // §3.10
+import { ShapeTally } from "./ShapeTally.js";
+
+/** `stats`: leaf counts by type in first-seen order, then totals (spec §2.1). */
+export class StatsCommand extends QueryCommand {              // QueryCommand：不进 undo 栈、不碰 io 锁 §2.2.6
+  static readonly commandName = "stats";                      // CommandType §2.2.2
+  static readonly usage = "stats";
+  static readonly summary = "count the shapes of the document by type";
+  // requiresDocument 继承 Command 的 true（决策 X11）；category 继承 QueryCommand 的 DISPLAY（决策 X13）
+
+  static parse(args: ArgList): StatsCommand {                 // ArgList.expectEnd：`usage: stats`
+    args.expectEnd();
+    return new StatsCommand();
+  }
+
+  execute(context: CommandContext): CommandResult {           // CommandContext.document() §2.2.5
+    const tally = new ShapeTally();
+    tally.visit(context.document().childList());              // SvgDocument.childList()（现有）
+    return CommandResult.of(tally.render());
+  }
+}
+
+// src/ShapeTally.ts
+import type { Shape } from "@svgframe/kernel";
+
+/** Counts leaves by kind name in first-seen order and containers separately. */
+export class ShapeTally {
+  private readonly leaves = new Map<string, number>();        // 数据 Map，不是名字分派（P2 允许）；插入顺序 = 首次出现顺序
+  private containers = 0;
+
+  /** Depth-first, in child order; the document root itself is not a shape and is never counted. */
+  visit(shapes: readonly Shape[]): void {
+    for (const shape of shapes) {
+      const container = shape.asContainer();                  // asContainer(): ContainerShape | null §3.5
+      if (container === null) {
+        const kind = shape.kindName();                        // kindName() §3.6；box 的部件是 rect/text
+        this.leaves.set(kind, (this.leaves.get(kind) ?? 0) + 1);
+      } else {
+        this.containers++;                                    // g 与 box 都只计入 containers
+        this.visit(container.childList());                    // box 内部的叶子照常计数
+      }
+    }
+  }
+
+  /** `rect: 3  circle: 1  text: 2  (total 6, containers 2)`; an empty document gives `(total 0, containers 0)`. */
+  render(): string {
+    const total = [...this.leaves.values()].reduce((sum, n) => sum + n, 0);
+    const parts = [...this.leaves].map(([kind, n]) => `${kind}: ${n}`);
+    return [...parts, `(total ${total}, containers ${this.containers})`].join("  ");
+  }
+}
+```
+
+**3. 接入提交 C 与判据**
+
+```text
+$ git diff --name-status C^ C
+M	package-lock.json
+A	plugins/command-stats/package.json
+A	plugins/command-stats/src/ShapeTally.ts
+A	plugins/command-stats/src/StatsCommand.ts
+A	plugins/command-stats/src/StatsPlugin.ts
+A	plugins/command-stats/tests/FakeCommandContext.ts
+A	plugins/command-stats/tests/FakeContainer.ts
+A	plugins/command-stats/tests/FakeLeaf.ts
+A	plugins/command-stats/tests/ShapeTally.test.ts
+A	plugins/command-stats/tests/StatsCommand.test.ts
+A	plugins/command-stats/tests/StatsPlugin.test.ts
+M	src/assembly/CompositionRoot.ts
+```
+
+| 插件目录以外的文件 | 为什么必须改 |
+|---|---|
+| `package-lock.json` | 新 workspace 包：两段（`node_modules/@svgframe/plugin-command-stats` 的 `link` 与 `plugins/command-stats` 的条目，附录 B.1） |
+| `src/assembly/CompositionRoot.ts` | 方式 A：两行 import（类与 `package.json`）+ `optional()` 中一项 |
+
+```bash
+git diff C^ C -- packages/kernel src/loader plugins ':(exclude)plugins/command-stats'   # 推演：空
+rg -n "import|require|switch" src/loader                                                # 推演：同本节开头，与 C^ 时相同
+```
+
+配置提交 C′：`M plugins.config.json`（追加 `{ "module": "@svgframe/plugin-command-stats" }`）。
+
+**4. 内核零改动**
+
+| `stats` 需要 | 已由谁提供 |
+|---|---|
+| 以类注册一条命令 | `PluginContext.registerCommand`（3.2），`CommandType`（2.2.2，现有） |
+| 不进 undo 栈、不碰 io 锁 | `QueryCommand.recordIn`（现有，2.2.6） |
+| 没有文档时报 `no document` | `Command.requiresDocument = true`（现有）+ `Editor.run` 的检查（现有） |
+| 在 `help` 中出现、类别与顺序 | `HelpCommand` 从 `CommandCatalog` 生成（2.2.3）；注册顺序 = 安装顺序 |
+| 未加载时 `unknown command: stats` | `CommandRegistry.lookup`（现有，2.2.1） |
+| 遍历文档、区分容器 | `SvgDocument.childList()`（现有）、`Shape.asContainer(): ContainerShape \| null`（3.5） |
+| box 计为容器、内部叶子照常计数 | `BoxShape extends ContainerShape`（8.3）；`asContainer()` 多态 |
+| 类型名 | `Shape.kindName()`（3.6） |
+| 测试替身搭文档 | `LeafShape`、`ContainerShape`、`SvgDocument`、`GeometryAttribute` 等经 `api.ts` 导出（3.10） |
+
+没有一项需要内核再提供什么。
+
+**测试**：`ShapeTally`：空文档 → `(total 0, containers 0)`；规格示例（3 rect、1 circle、2 text、2 容器，含嵌套）→ 原样；首次出现顺序（先 text 后 rect 的文档 → `text: … rect: …`）；容器内的叶子计数、容器嵌套容器、`kindName` 与 `tagName` 不同的叶子按 `kindName` 计。`StatsCommand`：`stats x` → `usage: stats`；执行前后文档序列化相同、`recordIn` 后 undo 深度不变（替身 `History`）。`StatsPlugin`：替身 `PluginContext` 收到恰好一个命令 `stats`。“已加载时出现在 `help` 中、未加载时报 `unknown command`”由 S9 的通用装配契约测试覆盖（9.2），接入时不改那个测试。
+
+### 8.2 `dir`（S11）
+
+**1. 文件清单与 Adapter 角色**
+
+| 文件 | Adapter 角色 | 内容 |
+|---|---|---|
+| `plugins/command-dir/package.json` | — | `name: "@svgframe/plugin-command-dir"`，`contributes: { "commands": ["dir"] }`，其余同 8.1 |
+| `src/DirPlugin.ts` | （装配） | 入口；构造时 `new NodeDirectoryLister()`、`new NodeWorkingDirectory()`，激活时注册 `new DirCommandType(lister, cwd)` |
+| `src/DirCommandType.ts` | （工厂） | 实现 `CommandType` 的**实例**：持有目录访问接口，`parse` 时把它交给命令（2.2.1） |
+| `src/DirCommand.ts` | **Client** | 继承 `QueryCommand`；只依赖 `DirectoryLister`、`WorkingDirectory` 两个接口；负责排序、格式、空目录与错误文案 |
+| `src/DirectoryLister.ts` | **Target** | 接口：`list(path: string): DirectoryEntry[]`；读取失败时抛异常 |
+| `src/DirectoryEntry.ts` | Target 的数据 | 值对象：`name()`、`isDirectory()` |
+| `src/NodeDirectoryLister.ts` | **Adapter** | `implements DirectoryLister`；把 Node 的 `fs.readdirSync(path, { withFileTypes: true })` 与 `Dirent` 转成 `DirectoryEntry`（L9：文件名以 `Node` 开头，可以 import `node:fs`） |
+| （Node 的 `node:fs`：`readdirSync`、`Dirent`、`statSync`） | **Adaptee** | 被适配者 |
+| `src/WorkingDirectory.ts` | Target（第二个端口） | 接口：`current(): string` |
+| `src/NodeWorkingDirectory.ts` | Adapter | `process.cwd()` |
+| `tests/FakeDirectoryLister.ts`、`tests/FakeWorkingDirectory.ts` | **测试替身** | 内存列表 / 抛错；固定路径 |
+| `tests/DirCommand.test.ts` | — | 替身测试 |
+| `tests/NodeDirectoryLister.test.ts` | — | 真实适配器：临时目录 |
+| `tests/DirInEditor.test.ts` | — | 用 `@svgframe/kernel/host` 组装只含 `DirPlugin` 与测试替身插件的编辑器，验证状态不变（9.1） |
+
+**2. 草图**
+
+```ts
+// src/DirCommandType.ts
+import { ArgList, CommandCategory, type CommandType } from "@svgframe/kernel";
+/** The registered static side of `dir`, as an instance because it carries the directory ports. */
+export class DirCommandType implements CommandType {           // CommandType §2.2.2；实例注册 §2.2.1
+  readonly commandName = "dir";
+  readonly usage = "dir";
+  readonly summary = "list the files and directories of the working directory";
+  readonly category = CommandCategory.DISPLAY;                  // §2.2.3（决策 X13）
+  readonly requiresDocument = false;                            // §2.2.6
+  constructor(private readonly lister: DirectoryLister, private readonly cwd: WorkingDirectory) {}
+  parse(args: ArgList): DirCommand {
+    args.expectEnd();                                           // 多余参数 → `usage: dir`（决策 X12）
+    return new DirCommand(this.lister, this.cwd);
+  }
+}
+
+// src/DirCommand.ts
+/** `dir`: the direct children of the working directory, directories first (spec §2.2). */
+export class DirCommand extends QueryCommand {                  // 不进 undo 栈、不碰 io 锁、不改文档 §2.2.6
+  private static readonly TAG_WIDTH = 6;                        // "[FILE]"；"[DIR]" 补一个空格（决策 X27）
+  execute(_context: CommandContext): CommandResult {            // 不读 context：没有文档时同样可用
+    const path = this.cwd.current();
+    let entries: DirectoryEntry[];
+    try {
+      entries = this.lister.list(path);
+    } catch {
+      throw new EditorError(`cannot read directory: ${path}`);  // EditorError §3.10；之后照常执行其他命令
+    }
+    if (entries.length === 0) {
+      return CommandResult.of("(empty directory)");
+    }
+    const dirs = entries.filter((e) => e.isDirectory()).sort(DirCommand.byCodeUnit);
+    const files = entries.filter((e) => !e.isDirectory()).sort(DirCommand.byCodeUnit);
+    return CommandResult.of(...dirs.map((e) => this.line("[DIR]", e)), ...files.map((e) => this.line("[FILE]", e)));
+  }
+  /** UTF-16 code-unit order, independent of the locale (not localeCompare). */
+  private static byCodeUnit(a: DirectoryEntry, b: DirectoryEntry): number { … a.name() < b.name() ? -1 : … }
+  private line(tag: string, entry: DirectoryEntry): string { return `${tag.padEnd(DirCommand.TAG_WIDTH)} ${entry.name()}`; }
+}
+
+// src/NodeDirectoryLister.ts
+/** Adapter: Node's readdirSync / Dirent → DirectoryEntry. Follows a symbolic link one level; everything that is not a directory is a file. */
+export class NodeDirectoryLister implements DirectoryLister {
+  list(path: string): DirectoryEntry[] {
+    return readdirSync(path, { withFileTypes: true }).map((d) => new DirectoryEntry(d.name, this.isDirectory(path, d)));
+  }
+  private isDirectory(path: string, d: Dirent): boolean {
+    if (!d.isSymbolicLink()) return d.isDirectory();
+    try { return statSync(join(path, d.name)).isDirectory(); } catch { return false; }   // 断链 → [FILE]
+  }
+}
+```
+
+| 规格要求 | 设计 |
+|---|---|
+| 同步还是异步 | 同步（决策 X19，与 2.2.4 一致） |
+| 当前工作目录从哪里来 | `WorkingDirectory.current()`，真实实现是 `process.cwd()`；`read`、`save` 不改变它（它们只读写文件路径） |
+| 排序 | 先目录后文件；组内按 UTF-16 码元升序（`localeCompare` 依赖 ICU 与 locale，换机器可能变，会破坏逐字节一致） |
+| 隐藏项 | 列出（`readdirSync` 本来就不返回 `.`、`..`） |
+| 符号链接等特殊项 | 跟随一层，指向目录 → `[DIR]`，其余 → `[FILE]`（N3） |
+| 空目录 | `(empty directory)` |
+| 读取失败 | `error: cannot read directory: <path>`，`<path>` 是当前目录的绝对路径（N7）；`Editor` 照常返回，下一行继续 |
+| 多余的参数 | `usage: dir` |
+| 没有文档时可用 | `requiresDocument = false` |
+| 不改变文档、dirty、undo/redo、io 锁 | 不调用 `context` 的任何方法；`QueryCommand.recordIn` 为空；不触发事件（所以 `modified-star` 的状态也不变） |
+| 两种装配用同一个实现、同一个接口 | 两种方式都由安装器执行 `new DirPlugin(options)`（4.1），构造出同一个 `NodeDirectoryLister`；命令只经 `DirectoryLister` 访问文件系统 |
+
+**3. 接入提交 C 与判据**
+
+```text
+$ git diff --name-status C^ C
+M	package-lock.json
+A	plugins/command-dir/package.json
+A	plugins/command-dir/src/DirCommand.ts
+A	plugins/command-dir/src/DirCommandType.ts
+A	plugins/command-dir/src/DirPlugin.ts
+A	plugins/command-dir/src/DirectoryEntry.ts
+A	plugins/command-dir/src/DirectoryLister.ts
+A	plugins/command-dir/src/NodeDirectoryLister.ts
+A	plugins/command-dir/src/NodeWorkingDirectory.ts
+A	plugins/command-dir/src/WorkingDirectory.ts
+A	plugins/command-dir/tests/DirCommand.test.ts
+A	plugins/command-dir/tests/DirInEditor.test.ts
+A	plugins/command-dir/tests/FakeDirectoryLister.ts
+A	plugins/command-dir/tests/FakeWorkingDirectory.ts
+A	plugins/command-dir/tests/NodeDirectoryLister.test.ts
+M	src/assembly/CompositionRoot.ts
+```
+
+插件目录以外：`package-lock.json`、`CompositionRoot.ts`，理由同 8.1。
+
+```bash
+git diff C^ C -- packages/kernel src/loader plugins ':(exclude)plugins/command-dir'   # 推演：空
+rg -n "import|require|switch" src/loader                                              # 推演：同本节开头
+```
+
+配置提交 C′：
+
+```text
+M	plugins.config.json
+A	doc/transcript/cli-2.txt
+A	doc/transcript/cli-2.runs.json                 { "groups": [ { "expected": null, "runs": [[], ["--config", "{repo}/plugins.config.json"]] } ] }
+A	doc/transcript/fixtures/cli-2/.hidden
+A	doc/transcript/fixtures/cli-2/docs/readme.txt
+A	doc/transcript/fixtures/cli-2/plugins/keep.txt
+A	doc/transcript/fixtures/cli-2/demo.svg
+A	doc/transcript/fixtures/cli-2/package.json
+M	doc/transcript/README.md
+```
+
+`cli-2.txt` 在 S11 只含 `dir`（无文档时与有文档时各一次）、`stats`、`init`、几条 `create`，不含 `tree`、`save`（4.7）；期望输出在 S14 补。
+
+**4. 内核零改动**
+
+| `dir` 需要 | 已由谁提供 |
+|---|---|
+| 命令带着注入的依赖注册 | 注册对象可以是 `CommandType` 的实例（2.2.1） |
+| 不需要文档 | `CommandType.requiresDocument`（现有） |
+| 类别 Display | `CommandCategory.DISPLAY`（现有，经 `api.ts` 导出） |
+| 用户可见的错误、继续执行 | `EditorError` + `Editor.executeLine` 的现有捕获 |
+| 访问文件系统 | 插件自己的 Adapter；L9 允许 `Node*` 文件 import `node:fs` |
+| 同步 | 命令接口本来就是同步的（2.2.4） |
+| 状态测试用的最小编辑器 | `@svgframe/kernel/host` 的 `Editor`、`EditorSession`、`ExtensionRegistry`、`PluginInstaller`（3.10），测试中可用（L2） |
+
+### 8.3 `box`（S12）
+
+**1. 文件清单**
+
+| 文件 | 内容 |
+|---|---|
+| `plugins/shape-box/package.json` | 3.3.2 的样例：`contributes: { shapes: ["box"], attributes: ["box-attributes"], decorators: ["box-type-label"] }` |
+| `src/BoxPlugin.ts` | 入口；检查 rect/text 已注册，注册提供者、处理器、标签 |
+| `src/BoxShape.ts` | `extends ContainerShape`：`tagName() = "g"`、`kindName() = "box"`、`canUngroup() = false`、`canRelease`、`svgAttributes` 带 `data-kind` |
+| `src/BoxProvider.ts` | `implements ShapeProvider`：参数、派生 id、模板、回显说明、读回 |
+| `src/BoxAttributeHandler.ts` | `implements AttributeHandler`：`fill`、`label` |
+| `src/BoxFillChange.ts`、`src/BoxLabelChange.ts` | `implements AttributeChange` |
+| `src/BoxTypeLabel.ts` | `implements TreeDecorator`：`(box)`。**`(box)` 标注放在 box 插件里**：没装 box 就没有 box，也就不需要这个标签；它只认自己的 `kindName`，与 `modified-star` 互不感知 |
+| `tests/FakeShapesPlugin.ts`、`tests/FakeRect.ts`、`tests/FakeText.ts`、`tests/FakeGroup.ts` | 测试替身：不依赖内置图形插件的 rect/text/g（继承内核的 `LeafShape` / `ContainerShape`，用 `StaticShapeProvider` 注册） |
+| `tests/BoxProvider.test.ts`、`tests/BoxReadBack.test.ts`、`tests/BoxAttributeHandler.test.ts`、`tests/BoxInEditor.test.ts`、`tests/BoxTypeLabel.test.ts` | 见下表 |
+
+**2. 草图**
+
+```ts
+// src/BoxShape.ts
+/** `box`: a container holding a frame rect `<id>-rect` and a title text `<id>-label` (P1 spec §4.4). */
+export class BoxShape extends ContainerShape {                 // ContainerShape §3.5
+  static readonly KIND = "box";
+  static readonly MARKER = "data-kind";
+  constructor(id: string) { super(id); }
+  tagName(): string { return "g"; }                            // 序列化为 <g>
+  override kindName(): string { return BoxShape.KIND; }        // kindName §3.6 → 回显 box#n1
+  override canUngroup(): boolean { return false; }             // §3.5 → cannot ungroup composite shape: n1
+  override canRelease(child: Shape): boolean {                 // canRelease §3.7
+    return child.getId() !== this.frameId() && child.getId() !== this.labelId();
+  }
+  frameId(): string { return `${this.getId()}-rect`; }
+  labelId(): string { return `${this.getId()}-label`; }
+  override svgAttributes(): Array<[string, string]> {           // Shape.svgAttributes（现有，可覆写）
+    return [["id", this.getId()], [BoxShape.MARKER, BoxShape.KIND], ...this.styleEntries(), ...this.extraEntries()];
+  }
+}
+
+// src/BoxProvider.ts
+/** ShapeProvider of `box`: template, derived ids, creation echo and read-back. */
+export class BoxProvider implements ShapeProvider {            // ShapeProvider §2.1.2
+  private static readonly FRAME_TYPE = "rect";
+  private static readonly LABEL_TYPE = "text";
+  private static readonly DEFAULT_FILL = "#4a90d9";            // 决策 X3
+  readonly typeName = BoxShape.KIND;
+  readonly params = [ParamSpec.required("x"), ParamSpec.required("y"), ParamSpec.required("w", "width"),
+                     ParamSpec.required("h", "height"), ParamSpec.textContent("label", "label")];   // usage: create box <id> <x> <y> <w> <h> "label" [in <containerId>]
+
+  claimedIds(id: string): readonly string[] { return [id, `${id}-rect`, `${id}-label`]; }          // §2.1.6
+
+  create(id: string, values: ReadonlyMap<string, string>, kit: ShapeKit): Shape {                // ShapeKit §2.1.2
+    const [x, y, w, h] = ["x", "y", "width", "height"].map((k) => NumberFormat.parse(values.get(k) ?? ""));
+    const box = new BoxShape(id);
+    const frame = kit.build(BoxProvider.FRAME_TYPE, box.frameId(), new Map([
+      ["x", values.get("x")!], ["y", values.get("y")!], ["width", values.get("width")!], ["height", values.get("height")!],
+      ["fill", BoxProvider.DEFAULT_FILL]]));                                                        // 取值非法 → rect 抛 invalid value for width: -1
+    const label = kit.build(BoxProvider.LABEL_TYPE, box.labelId(), new Map([
+      ["x", NumberFormat.format(x + w / 8)], ["y", NumberFormat.format(y + h / 2 + 5)], ["text", values.get("label")!]]));
+    box.insertAt(frame, 0);                                                                         // 游离子树内部的组装
+    box.insertAt(label, 1);
+    return box;
+  }
+
+  creationDetail(shape: Shape): string {                                                            // §2.1.6
+    const parts = shape.asContainer()?.childList() ?? [];
+    return ` (${[shape, ...parts].map((s) => s.treeLabel()).join(" + ")})`;                         // (g#n1 + rect#n1-rect + text#n1-label)
+  }
+
+  matchScore(element: ElementView): number {                                                        // ElementView §2.1.4
+    return element.name() === "g" && element.attribute(BoxShape.MARKER) === BoxShape.KIND ? 2 : 0;
+  }
+
+  read(element: ElementView, reader: ShapeReader): Shape | null {                                   // ShapeReader §2.1.4
+    const id = element.attribute("id");
+    if (id !== undefined && id.length > 0) {
+      for (const claimed of this.claimedIds(id)) {
+        reader.requireUnique(claimed);                                                              // ADR-2：读入结束时检查；降级也不豁免
+      }
+    }
+    const problem = this.structureProblem(element, id);                                             // 只看 ElementView，无副作用
+    if (problem !== null) {
+      reader.warn(`box ${id ?? "(no id)"} read as plain g: ${problem}`);
+      return reader.readWithNext(element);                                                          // 降级：交给 g 的提供者
+    }
+    const box = new BoxShape(reader.allocateId(element));
+    reader.applyAttributes(box, element, [BoxShape.MARKER]);                                        // data-kind 已消费，不进透传属性
+    reader.readChildren(element).forEach((child, i) => box.insertAt(child, i));                     // 子部件走通用路径
+    return box;
+  }
+
+  /** null when valid; otherwise e.g. `missing n1-label` or `n1-rect is <circle>, expected <rect>`. */
+  private structureProblem(element: ElementView, id: string | undefined): string | null { … }      // 决策 X7
+}
+
+// src/BoxAttributeHandler.ts
+/** `set <box> fill` goes to the frame rect, `set <box> label` rewrites the title text. */
+export class BoxAttributeHandler implements AttributeHandler {  // AttributeHandler §2.4.2
+  private static readonly FILL = "fill";
+  private static readonly LABEL = "label";
+  readonly name = "box-attributes";
+  readonly priority = 0;
+  handles(target: ShapeView, attribute: string): boolean {      // ShapeView §2.3.5 / §3.6
+    return target.kindName() === BoxShape.KIND
+      && (attribute === BoxAttributeHandler.FILL || attribute === BoxAttributeHandler.LABEL);
+  }
+  apply(target: AttributeTarget, attribute: string, value: string): AttributeChange {   // AttributeTarget §2.4.2
+    const id = target.view().getId();
+    const label = target.view().label();                       // box#n2
+    if (attribute === BoxAttributeHandler.FILL) {
+      target.part(`${id}-rect`).setAttribute(BoxAttributeHandler.FILL, value);
+      return new BoxFillChange(label, `${id}-rect`);           // propagated to / restored on
+    }
+    const text = target.part(`${id}-label`);
+    const old = text.view().textContent() ?? "";
+    text.setAttribute("text", value);
+    return new BoxLabelChange(label, value, old);              // label updated: "v" / label restored: "old"
+  }
+}
+
+// src/BoxTypeLabel.ts
+/** Tree tag `(box)` on box rows only. */
+export class BoxTypeLabel implements TreeDecorator {           // TreeDecorator §2.3.1
+  readonly name = "box-type-label";
+  tagFor(row: TreeRowView): string | null {
+    return row.shape()?.kindName() === BoxShape.KIND ? `(${BoxShape.KIND})` : null;
+  }
+}
+
+// src/BoxPlugin.ts
+/** The `box` shape type with its attribute semantics and tree tag. */
+export default class BoxPlugin implements Plugin {
+  constructor(_options: PluginOptions) {}
+  activate(context: PluginContext): void {
+    const types = context.shapeTypes();                        // shapeTypes() §3.2
+    if (!types.has("rect") || !types.has("text")) {
+      throw new Error("requires shape types: rect, text");     // → plugin failed to activate（§2.1.5）
+    }
+    context.registerShape(new BoxProvider());
+    context.registerAttributeHandler(new BoxAttributeHandler());
+    context.registerTreeDecorator(new BoxTypeLabel());
+  }
+}
+```
+
+**3. 行为覆盖（规格 §3.4、§4，P1 规格 §4.4）**
+
+| 行为 | 产生它的机制 | 测试 |
+|---|---|---|
+| `create box n1 120 100 160 60 "开始"` → `box#n1 created (g#n1 + rect#n1-rect + text#n1-label)` | `CreateCommand`（2.1.6）+ `BoxProvider.create` / `creationDetail` + `BoxShape.label()` | `BoxInEditor` |
+| 派生 id 冲突：`n1-rect` 已存在 → `error: id already exists: n1-rect`，不留下 `n1` 与 `n1-label` | `claimedIds` 一次性查重（2.1.6） | `BoxInEditor`：执行前后序列化相同、undo 深度不变 |
+| 派生 id 不合法（`n1` 合法则派生 id 也合法；`IdSyntax` 对每个 claimed id 检查） | `checkNewId` | `BoxProvider` |
+| `create box n3 … in n1` → `box#n3 created (g#n3 + …) in box#n1` | `findContainer` 接受 `ContainerShape`（3.5，N1）、回显顺序（X4） | `BoxInEditor` |
+| 嵌套 box、`create rect r9 … in n1`、`addto n1 r9` | 同上；`canRelease` 只保护两个部件 | `BoxInEditor` |
+| `move n2 0 100` → `box#n2 moved by (0,100)`；undo → `box#n2 moved back by (0,-100)` | `ContainerShape.moveBy` / `moveDescription`、`label()` | `BoxInEditor` |
+| `delete n1` 一个 undo 单元；undo → `box#n1 restored` | `DeleteCommand`（现有）+ `TreePosition` | `BoxInEditor` |
+| `group cluster n1 n2` → `g#cluster created with 2 children` | `GroupCommand`（3.5） | `BoxInEditor` |
+| `ungroup n1` → `error: cannot ungroup composite shape: n1` | `BoxShape.canUngroup()` + `UngroupCommand`（现有文案） | `BoxInEditor` |
+| `set n1 fill #f5a623` 改 `n1-rect`，一个 undo 单元 | `BoxAttributeHandler` + `AttributeDispatcher`（2.4.3） | `BoxAttributeHandler`、`BoxInEditor` |
+| `set n1 label "处理数据 v2"` 改 `n1-label`，一个 undo 单元；undo / redo 各一次 | 同上 | 同上 |
+| 处理器失败回滚（`set n1 fill ""` → `invalid value for fill: ""`，文档与历史不变） | 2.4.3 第 5 步 | `BoxInEditor` |
+| 序列化 `<g id="n1" data-kind="box">`，`data-kind` 只写一次 | `BoxShape.svgAttributes` + `applyAttributes(…, ["data-kind"])` | `BoxReadBack`：读 → 存 → 读 → 存，两次文件逐字节相同 |
+| 读回还原为 box | `matchScore` = 2 > `g` 的 1（2.1.3） | `BoxReadBack` |
+| 没装插件时降级为 `g`，`data-kind` 原样写回 | 2.1.3；`g` 的提供者 + 透传属性（F7） | 根测试（`tests/system/`，S12）：用 bare 读写同一文件 |
+| 子部件不完整 / 类型错误 → 警告并降级 | `structureProblem` + `readWithNext`（ADR-2） | `BoxReadBack`：缺 `n1-label`、`n1-rect` 是 `<circle>`、box 无 id、部件 id 是自动分配的 |
+| 部件顺序调换、多出子元素（嵌套 box） | 按派生 id 识别（X7） | `BoxReadBack` |
+| 重复 id → 拒绝整个读入，原文档不变 | `requireUnique`（2.1.4） | `BoxReadBack`：① 另一处 `<rect id="n1-rect">` → 拒绝；② box 内有两个 `<rect id="n1-rect">`（结构不完整、降级）→ 仍拒绝；③ 文件中另有被跳过的 `<path id="n1-rect">` → **照常读入**为 box（与 F14 同口径）；④ 嵌套在被跳过元素里的同名 id → 照常读入。`BoxInEditor`：`read` 失败后 `tree` 不变 |
+| `delete n1-rect`、`addto other n1-label`、`group x n1-rect` → `cannot detach required part of composite shape: <id>` | `canRelease` + `checkReleasable`（3.7） | `BoxInEditor`：状态完全不变 |
+| `front n1-rect`（box 内部调顺序）允许 | 3.7 | `BoxInEditor` |
+| `tree` 中 `g#n1 (box)`；`tree n1` 第一行 `g#n1 (box)` | `treeLabel()` + `BoxTypeLabel`（2.3） | `BoxTypeLabel`、`cli-1-1b` |
+| `show n1` → `box#n1  parent=…`；`show n1-rect` → `parent=box#n1` | `label()`、`containerLabel()`（3.6，X20） | `BoxInEditor` |
+| `stats` 中 box 计入 containers、部件照常计数 | 8.1 | `stats` 的测试（替身容器） |
+| 缺 rect/text 时 → `plugin failed to activate: … (requires shape types: rect, text)` | `BoxPlugin.activate` + `shapeTypes()` | `BoxPlugin`：替身上下文 |
+| 插件测试不依赖其他插件 | 替身 rect/text/g（`tests/Fake*.ts`）+ `@svgframe/kernel/host` 组装最小编辑器 | 全部 box 测试 |
+
+**4. P1 规格 §6.1B 逐行**
+
+| 输入 | 输出 | 由谁产生 |
+|---|---|---|
+| （启动） | `svg-editor 0.1 — type 'help' for commands` | `Repl.BANNER`（现有） |
+| `init 800 600` | `canvas 800x600 created` | `InitCommand.execute`（现有） |
+| `create box n1 120 100 160 60 "开始"` | `box#n1 created (g#n1 + rect#n1-rect + text#n1-label)` | `CreateCommand.describe`：`BoxShape.label()` + `BoxProvider.creationDetail()` |
+| `create box n2 520 100 160 60 "处理数据"` | `box#n2 created (g#n2 + rect#n2-rect + text#n2-label)` | 同上；标题位于 (540,135)（X3） |
+| `create line arrow1 280 130 520 130 black` | `line#arrow1 created` | `CreateCommand.describe`（内置 `line`，`creationDetail` 为空） |
+| `group flowchart n1 n2 arrow1` | `g#flowchart created with 3 children` | `GroupCommand.describe`；容器由 `ShapeCatalog.lookup("g")` 创建（3.5） |
+| `# Composite 的统一操作…` | （无输出） | `Editor.isIgnored`（现有） |
+| `move n2 0 100` | `box#n2 moved by (0,100)` | `MoveCommand.describe`：`label()` + `ContainerShape.moveDescription` |
+| `undo` | `box#n2 moved back by (0,-100)` | `MoveCommand.undo` |
+| `set n2 fill #f5a623` | `box#n2 fill propagated to n2-rect` | `SetCommand` → `AttributeDispatcher.plan` → `BoxAttributeHandler.apply` → `BoxFillChange.appliedMessage()` |
+| `set n2 label "处理数据 v2"` | `box#n2 label updated: "处理数据 v2"` | 同上 → `BoxLabelChange.appliedMessage()` |
+| `undo` | `box#n2 label restored: "处理数据"` | `SetCommand.undo` → `AttributeEdit.undo()` + 保存的 `undoneMessage()` |
+| `tree` | `svg (800x600)` | `TreeRenderer.renderDocument`（根行；`BoxTypeLabel` 对根行返回 null） |
+| | `└── g#flowchart` | `treeLabel()`；无摘要不补空格 |
+| | `    ├── g#n1 (box)` | `treeLabel()` + `BoxTypeLabel.tagFor` |
+| | `    │   ├── rect#n1-rect   x=120 y=100 w=160 h=60 fill=#4a90d9` | `Rect.summary()`；V1 列号 27（3 个空格，T3） |
+| | `    │   └── text#n1-label  (140,135) "开始"` | `Text.summary()`（2 个空格） |
+| | `    ├── g#n2 (box)` | 同 n1 |
+| | `    │   ├── rect#n2-rect   x=520 y=100 w=160 h=60 fill=#f5a623` | fill 已由处理器改写 |
+| | `    │   └── text#n2-label  (540,135) "处理数据"` | label 已撤销 |
+| | `    └── line#arrow1        (280,130) -> (520,130)` | `Line.summary()`（8 个空格） |
+| `save flowchart-box.svg` | `saved to flowchart-box.svg (8 elements)` | `SaveCommand`；`elementCount` 计 1 个 g + 2 个 box + 4 个部件 + 1 条线 = 8 |
+
+**5. 接入提交与判据**
+
+主线提交 C_A（方式 A），父提交 P：
+
+```text
+$ git diff --name-status P C_A
+M	package-lock.json
+A	plugins/shape-box/package.json
+A	plugins/shape-box/src/BoxAttributeHandler.ts
+A	plugins/shape-box/src/BoxFillChange.ts
+A	plugins/shape-box/src/BoxLabelChange.ts
+A	plugins/shape-box/src/BoxPlugin.ts
+A	plugins/shape-box/src/BoxProvider.ts
+A	plugins/shape-box/src/BoxShape.ts
+A	plugins/shape-box/src/BoxTypeLabel.ts
+A	plugins/shape-box/tests/BoxAttributeHandler.test.ts
+A	plugins/shape-box/tests/BoxInEditor.test.ts
+A	plugins/shape-box/tests/BoxProvider.test.ts
+A	plugins/shape-box/tests/BoxReadBack.test.ts
+A	plugins/shape-box/tests/BoxTypeLabel.test.ts
+A	plugins/shape-box/tests/FakeGroup.ts
+A	plugins/shape-box/tests/FakeRect.ts
+A	plugins/shape-box/tests/FakeShapesPlugin.ts
+A	plugins/shape-box/tests/FakeText.ts
+M	src/assembly/CompositionRoot.ts
+```
+
+演示分支 `demo/box-config` 上的提交 C_B（方式 B），父提交同为 P：
+
+```text
+$ git diff --name-status P C_B
+M	package-lock.json
+A	plugins/shape-box/…（与 C_A 完全相同的 18 个文件）
+M	plugins.config.json
+```
+
+| 插件目录以外的文件 | C_A | C_B | 理由 |
+|---|---|---|---|
+| `package-lock.json` | M | M | 新 workspace 包（两次的改动相同） |
+| `src/assembly/CompositionRoot.ts` | M | — | 方式 A 唯一的装配文件 |
+| `plugins.config.json` | — | M | 方式 B 唯一的配置 |
+
+判据：
+
+```bash
+# 方式 A（C = C_A）
+git diff C_A^ C_A -- packages/kernel src/loader plugins ':(exclude)plugins/shape-box'   # 推演：空
+# 方式 B（C = C_B）：运行代码全部不变，含组合根
+git diff C_B^ C_B -- packages src plugins ':(exclude)plugins/shape-box'                # 推演：空
+git diff C_B^ C_B -- packages/kernel src/loader plugins ':(exclude)plugins/shape-box'   # 推演：空
+# 两次接入的插件目录完全相同
+git diff C_A C_B -- plugins/shape-box                                                   # 推演：空
+rg -n "import|require|switch" src/loader                                                # 推演：同本节开头
+```
+
+主线随后的配置提交 C_A2：
+
+```text
+M	plugins.config.json
+A	doc/transcript/cli-1-1b.txt
+A	doc/transcript/cli-1-1b.runs.json        { "groups": [ { "expected": "cli-1-1b", "runs": [["--only", "@svgframe/plugin-shape-box"], ["--config", "{transcript}/configs/box.json"]] } ] }
+A	doc/transcript/configs/box.json          { "plugins": [ { "module": "@svgframe/plugin-shape-box" } ] }
+A	doc/transcript/expected/cli-1-1b/exit-code.txt
+A	doc/transcript/expected/cli-1-1b/files/flowchart-box.svg
+A	doc/transcript/expected/cli-1-1b/stdout.txt
+M	doc/transcript/README.md
+```
+
+（`configs/empty.json` 在 S9 已加。期望输出用 `--update cli-1-1b` 生成，需要事先得到明确同意，并逐行对照 P1 规格 §6.1B，见 9.2。）
+
+**6. 内核零改动**
+
+| box 需要 | 已由谁提供 |
+|---|---|
+| 一种新的图形类型、create 参数与 usage | `ShapeProvider`（2.1.2），`ParamSpec`（现有） |
+| 用 rect/text 组装、不 import 其他插件 | `ShapeKit.build`（2.1.2、2.1.5） |
+| 检查 rect/text 已安装 | `PluginContext.shapeTypes()`（3.2） |
+| 三个 id 一次性查重 | `claimedIds`（2.1.6） |
+| 创建回显的附加说明、`in` 的位置 | `creationDetail` + 回显顺序（2.1.6，X4） |
+| 是容器：`in`、`addto`、嵌套、整体 `move` / `scale` / `delete`、被 `group` | `ContainerShape`（3.5） |
+| 拒绝 `ungroup` | `ContainerShape.canUngroup()` + `UngroupCommand` 的现有文案 |
+| 保护必要子部件 | `ShapeContainer.canRelease` + `EditCommand.checkReleasable`（3.7） |
+| 回显 `box#…`、树里 `g#…` | `kindName()` / `label()` / `treeLabel()`（3.6） |
+| `fill`、`label` 的语义、undo 单元、失败回滚 | `AttributeHandler`、`AttributeTarget`、`AttributeChange`、`AttributeDispatcher`（2.4） |
+| `(box)` 标注 | `TreeDecorator`、`TreeRowView`、`ShapeView.kindName()`（2.3） |
+| 序列化 `data-kind` | `Shape.svgAttributes()` 可覆写（现有） |
+| 按 `data-kind` 读回、不认识时降级 | `matchScore` 分派（2.1.3） |
+| 读回时复用子元素处理 | `ShapeReader.readChildren`、`allocateId`、`applyAttributes`（2.1.4） |
+| 不完整时降级 | `ShapeReader.warn`、`readWithNext`（2.1.4） |
+| 重复 id 拒绝整个读入 | `ShapeReader.requireUnique`（2.1.4） |
+| 读入失败时原文档不变 | `ReadCommand` 的现有顺序（3.8） |
+| 两种装配 | 组合根一项 / 配置一项（4.1） |
+
+### 8.4 `modified-star`（S13）
+
+**1. 文件清单**
+
+| 文件 | 内容 |
+|---|---|
+| `plugins/tree-star/package.json` | `name: "@svgframe/plugin-tree-star"`，`contributes: { "decorators": ["modified-star"] }` |
+| `src/TreeStarPlugin.ts` | 入口：`const star = new ModifiedStar(); context.registerTreeDecorator(star); context.subscribe(star);` |
+| `src/ModifiedStar.ts` | `implements TreeDecorator, DocumentListener`；唯一的状态字段 `private baseline: SaveBaseline \| null = null` |
+| `src/SaveBaseline.ts` | 不可变值对象：`private readonly fingerprints: ReadonlyMap<string, string>`（id → 指纹）、`private readonly documentText: string`（整份序列化）；`static capture(document: DocumentView)`、`isShapeDirty(view)`、`isDocumentDirty(document)` |
+| `tests/ModifiedStar.test.ts` | 状态机：替身 `DocumentView` / `ShapeView` 加真实事件序列 |
+| `tests/StarInEditor.test.ts` | 用 `@svgframe/kernel/host` 组装最小编辑器（替身图形与替身编辑命令），跑 8.4 表中的每一行 |
+
+**2. 草图**
+
+```ts
+// src/ModifiedStar.ts
+/** `*` on rows whose content differs from the last save, read or init point (ADR-3). */
+export class ModifiedStar implements TreeDecorator, DocumentListener {     // TreeDecorator §2.3.1；DocumentListener §3.4
+  private static readonly TAG = "*";
+  readonly name = "modified-star";
+  private baseline: SaveBaseline | null = null;                           // 状态只在实例字段里（规格 §5）
+
+  documentReplaced(document: DocumentView, _path: string | null): void { this.baseline = SaveBaseline.capture(document); }
+  documentSaved(document: DocumentView, _path: string): void { this.baseline = SaveBaseline.capture(document); }
+  documentEdited(_document: DocumentView): void {}                        // 内容比对不需要编辑事件
+
+  tagFor(row: TreeRowView): string | null {                               // TreeRowView §2.3.1
+    if (this.baseline === null) return null;
+    const shape = row.shape();
+    const dirty = shape === null ? this.baseline.isDocumentDirty(row.document()) : this.baseline.isShapeDirty(shape);
+    return dirty ? ModifiedStar.TAG : null;
+  }
+}
+
+// src/SaveBaseline.ts
+/** Snapshot of a document at a save point: one fingerprint per shape plus the serialized text. */
+export class SaveBaseline {
+  static capture(document: DocumentView): SaveBaseline {                  // DocumentView §2.3.5
+    const prints = new Map(document.allViews().map((v) => [v.getId(), SaveBaseline.fingerprint(v)]));
+    return new SaveBaseline(prints, new SvgSerializer().serialize(document));    // SvgSerializer(DocumentView) §2.3.5、§3.10
+  }
+  /** Own attributes (id and data-kind included), text and parent; children and sibling order are not part of it. */
+  private static fingerprint(v: ShapeView): string {                      // ShapeView §3.6
+    return JSON.stringify([v.tagName(), v.svgAttributes(), v.textContent(), v.parentId()]);
+  }
+  isShapeDirty(v: ShapeView): boolean { return this.prints.get(v.getId()) !== SaveBaseline.fingerprint(v); }   // 新节点：get 为 undefined → dirty
+  isDocumentDirty(d: DocumentView): boolean { return new SvgSerializer().serialize(d) !== this.text; }
+}
+```
+
+`DocumentView.allViews()`：先序遍历的全部图形视图（`SvgDocument.allShapes()` 的只读版本，S7 随 `DocumentView` 一起定义；见 8.5 G12）。
+
+**3. 状态机**
+
+保存点 = 最近一次 `init`、`read` 或 `save` 成功时的内容。“行”列只列有变化的行。
+
+| # | 操作 | 驱动事件 | `baseline` | `tree` 中的 `*` |
+|---|---|---|---|---|
+| 1 | 启动 | — | `null` | 没有文档，`tree` 报 `no document` |
+| 2 | `init 800 600` | `documentReplaced` | 空画布 | 无（N15） |
+| 3 | `create rect r1 0 0 10 10` | `documentEdited`（忽略） | 不变 | 根行 `*`；`rect#r1 … *`（新节点立即标记） |
+| 4 | `save a.svg` | `documentSaved` | 当前内容 | 无 |
+| 5 | `move r1 5 0` | `documentEdited` | 不变 | 根行、`r1` |
+| 6 | `undo`（回到保存点） | `documentEdited` | 不变 | **无**（内容与保存点相同） |
+| 7 | `redo` | `documentEdited` | 不变 | 根行、`r1` |
+| 8 | `save /no/such/dir/x.svg`（失败） | 无（命令失败，事件被丢弃） | 不变 | 根行、`r1`（仍未保存） |
+| 9 | `save b.svg`（另存为新路径） | `documentSaved` | 当前内容 | 无 |
+| 10 | `create g g1`、`create rect r2 0 0 1 1 in g1` | `documentEdited` ×2 | 不变 | 根行、`g#g1 *`、`rect#r2 … *` |
+| 11 | `save` 后 `set r2 fill red` | `documentSaved`、`documentEdited` | 第一次 save 时的内容 | 根行、`r2`；**`g1` 不标**（不向祖先传播） |
+| 12 | `delete r1` | `documentEdited` | 不变 | 根行（`r1` 不在树里了） |
+| 13 | `undo`（`r1` 回到原位） | `documentEdited` | 不变 | 若与保存点相同则无 |
+| 14 | `front r1`（只改 z-order） | `documentEdited` | 不变 | 只有根行（指纹不含兄弟顺序，序列化含） |
+| 15 | `canvas 400 300` | 无（文档类命令，不是编辑） | 不变 | 只有根行（序列化含尺寸） |
+| 16 | `read other.svg` | `documentReplaced` | 读入后的内容 | 无 |
+| 17 | `read missing.svg`（失败） | 无 | 不变 | 不变 |
+| 18 | `tree r2`（子树） | — | — | 没有根行，只看图形行 |
+| 19 | `stats`、`dir`、`show`、`help` | 无 | 不变 | 不变 |
+| 20 | box 与 star 同时装：`set n1 fill red` | `documentEdited` | 不变 | `rect#n1-rect … *`；`g#n1 (box)` 不带 `*`；若 `set n1 stroke red`（设在 `<g>` 上）则 `g#n1 (box) *`——拼接顺序为注册顺序，box 先装 |
+
+规格 §5 要求覆盖的分支（编辑 → 保存 → 再编辑 → `undo` 回到保存点）就是第 3–7 行；其余各行同样各有一条测试。
+
+**4. 接入提交与判据**
+
+```text
+$ git diff --name-status C^ C
+M	package-lock.json
+A	plugins/tree-star/package.json
+A	plugins/tree-star/src/ModifiedStar.ts
+A	plugins/tree-star/src/SaveBaseline.ts
+A	plugins/tree-star/src/TreeStarPlugin.ts
+A	plugins/tree-star/tests/ModifiedStar.test.ts
+A	plugins/tree-star/tests/StarInEditor.test.ts
+M	src/assembly/CompositionRoot.ts
+```
+
+```bash
+git diff C^ C -- packages/kernel src/loader plugins ':(exclude)plugins/tree-star'   # 推演：空（内核与渲染器 TreeRenderer 都在 packages/kernel 里）
+rg -n "import|require|switch" src/loader                                            # 推演：同本节开头
+```
+
+配置提交 C′：`M plugins.config.json`。`cli-1-1b` 的两次运行用 `--only @svgframe/plugin-shape-box` 与 `configs/box.json`，都不含 `modified-star`，不受影响；`cli-2` 不含 `tree`，不受影响（4.7）。禁用全部新增插件时 `tree` 与 `final` 逐字节相同，由基线的 `--bare` 运行保证。
+
+**5. 内核零改动**
+
+| `modified-star` 需要 | 已由谁提供 |
+|---|---|
+| 给根行与图形行加标签，不改渲染器 | `TreeDecorator`、`TreeRowView`（2.3） |
+| 无标签时逐字节不变 | 2.3.3 的拼接规则 |
+| 知道保存点 | `DocumentListener.documentReplaced` / `documentSaved`（3.4） |
+| 失败的 `save` / `read` 不算保存点 | 事件只在命令成功后派发（3.4） |
+| 识别节点、读属性、读父 id | `ShapeView`（3.6） |
+| 遍历全部节点、序列化整份文档 | `DocumentView.allViews()`、`SvgSerializer.serialize(DocumentView)`（2.3.5、3.10） |
+| 不能修改文档 | 视图接口只读（2.3.5） |
+| 与 `(box)` 同时出现的顺序 | 注册顺序（2.3.4） |
+| 状态在实例里 | 默认导出是类，每个 `Editor` 一个实例（3.1） |
+
+### 8.5 缺口回填记录
+
+演练（以及写第 2–4 部分时为演练做的草拟）中发现的缺口。每一条都已补进正文，演练里没有剩下“需要内核再提供”的东西。
+
+| # | 发现于 | 缺口 | 补到哪里 |
+|---|---|---|---|
+| G1 | box | box 需要 rect/text，但不能 import 内置插件；缺少时应在激活时失败 | `PluginContext.shapeTypes()`（3.2）+ `ShapeKit`（2.1.2、2.1.5） |
+| G2 | box | 不完整的 box 要降级为 `g`，但降级之前不能留下任何副作用（已分配的 id、已产生的警告） | `ShapeReader.readWithNext` + 只基于 `ElementView` 的预检查（2.1.4、ADR-2） |
+| G3 | box | 判断“涉及 box 的重复 id”需要知道哪些元素真正被导入（与 F14 同口径），而 box 读取自己时还不知道后面的元素会不会被跳过 | `ShapeReader.requireUnique`：声明在读取时，检查推迟到读入结束（2.1.4）。评审后由“全文件计数”改为此口径 |
+| G4 | box | 装了 box 时 `data-kind` 会被当作透传属性再写一次 | `ShapeReader.applyAttributes(…, consumed)`（2.1.4、2.1.3） |
+| G5 | box | box 自己解析子元素会与内置图形的 id 分配、警告、透传属性不一致 | `ShapeReader.readChildren`、`readStandard`（2.1.4） |
+| G6 | box | 创建回显 `(g#n1 + …)` 与 `in` 子句的位置 | `ShapeProvider.creationDetail` + 回显顺序（2.1.6、X4） |
+| G7 | box | 三个 id 要一次性查重，内核不知道派生规则 | `ShapeProvider.claimedIds`（2.1.2、2.1.6） |
+| G8 | box | `in`、`findContainer`、`group` 都写死了 `Group` | `ContainerShape`（3.5） |
+| G9 | box | 移走必要子部件 | `ShapeContainer.canRelease` + `EditCommand.checkReleasable`（3.7） |
+| G10 | box | `label` 的 undo 文案要旧值，回显要在 `plan` 时取得 | `AttributeTarget.view()` 可读文本；`AttributeChange` 两条文案在 `plan` 中取得（2.4.2、2.4.3） |
+| G11 | dir | 命令要带着注入的目录访问接口，而静态侧不能有状态 | 注册对象可以是 `CommandType` 的实例（2.2.1） |
+| G12 | modified-star | 指纹需要父 id；保存点需要遍历全部节点 | `ShapeView.parentId()`、`DocumentView.allViews()`（3.6、2.3.5） |
+| G13 | modified-star | 根行比对需要序列化一个只读文档 | `SvgSerializer.serialize(DocumentView)` 并经 `api.ts` 导出（2.3.5、3.10） |
+| G14 | box + modified-star | §6.1B 需要“有 box、没有 star”的方式 A 运行 | `--only`（4.3）；双装配组的引入时机（4.7） |
+| G15 | 全部 | 插件测试要组装最小编辑器，又不能依赖其他插件；读回测试要只含替身图形的目录 | 插件测试可 import `@svgframe/kernel/host`（L2）；`ShapeCatalog.providers()`（2.1.2） |
+| G16 | 全部 | 插件可能保留上下文，在激活之后继续注册，绕过校验 | `StagingContext.seal()`（3.3.1） |
+
+---
+
+## 9 测试计划与步骤划分确认
+
+### 9.1 测试的组织
+
+| 层 | 位置 | 依赖 | 用途 |
+|---|---|---|---|
+| Phase 1 的 889 个测试 | 根 `tests/`（不搬，附录 A.1） | 内核 + 内置插件（相对路径） | 行为回归；测试数在 S5 保持 889，S6/S7 只在接口改名处改调用方式 |
+| 内核契约测试 | `packages/kernel/tests/` | 只用内核与**测试替身**（替身插件、替身提供者、替身处理器、替身标签、替身监听器、替身容器） | 四个扩展点与支撑设施的契约；不依赖任何真实插件 |
+| 插件测试 | `plugins/<目录>/tests/` | 内核（`@svgframe/kernel`、`@svgframe/kernel/host`）+ 本插件 + 本插件测试目录里的替身 | 每个插件独立可测（规格 §4、§7）；最小编辑器 = `ExtensionRegistry` + `PluginInstaller` 安装本插件与替身插件 + `EditorSession` + `Editor` |
+| 装配处测试 | 根 `tests/unit/host/` | 全部 | `CliArguments`、`EditorAssembler`、`PluginConfig`、`ModuleLocator`、`PluginLoader` |
+| 加载器夹具 | 根 `tests/fixtures/plugins/<用例>/` | 内核 | 每条失败路径一个假插件包（不在 `plugins/` 下，不是 workspace） |
+| architecture test | 根 `tests/unit/architecture.test.ts` | 读源码与 `package.json` | L1–L10；P1–P10 按 1.2.4 的区域范围 |
+| 系统测试 | 根 `tests/system/` | 全部 | 双装配、基线兼容、装配契约 |
+| 基线会话 | `doc/transcript/` + `npm run baseline` | 真实 CLI 进程 | 与 `final` 逐字节一致；双装配逐字节一致 |
+
+### 9.2 每一步新增的测试
+
+| 步骤 | 新增测试 | 关键断言 |
+|---|---|---|
+| S5 | 无新增；architecture test 改扫描根与过渡映射 | 测试数 = 889；基线 3 个会话 0 差异；`git diff -M --stat` 绝大多数为重命名；“is scanned”断言指向新路径 |
+| S6 | 内核：`ShapeRegistry`（注册、按名查找、`unknown shape type`、`matchScore` 选择、并列拒绝、全 0 跳过）；`StaticShapeProvider`；`SvgImporter` 的 `readWithNext` / `requireUnique`（被导入元素中重复 → 拒绝；被跳过元素上的同名 id 不计；降级不豁免；读入失败时原文档不变）/ `reject` / `applyAttributes(consumed)`（替身提供者）；F14 的两组现有测试不变；`CommandRegistry`（`unknown command`）；`PluginInstaller`（成功提交、激活失败回滚、异步 activate、重复注册：与已提交 / 本插件内部、清单不符、清单非法、多重违反只报第一条、回滚后后续插件照常安装、`seal` 之后再注册抛错）；`PluginManifest`；`ContainerShape`；`CreateCommand` 的 `claimedIds` 查重与 `creationDetail`（替身提供者）、`shape provider failed` 包装；`label` / `treeLabel` / `kindName`。装配处：`CompositionRoot` 的内置插件表、`EditorAssembler`（bare）。architecture test：L1–L4、L6–L8、L10、P5a、P5b，以及 P1–P10 按 1.2.4 的区域范围（含“插件中比较自己的类型名不报错”的合成用例），各配合成违规用例 | 基线 0 差异；889 个旧测试全过（`Editor.createDefault` 的测试改为经 `EditorAssembler`）；`rg` 在内核里搜不到任何注册名（L6） |
+| S7 | 内核：`AttributeDispatcher`（命中、未命中 → null、优先级、并列 → `ambiguous`、`handles` 抛错、`apply` 部分修改后抛 `EditorError` / 抛普通 `Error` → 文档与 undo/redo 深度、io 锁都不变、不回退白名单、undo / redo 各一次整体恢复、redo 回显与首次相同）；`TreeRenderer`（无标签逐字节不变、单个标签、两个标签按注册顺序、根行与 `tree <id>` 第一行、标签不参与列宽、`tagFor` 违约 → `tree decorator failed`）；`DocumentEvents`（三个事件的触发点、失败命令不派发、`read` / `save` 失败无事件、订阅顺序）；`canRelease`（替身容器拒绝时 `delete` / `addto` / `group` 的状态完全不变、同容器 `addto` 允许）；`SvgSerializer(DocumentView)`。architecture test：P10 | 基线 0 差异；对照第 8 节逐项确认 box 与 `modified-star` 需要的内核接口都已存在（S7 的验收） |
+| S8 | 装配处：`CliArguments`（四种配置、互斥、未知参数、`--only` 未知包名、退出码 2）；`PluginConfig`（合法、语法错误、顶层多键、项缺 `module`、`enabled` 非布尔、`options` 非对象、文件不存在）；`ModuleLocator`（相对路径以配置目录为基准、包名经 `node_modules`、目录无 `package.json`、`exports` 缺 `./package.json`、入口文件不存在）；`PluginLoader`：**四条规格失败路径**（`not found`、`no default export`、`manifest mismatch`、`failed to activate`）+ 重复注册 + 求值失败 + 依赖缺失（报 `failed to load` 而非 `not found`）+ 默认导出不是类 + 回滚后后续插件照常加载 + `enabled: false` 完全跳过 + 数组顺序 + options 传递 + 同一插件装进两个 `Editor` 状态独立；`Repl` 的启动消息位置。architecture test：L5、L9 的 loader 部分 | 手工验证：`--bare` 与 `--config <空配置>` 两种方式下基线三个会话与 `final` 逐字节一致（S9 固定成 `.runs.json`） |
+| S9 | `SessionPlan` / `RunGroup`（缺省组、占位符替换、组内比对、`--update` 拒绝组内不一致）；`ComplexityCounter`（内置样本自检：`readQuoted` 的 M = 8）；`PluginDiffCheck`（对人为构造的“改了内核”的提交报失败、对路径不存在报失败）；architecture test：每个源文件有类注释（metrics 的职责来源）；**通用装配契约测试**：对 `CompositionRoot.optional()` 中每个候选，读其清单的 `commands`，断言 bare 下执行报 `unknown command: <name>`、`--only <包名>` 下 `help` 含以 `  <name>` 开头的一行（S10、S11 接入时自动覆盖，不改测试） | 三个已有会话的 `.runs.json`（`--bare` + 空配置）0 差异；metrics 可由脚本复现 |
+| S10 | `stats` 插件自己的测试（8.1） | 判据脚本通过；装配契约测试覆盖 `stats` |
+| S11 | `dir` 插件自己的测试（8.2）：替身（混合、空目录、隐藏项、读取失败、稳定排序、多余参数）、真实临时目录（含符号链接与断链）、状态（无文档可用；有文档时成功与失败都不改文档、undo/redo 深度、io 锁） | 判据脚本通过；`cli-2` 的双装配组 A = B |
+| S12 | box 插件自己的测试（8.3）；根 `tests/system/` 加一条“未装插件时降级并原样写回 `data-kind`”的测试（bare 读写） | 判据脚本对 C_A、C_B 都通过；`git diff C_A C_B -- plugins/shape-box` 为空；`cli-1-1b` 两次运行都等于期望输出 |
+| S13 | `modified-star` 插件自己的测试：8.4 状态机表的每一行一条；与 box 并存时的拼接顺序（替身 `(box)` 标签） | 判据脚本通过；`--bare` 下 `tree` 与 `final` 逐字节相同 |
+| S14 | 系统测试：组合根与配置的插件集合、顺序、options 相同（4.9）；双装配会话（4.7 #3–#5）；基线兼容 | `npm test`、`npm run baseline`、CI 全绿 |
+| S15 | 无新增测试；README 的一致性自查用脚本输出作证据 | — |
+
+### 9.3 步骤划分的确认与修订
+
+原计划的拆分可行，依赖仍是一条直线。需要调整的地方如下；**`doc/spec/phase2-plan.md` 本步不改**，评审通过后由用户同步。
+
+| 步骤 | 原计划 | 修订 | 理由 |
+|---|---|---|---|
+| S5 | 搬移、修 import 与工程配置 | 明确包含：根 `package.json` 的 `workspaces`（`["packages/*","plugins/*"]`）与 `npm test` 脚本、`packages/kernel/package.json`、`plugins/builtin-shapes/package.json`、`plugins/builtin-commands/package.json`（三个文件在 S5 就必须带 `name`（`@svgframe/kernel`、`@svgframe/plugin-builtin-shapes`、`@svgframe/plugin-builtin-commands`）、`version`（`0.1.0`）、`"private": true` 与 **`"type": "module"`**——缺 `type` 时 tsx 会把包内的 `.ts` 当 CJS 编译（附录 B.2），而 L7 要到 S6 才检查；此时都**不写** `exports` 与 `contributes`）、`vitest.config.ts`、`tsconfig.json` 的 `include` glob、`package-lock.json`；architecture test 的扫描根与过渡映射（1.2.2）；Phase 1 测试留在根 `tests/`；`src/cli/` 不搬 | 1.4：这些配置拖到插件提交里做就破坏零差异；S5 时内核仍 import 内置插件，加 `exports` 与 `api.ts` 会引入循环导入的风险，留到 S6 |
+| S6 | `ShapeProvider` + `Command` 扩展点、内置插件化、`PluginInstaller`、容器抽象、读回分派、名字拆分、组合根 | 另加：`api.ts`、`host-api.ts`、内核 `exports`、`resolveJsonModule`、内置插件的 `exports` 与 `contributes`、`EditorAssembler`（只有 bare/full，`optional()` 为空）、`ShapeReader` / `ElementView`、L1–L4、L6–L8、L10、P5a、P5b；删除 `Editor.createDefault` | 第 2、3 部分 |
+| S7 | `AttributeHandler`、`TreeDecorator`、事件、保护钩子 | 另加：`ShapeView` / `DocumentView`、`SvgSerializer(DocumentView)`、`markSaved` 取代 `setFilePath`、P10 | 3.4、3.6.1 |
+| S8 | 加载器 + 配置 + 失败路径；“允许修改”含 `package.json`（如需要 workspaces） | workspaces 已在 S5 完成；S8 加 `CliArguments`（`--bare`、`--only`、`--config`）、`Repl` 的启动消息、`plugins.config.json`（空列表）、`tests/fixtures/plugins/`、L5、L9 的 loader 部分。**S8 不改 `scripts/`**：基线的按会话参数放在 S9 | 4.3、4.8；S8 的“允许修改”不含 `scripts/`，而 S10 之前不带参数启动等于 bare，基线不受影响 |
+| S9 | metrics、差异检查脚本、双装配运行器、扩展点清单草稿 | 明确：双装配运行器 = 基线工具的 `.runs.json` 运行组（4.8），不另写 runner；三个已有会话加 `.runs.json` 与 `doc/transcript/configs/empty.json`；通用装配契约测试；类注释的 architecture test；**“允许修改”加上根 `package.json`**（新增 `metrics`、`plugin-diff` 两个 npm 脚本）与 `doc/transcript/` | 4.8、9.2 |
+| S10–S13 | 一个干净提交：插件 + 装配处的一处修改；S10“装配方式按设计文档选 A 或 B” | 每个插件两个提交：C（插件 + `CompositionRoot.ts` + 锁文件，满足方式 A）与 C′（`plugins.config.json` + 会话数据）；文档另起提交。S10、S11 两种装配都支持 | 决策 X24；规格 §2“两者均须按第 6 节支持代码装配和配置装配” |
+| S11 | `dir` 的双装配一致性“使用 S9 的运行器” | C′ 加 `cli-2.txt`、fixtures、`cli-2.runs.json`（只有 A = B 组，无期望输出）；`cli-2` 不含 `tree`、`save` | 4.7：避免 S12、S13 的 C 让它失配；期望输出要用 `--update`，留到 S14 一并申请 |
+| S12 | 主线方式 A + 演示分支方式 B；主线随后把 box 加进配置；§6.1B 会话 | 主线随后的提交 C_A2 = 配置 + `cli-1-1b` 的输入、`.runs.json`、`configs/box.json`、期望输出、`doc/transcript/README.md` 加注；方式 A 的运行用 `--only @svgframe/plugin-shape-box` | 8.3；4.7 #2 |
+| S14 | 三组会话双装配、基础兼容、接入 CI | 另加：`cli-1` 的 full 双装配组；`cli-2` 的期望输出（需同意 `--update cli-2`）；组合根与配置一致性测试；CI 加 `npm run typecheck:scripts`、`npm run baseline`，处理 `actions/checkout@v4`、`actions/setup-node@v4` 的 Node 20 弃用提示 | 4.7、4.9 |
+| S15 | 文档收尾 | 另加：`vscode-svg/doc/analysis.md` §1.4 中“设计文档尚未编写”的说法改为指向 README；README §3 合并 L 规则、P5a/P5b/P10；README §5 记录 K1、K2 的消除；README 与测试注释中 `tree n1` “第 18 列”的笔误（2.3.3） | 本步发现，留给 S15 |
+
+修订后的步骤表（只列与原计划不同的列）：
+
+| 步骤 | 分支 | 允许修改（修订后） | 里程碑 |
+|---|---|---|---|
+| S5 | `refactor/p2-layout` | 全仓库，但不得有行为变化（含根 `package.json`、`package-lock.json`、`tsconfig.json`、`vitest.config.ts`） | — |
+| S6 | `feat/p2-registries` | `packages/kernel`、`src/`、`plugins/builtin-*`、`tests/`、`tsconfig.json` | — |
+| S7 | `feat/p2-extension-points` | `packages/kernel`、`plugins/builtin-*`（只限 `markSaved`、`attributeEdits`、`treeDecorators`、`checkReleasable` 的调用处）、`tests/` | — |
+| S8 | `feat/p2-loader` | `src/`、`tests/`、`plugins.config.json` | — |
+| S9 | `chore/p2-tooling` | `scripts/`、`docs/metrics/`、`doc/README.md`、`doc/transcript/`（只加 `.runs.json` 与 `configs/`）、`tests/`、根 `package.json`（只加 npm 脚本） | `milestone(2/6)` |
+| S10 | `feat/plugin-stats` | `plugins/command-stats/`、`src/assembly/CompositionRoot.ts`、`plugins.config.json`、`package-lock.json`、`doc/` | — |
+| S11 | `feat/plugin-dir` | 同上（`plugins/command-dir/`）+ `doc/transcript/`（`cli-2`） | `milestone(3/6)` |
+| S12 | `feat/plugin-box` + `demo/box-config` | 同上（`plugins/shape-box/`）+ `doc/transcript/`（`cli-1-1b`）+ `tests/system/`（降级测试） | `milestone(4/6)` |
+| S13 | `feat/plugin-tree-star` | 同上（`plugins/tree-star/`） | `milestone(5/6)` |
+| S14 | `test/p2-system` | `tests/`、`doc/transcript/`、`.github/workflows/` | — |
+| S15 | `docs/p2-final` | `doc/`、`docs/metrics/`、`vscode-svg/doc/analysis.md` | `milestone(6/6)`，tag `p2` |
+
+### 9.4 写进对应步骤的已知事项
+
+| 步骤 | 事项 |
+|---|---|
+| S12 | `cli-1-1b` 的期望输出**必须逐行手工对照 P1 规格 §6.1B**（8.3 第 4 小节的表就是对照表），不能只靠 `--update` 生成。树的对齐与规格原文差一位：原文三处摘要前分别是 2/1/7 个空格，按 V1（最宽 + 2）是 3/2/8；规格 §5 的示例恰好是 3/2/8。期望输出沿用 V1，并在 `doc/transcript/README.md` 中加注（约定补充 N4、偏差 T3）。`--update cli-1-1b` 仍然需要用户事先明确同意 |
+| S9 | 圈复杂度脚本按决策 X18（5.3）实现：`typescript/unstable/sync`，启动自检，口径与输出格式按 5.3 |
+| S14 | CI 统一处理：`typecheck:scripts` 与 `baseline` 进 CI；`actions/checkout@v4`、`actions/setup-node@v4` 的 Node 20 弃用提示；`cli-2` 的 `--update` 需要事先同意 |
+| S5–S15 | `npm run baseline -- --update` 未经用户明确同意一律不用（`CLAUDE.md`） |
+
+---
+
+## 附录 A 现有文件归属表
+
+`fe10441` 上 `src/` 的 82 个文件逐个列出：归到哪一类、S5 怎样搬、之后哪一步改它。S5 只做表中的 `git mv` 与 import 路径修正，**不改任何行为**；“之后”一列是 S6–S8 的预告，以第 2–4 部分为准。
+
+统计：内核 51 个，内置插件 28 个（`builtin-shapes` 6、`builtin-commands` 22），装配处 3 个（其中 2 个不搬）。
+
+| # | 现有路径 | 归属 | S5 的搬法 | 之后 |
+|---|---|---|---|---|
+| 1 | `src/app/Editor.ts` | 内核 | `git mv src/app/Editor.ts packages/kernel/src/app/Editor.ts` | S6：删除 `createDefault`（移到装配处）；S7：成功后 `flushEvents` |
+| 2 | `src/app/EditorSession.ts` | 内核 | `git mv src/app/EditorSession.ts packages/kernel/src/app/EditorSession.ts` | S6：构造参数改为 `(FileSystem, ExtensionRegistry)`；S7：事件、`markSaved` |
+| 3 | `src/cli/Repl.ts` | 装配处 | （不搬） | S8：启动消息 |
+| 4 | `src/cli/main.ts` | 装配处 | （不搬） | S6：改用 `EditorAssembler`；S8：`CliArguments` |
+| 5 | `src/commands/AddToCommand.ts` | 内置插件 | `git mv src/commands/AddToCommand.ts plugins/builtin-commands/src/AddToCommand.ts` | S6：字段类型 `ContainerShape`；S7：`checkReleasable` |
+| 6 | `src/commands/ArgList.ts` | 内核 | `git mv src/commands/ArgList.ts packages/kernel/src/commands/ArgList.ts` | — |
+| 7 | `src/commands/BackCommand.ts` | 内置插件 | `git mv src/commands/BackCommand.ts plugins/builtin-commands/src/BackCommand.ts` | — |
+| 8 | `src/commands/CanvasCommandParser.ts` | 内置插件 | `git mv src/commands/CanvasCommandParser.ts plugins/builtin-commands/src/CanvasCommandParser.ts` | — |
+| 9 | `src/commands/Command.ts` | 内核 | `git mv src/commands/Command.ts packages/kernel/src/commands/Command.ts` | — |
+| 10 | `src/commands/CommandCategory.ts` | 内核 | `git mv src/commands/CommandCategory.ts packages/kernel/src/commands/CommandCategory.ts` | — |
+| 11 | `src/commands/CommandContext.ts` | 内核 | `git mv src/commands/CommandContext.ts packages/kernel/src/commands/CommandContext.ts` | S6/S7：方法表见 2.2.5 |
+| 12 | `src/commands/CommandLine.ts` | 内核 | `git mv src/commands/CommandLine.ts packages/kernel/src/commands/CommandLine.ts` | — |
+| 13 | `src/commands/CommandParser.ts` | 内核 | `git mv src/commands/CommandParser.ts packages/kernel/src/commands/CommandParser.ts` | — |
+| 14 | `src/commands/CommandRegistry.ts` | 内核 | `git mv src/commands/CommandRegistry.ts packages/kernel/src/commands/CommandRegistry.ts` | S6：构造函数清空（K2 消除）；实现 `CommandCatalog` |
+| 15 | `src/commands/CommandResult.ts` | 内核 | `git mv src/commands/CommandResult.ts packages/kernel/src/commands/CommandResult.ts` | — |
+| 16 | `src/commands/CommandType.ts` | 内核 | `git mv src/commands/CommandType.ts packages/kernel/src/commands/CommandType.ts` | — |
+| 17 | `src/commands/CreateCommand.ts` | 内置插件 | `git mv src/commands/CreateCommand.ts plugins/builtin-commands/src/CreateCommand.ts` | S6：经 `ShapeCatalog`/`ShapeProvider` 创建，`claimedIds` 查重，`creationDetail` |
+| 18 | `src/commands/DeleteCommand.ts` | 内置插件 | `git mv src/commands/DeleteCommand.ts plugins/builtin-commands/src/DeleteCommand.ts` | S7：`checkReleasable` |
+| 19 | `src/commands/DocumentCommand.ts` | 内核 | `git mv src/commands/DocumentCommand.ts packages/kernel/src/commands/DocumentCommand.ts` | — |
+| 20 | `src/commands/EditCommand.ts` | 内核 | `git mv src/commands/EditCommand.ts packages/kernel/src/commands/EditCommand.ts` | S6：`findContainer` 返回 `ContainerShape`；S7：`checkReleasable` |
+| 21 | `src/commands/FrontCommand.ts` | 内置插件 | `git mv src/commands/FrontCommand.ts plugins/builtin-commands/src/FrontCommand.ts` | — |
+| 22 | `src/commands/GroupCommand.ts` | 内置插件 | `git mv src/commands/GroupCommand.ts plugins/builtin-commands/src/GroupCommand.ts` | S6：经 `ShapeCatalog` 创建 `g`；S7：`checkReleasable` |
+| 23 | `src/commands/HelpCommand.ts` | 内置插件 | `git mv src/commands/HelpCommand.ts plugins/builtin-commands/src/HelpCommand.ts` | S6：`context.commands()` |
+| 24 | `src/commands/History.ts` | 内核 | `git mv src/commands/History.ts packages/kernel/src/commands/History.ts` | S7：构造参数加事件回调；实现 `UndoStack` |
+| 25 | `src/commands/HistoryCommand.ts` | 内核 | `git mv src/commands/HistoryCommand.ts packages/kernel/src/commands/HistoryCommand.ts` | — |
+| 26 | `src/commands/InitCommand.ts` | 内置插件 | `git mv src/commands/InitCommand.ts plugins/builtin-commands/src/InitCommand.ts` | — |
+| 27 | `src/commands/MoveCommand.ts` | 内置插件 | `git mv src/commands/MoveCommand.ts plugins/builtin-commands/src/MoveCommand.ts` | — |
+| 28 | `src/commands/QueryCommand.ts` | 内核 | `git mv src/commands/QueryCommand.ts packages/kernel/src/commands/QueryCommand.ts` | — |
+| 29 | `src/commands/ReadCommand.ts` | 内置插件 | `git mv src/commands/ReadCommand.ts plugins/builtin-commands/src/ReadCommand.ts` | S6：`new SvgImporter(context.shapes())` |
+| 30 | `src/commands/RedoCommand.ts` | 内置插件 | `git mv src/commands/RedoCommand.ts plugins/builtin-commands/src/RedoCommand.ts` | — |
+| 31 | `src/commands/ResizeCanvasCommand.ts` | 内置插件 | `git mv src/commands/ResizeCanvasCommand.ts plugins/builtin-commands/src/ResizeCanvasCommand.ts` | — |
+| 32 | `src/commands/SaveCommand.ts` | 内置插件 | `git mv src/commands/SaveCommand.ts plugins/builtin-commands/src/SaveCommand.ts` | S7：`setFilePath` → `markSaved` |
+| 33 | `src/commands/ScaleCommand.ts` | 内置插件 | `git mv src/commands/ScaleCommand.ts plugins/builtin-commands/src/ScaleCommand.ts` | — |
+| 34 | `src/commands/SetCommand.ts` | 内置插件 | `git mv src/commands/SetCommand.ts plugins/builtin-commands/src/SetCommand.ts` | S7：先问 `AttributeDispatcher`（2.4.3） |
+| 35 | `src/commands/ShowCanvasCommand.ts` | 内置插件 | `git mv src/commands/ShowCanvasCommand.ts plugins/builtin-commands/src/ShowCanvasCommand.ts` | — |
+| 36 | `src/commands/ShowCommand.ts` | 内置插件 | `git mv src/commands/ShowCommand.ts plugins/builtin-commands/src/ShowCommand.ts` | — |
+| 37 | `src/commands/Token.ts` | 内核 | `git mv src/commands/Token.ts packages/kernel/src/commands/Token.ts` | — |
+| 38 | `src/commands/Tokenizer.ts` | 内核 | `git mv src/commands/Tokenizer.ts packages/kernel/src/commands/Tokenizer.ts` | — |
+| 39 | `src/commands/TreeCommand.ts` | 内置插件 | `git mv src/commands/TreeCommand.ts plugins/builtin-commands/src/TreeCommand.ts` | S7：`new TreeRenderer(context.treeDecorators())` |
+| 40 | `src/commands/UndoCommand.ts` | 内置插件 | `git mv src/commands/UndoCommand.ts plugins/builtin-commands/src/UndoCommand.ts` | — |
+| 41 | `src/commands/UngroupCommand.ts` | 内置插件 | `git mv src/commands/UngroupCommand.ts plugins/builtin-commands/src/UngroupCommand.ts` | S6：字段类型 `ContainerShape` |
+| 42 | `src/commands/ZOrderCommand.ts` | 内置插件 | `git mv src/commands/ZOrderCommand.ts plugins/builtin-commands/src/ZOrderCommand.ts` | — |
+| 43 | `src/io/FileSystem.ts` | 内核 | `git mv src/io/FileSystem.ts packages/kernel/src/io/FileSystem.ts` | — |
+| 44 | `src/io/IdAllocator.ts` | 内核 | `git mv src/io/IdAllocator.ts packages/kernel/src/io/IdAllocator.ts` | — |
+| 45 | `src/io/ImportResult.ts` | 内核 | `git mv src/io/ImportResult.ts packages/kernel/src/io/ImportResult.ts` | — |
+| 46 | `src/io/NodeFileSystem.ts` | 装配处 | `git mv src/io/NodeFileSystem.ts src/adapters/NodeFileSystem.ts` | — |
+| 47 | `src/io/SvgImporter.ts` | 内核 | `git mv src/io/SvgImporter.ts packages/kernel/src/io/SvgImporter.ts` | S6：按 `matchScore` 分派；内部会话类实现 `ShapeReader` |
+| 48 | `src/io/SvgSerializer.ts` | 内核 | `git mv src/io/SvgSerializer.ts packages/kernel/src/io/SvgSerializer.ts` | S7：参数类型放宽为 `DocumentView` |
+| 49 | `src/io/XmlDomAdapter.ts` | 内核 | `git mv src/io/XmlDomAdapter.ts packages/kernel/src/io/XmlDomAdapter.ts` | — |
+| 50 | `src/io/XmlElement.ts` | 内核 | `git mv src/io/XmlElement.ts packages/kernel/src/io/XmlElement.ts` | S6：`implements ElementView` |
+| 51 | `src/model/CanvasSize.ts` | 内核 | `git mv src/model/CanvasSize.ts packages/kernel/src/model/CanvasSize.ts` | — |
+| 52 | `src/model/ChildList.ts` | 内核 | `git mv src/model/ChildList.ts packages/kernel/src/model/ChildList.ts` | — |
+| 53 | `src/model/Circle.ts` | 内置插件 | `git mv src/model/Circle.ts plugins/builtin-shapes/src/Circle.ts` | — |
+| 54 | `src/model/ColorProperty.ts` | 内核 | `git mv src/model/ColorProperty.ts packages/kernel/src/model/ColorProperty.ts` | — |
+| 55 | `src/model/CoordinateRole.ts` | 内核 | `git mv src/model/CoordinateRole.ts packages/kernel/src/model/CoordinateRole.ts` | — |
+| 56 | `src/model/EditorError.ts` | 内核 | `git mv src/model/EditorError.ts packages/kernel/src/model/EditorError.ts` | — |
+| 57 | `src/model/Ellipse.ts` | 内置插件 | `git mv src/model/Ellipse.ts plugins/builtin-shapes/src/Ellipse.ts` | — |
+| 58 | `src/model/Extent.ts` | 内核 | `git mv src/model/Extent.ts packages/kernel/src/model/Extent.ts` | — |
+| 59 | `src/model/ExtraAttributes.ts` | 内核 | `git mv src/model/ExtraAttributes.ts packages/kernel/src/model/ExtraAttributes.ts` | — |
+| 60 | `src/model/GeometryAttribute.ts` | 内核 | `git mv src/model/GeometryAttribute.ts packages/kernel/src/model/GeometryAttribute.ts` | — |
+| 61 | `src/model/Group.ts` | 内置插件 | `git mv src/model/Group.ts plugins/builtin-shapes/src/Group.ts` | S6：Composite 行为搬进内核 `ContainerShape`，本类只剩静态侧与 `tagName` |
+| 62 | `src/model/IdSyntax.ts` | 内核 | `git mv src/model/IdSyntax.ts packages/kernel/src/model/IdSyntax.ts` | — |
+| 63 | `src/model/LeafShape.ts` | 内核 | `git mv src/model/LeafShape.ts packages/kernel/src/model/LeafShape.ts` | — |
+| 64 | `src/model/Line.ts` | 内置插件 | `git mv src/model/Line.ts plugins/builtin-shapes/src/Line.ts` | — |
+| 65 | `src/model/NumberFormat.ts` | 内核 | `git mv src/model/NumberFormat.ts packages/kernel/src/model/NumberFormat.ts` | — |
+| 66 | `src/model/ParamSpec.ts` | 内核 | `git mv src/model/ParamSpec.ts packages/kernel/src/model/ParamSpec.ts` | — |
+| 67 | `src/model/Rect.ts` | 内置插件 | `git mv src/model/Rect.ts plugins/builtin-shapes/src/Rect.ts` | — |
+| 68 | `src/model/Shape.ts` | 内核 | `git mv src/model/Shape.ts packages/kernel/src/model/Shape.ts` | S6：`kindName`、`treeLabel`，`label()` 改义，`asContainer(): ContainerShape \| null`；S7：实现 `ShapeView` |
+| 69 | `src/model/ShapeContainer.ts` | 内核 | `git mv src/model/ShapeContainer.ts packages/kernel/src/model/ShapeContainer.ts` | S7：加 `canRelease` |
+| 70 | `src/model/ShapeFactory.ts` | 内核 | `git mv src/model/ShapeFactory.ts packages/kernel/src/model/ShapeFactory.ts` | S6：`git mv` 为 `ShapeRegistry.ts`，构造函数清空（K1 消除），增加 `bestFor` |
+| 71 | `src/model/ShapeMemento.ts` | 内核 | `git mv src/model/ShapeMemento.ts packages/kernel/src/model/ShapeMemento.ts` | — |
+| 72 | `src/model/ShapeType.ts` | 内核 | `git mv src/model/ShapeType.ts packages/kernel/src/model/ShapeType.ts` | S6：不变；由 `StaticShapeProvider` 适配 |
+| 73 | `src/model/StrokeWidthProperty.ts` | 内核 | `git mv src/model/StrokeWidthProperty.ts packages/kernel/src/model/StrokeWidthProperty.ts` | — |
+| 74 | `src/model/StyleAttributes.ts` | 内核 | `git mv src/model/StyleAttributes.ts packages/kernel/src/model/StyleAttributes.ts` | — |
+| 75 | `src/model/StyleProperty.ts` | 内核 | `git mv src/model/StyleProperty.ts packages/kernel/src/model/StyleProperty.ts` | — |
+| 76 | `src/model/SvgDocument.ts` | 内核 | `git mv src/model/SvgDocument.ts packages/kernel/src/model/SvgDocument.ts` | S7：实现 `DocumentView`；`canRelease` 返回 true |
+| 77 | `src/model/Text.ts` | 内置插件 | `git mv src/model/Text.ts plugins/builtin-shapes/src/Text.ts` | — |
+| 78 | `src/model/TreePosition.ts` | 内核 | `git mv src/model/TreePosition.ts packages/kernel/src/model/TreePosition.ts` | — |
+| 79 | `src/model/XCoordinate.ts` | 内核 | `git mv src/model/XCoordinate.ts packages/kernel/src/model/XCoordinate.ts` | — |
+| 80 | `src/model/YCoordinate.ts` | 内核 | `git mv src/model/YCoordinate.ts packages/kernel/src/model/YCoordinate.ts` | — |
+| 81 | `src/view/ShapeDetailRenderer.ts` | 内核 | `git mv src/view/ShapeDetailRenderer.ts packages/kernel/src/view/ShapeDetailRenderer.ts` | — |
+| 82 | `src/view/TreeRenderer.ts` | 内核 | `git mv src/view/TreeRenderer.ts packages/kernel/src/view/TreeRenderer.ts` | S7：`treeLabel()`、标签钩子（2.3） |
+
+### A.1 其他目录
+
+| 目录 | 处理 |
+|---|---|
+| `tests/` | **Phase 1 的 889 个测试留在根 `tests/`**，S5 只改 import 路径（相对路径指向新位置），测试数不变。它们大量同时使用内核类与内置图形（如 `tests/unit/model/build.ts` 用 `Rect`、`Group` 搭树），放进内核包会让内核测试依赖插件，放进插件包会让插件测试依赖另一个插件。S6 起**新增**的测试按归属放：内核的契约测试放 `packages/kernel/tests/`（用测试替身），插件的测试放 `plugins/<目录>/tests/`，装配处与加载器的测试放根 `tests/unit/host/`，加载器的假插件夹具放 `tests/fixtures/plugins/<用例>/`（不在 `plugins/` 下，所以不是 workspace，也不受 L 规则约束）。`tests/transcripts/` 不动（`CLAUDE.md` 禁止事项） |
+| `tests/unit/architecture.test.ts` | 留在根；S5 改扫描根与过渡映射（1.2.2–1.2.3），S6/S8 加 L 规则 |
+| `scripts/baseline/` | 留在原处。CLI 入口仍是 `src/cli/main.ts`，`BaselinePaths.CLI_ENTRY` 不改；S9 扩展按会话传参（4.8） |
+| `scripts/metrics/`、`scripts/plugin-diff/` | S9 新建；`scripts/tsconfig.json` 的 `include: ["."]` 自动覆盖 |
+| `doc/transcript/` | S5–S8 不动；S9 为已有的三个会话加 `<会话>.runs.json`（4.8）；S12 加 `cli-1-1b`，S14 加 `cli-2` |
+| `vscode-svg/` | 不动；不进 workspaces、tsconfig、vitest、architecture test、CLI 的 metrics（1.4） |
+
+---
+
+## 附录 B 验证实验记录
+
+全部在仓库之外的 `/tmp/s4-spike/` 中进行，代码不入库。环境：macOS，Node v26.13.0，npm 12.2.2，`typescript` 7.0.2，tsx 4.23.15 与 vitest（均取自仓库的 `node_modules`）。
+
+### B.1 实验 1：npm workspaces
+
+- **目的**：新增一个 `.ts` 插件包时，根 `package.json` 与 `package-lock.json` 各有什么变化；`vscode-svg/` 会不会被收进去。
+- **做法**：
+
+```bash
+mkdir -p /tmp/s4-spike/ws && cd /tmp/s4-spike/ws
+cp <仓库>/package.json <仓库>/package-lock.json <仓库>/tsconfig.json .
+cp -cR <仓库>/node_modules .                                  # APFS 克隆，免联网
+mkdir vscode-svg && echo '{"name":"vscode-svg","version":"0.0.1","private":true}' > vscode-svg/package.json
+git init -q && git add package.json package-lock.json && git commit -qm base
+# ① 只加 workspaces 字段
+node -e 'p=require("./package.json");p.workspaces=["packages/*","plugins/*"];require("fs").writeFileSync("package.json",JSON.stringify(p,null,2)+"\n")'
+npm install --no-audit --no-fund --prefer-offline && git diff --stat
+# ② 加内核包 packages/kernel（exports: {".": "./src/api.ts"}），npm install
+# ③ 加插件包 plugins/command-stats（type: module，exports 字符串 + ./package.json，dependencies: {"@svgframe/kernel": "0.1.0"}），npm install
+```
+
+- **输出摘录**：
+  - ①：`package.json` 多出 `workspaces`；`package-lock.json` 只在根条目 `""` 下多出同样的 `workspaces` 数组（4 行）。
+  - ②：`package-lock.json` +8 行：`"node_modules/@svgframe/kernel": { "resolved": "packages/kernel", "link": true }` 与 `"packages/kernel": { "name": "@svgframe/kernel", "version": "0.1.0" }`；`node_modules/@svgframe/kernel -> ../../packages/kernel`。
+  - ③：**根 `package.json` 无变化**；`package-lock.json` +11 行：`"node_modules/@svgframe/plugin-command-stats": { "resolved": "plugins/command-stats", "link": true }` 与 `"plugins/command-stats": { "name": …, "version": "0.1.0", "dependencies": { "@svgframe/kernel": "0.1.0" } }`；`node_modules/@svgframe/plugin-command-stats -> ../../plugins/command-stats`。
+  - 三次安装后锁文件中都没有 `vscode-svg`；`plugins/` 下没有 `package.json` 的空目录被忽略，不报错。
+- **结论**：S5 声明 glob 之后，每接入一个插件只改 `package-lock.json`（两段，约 11 行）；glob 写成 `packages/*`、`plugins/*` 不会收进 `vscode-svg/`（1.4）。
+
+### B.2 实验 2：tsx 下按字符串模块名加载 `.ts` 插件；`exports` 的写法；类型检查与测试范围
+
+- **目的**：加载器用字符串模块名（相对路径、包名各一个）能否在 tsx 下导入 `.ts` 插件；`exports` 怎样写才能同时被 `import()` 与 `createRequire().resolve()` 解析；`tsconfig` 与 vitest 的 glob 是否覆盖新插件、排除 `vscode-svg/`。
+- **做法**：在 `ws/host/probe.ts`（`ws` 是 `"type": "module"`）里实现“先解析后导入”：相对路径以配置文件目录为基准找 `package.json`，包名用 `createRequire(<配置文件>).resolve("<包名>/package.json")`，再按 `exports["."]` 拼入口、`import(pathToFileURL(入口).href)`。**在无关的临时目录 `/tmp/s4-spike/cwd` 下运行**：
+
+```bash
+cd /tmp/s4-spike/cwd && <仓库>/node_modules/.bin/tsx /tmp/s4-spike/ws/host/probe.ts /tmp/s4-spike/ws/plugins.config.json
+```
+
+- **输出摘录**：
+
+```text
+@svgframe/plugin-command-stats   resolve: ok …/plugins/command-stats/package.json   import: ok, default=function hello stats
+./plugins/command-stats          resolve: ok plugins/command-stats/package.json     import: ok, default=function hello stats
+@spike/import-only               resolve: FAIL ERR_PACKAGE_PATH_NOT_EXPORTED        （exports 只有 {".": {"import": …}}，没有 ./package.json）
+@spike/no-pkgjson-export         resolve: FAIL ERR_PACKAGE_PATH_NOT_EXPORTED        （exports 是字符串但没有 ./package.json）
+createRequire.resolve @spike/import-only            -> FAIL ERR_PACKAGE_PATH_NOT_EXPORTED   （CJS 条件不匹配 import）
+createRequire.resolve @svgframe/plugin-command-stats -> plugins/command-stats/src/StatsPlugin.ts
+import() @spike/import-only ok                                                      （ESM 条件匹配）
+json import: @svgframe/plugin-command-stats {"commands":["stats"]}                  （import … with { type: "json" }）
+```
+
+  另外：把探针放在没有 `"type": "module"` 的目录里时，tsx 报 `Top-level await is currently not supported with the "cjs" output format`——说明 `.ts` 文件的模块格式取决于所在包的 `type`。
+- **类型检查**：`tsconfig.json` 的 `include` 改为 `["src","tests","host","packages/*/src","packages/*/tests","plugins/*/src","plugins/*/tests"]`、加 `resolveJsonModule`：`tsc --noEmit -p .` 通过（内核经 `exports` 指向 `.ts` 源码、JSON import、默认导出都能解析）；在 `vscode-svg/src/bad.ts` 放 `const x: number = "not checked";` 仍通过（不在范围内）；插件里写 `import { Greeter } from "@svgframe/kernel/src/Greeter.js"` 报 `TS2307: Cannot find module`。运行时深层 import 报 `ERR_PACKAGE_PATH_NOT_EXPORTED`。
+- **测试范围**：`vitest.config.ts` 设 `include: ["tests/**/*.test.ts","packages/*/tests/**/*.test.ts","plugins/*/tests/**/*.test.ts"]`，在 `vscode-svg/tests/bad.test.ts` 放一个必然失败的测试：`vitest run` → `Test Files 3 passed (3)`；去掉配置文件再运行 → `FAIL vscode-svg/tests/bad.test.ts`。插件测试经 `@svgframe/kernel` 导入 `.ts` 源码正常。
+- **结论**：插件包的 `exports` 定为 `{ ".": "<入口>.ts", "./package.json": "./package.json" }`，并且必须 `"type": "module"`（L7）；加载器只用 `createRequire` 定位 `package.json`，入口自己取（4.6）；tsconfig 与 vitest 的 glob 按 1.4 写。
+
+### B.3 实验 3：三种失败分别抛什么
+
+- **目的**：“模块不存在”“模块存在但求值时抛错”“模块存在但它自己的依赖缺失”能否区分。
+- **做法**：三个夹具包——`@spike/eval-throws`（入口顶层 `throw new Error("boom at load")`）、`@spike/missing-dep`（入口 `import { x } from "left-pad-does-not-exist"`）、`@spike/no-default`（只有具名导出）；外加不存在的 `@svgframe/plugin-nope` 与 `./plugins/nope`。分别用“先解析后导入”与“直接 `import(包名)`”两种方式加载。
+- **输出摘录**：
+
+```text
+先解析后导入：
+  @svgframe/plugin-nope   resolve: FAIL MODULE_NOT_FOUND: Cannot find module '@svgframe/plugin-nope/package.json'
+  ./plugins/nope          resolve: FAIL（目录或 package.json 不存在）
+  @spike/eval-throws      resolve: ok   import: FAIL Error: boom at load
+  @spike/missing-dep      resolve: ok   import: FAIL ERR_MODULE_NOT_FOUND: Cannot find package 'left-pad-does-not-exist' imported from …/plugins/missing-dep/src/Entry.ts
+  @spike/no-default       resolve: ok   import: ok, default=undefined
+直接 import(包名)：
+  @svgframe/plugin-nope   FAIL ERR_MODULE_NOT_FOUND Cannot find package '@svgframe/plugin-nope' imported from <ws>/host/probe2.ts
+  @spike/missing-dep      FAIL ERR_MODULE_NOT_FOUND Cannot find package 'left-pad-does-not-exist' imported from <ws>/plugins/missing-dep/src/Entry.ts
+```
+
+- **结论**：直接 `import()` 时“找不到”与“依赖缺失”是同一个错误码，只有消息文本不同（不可靠）；先解析后导入则按阶段区分：解析失败 → `plugin not found`，导入失败 → `plugin failed to load`，`default` 为 `undefined` → `plugin has no default export`（4.5、4.6）。另见 Node 的消息含绝对路径（偏差 T4）。
+
+### B.4 实验 4：D18 的解析方案
+
+- **目的**：在 TypeScript 7 下解析 `src/` 中的文件并数出判定点。
+- **做法**：`git archive fe10441 src | tar -x -C /tmp/s4-spike/cc/snap`，在 `snap/` 写一个最小 `tsconfig.json`；脚本 `cc.ts`：
+
+```ts
+import { API } from "typescript/unstable/sync";
+import { SyntaxKind } from "typescript/unstable/ast";
+const api = new API({ cwd: root });
+const project = api.updateSnapshot({ openProjects: [`${root}/tsconfig.json`] }).getProjects()[0];
+const sf = project.program.getSourceFile(`${root}/${file}`);
+// 遍历 forEachChild；函数节点：FunctionDeclaration、MethodDeclaration、Constructor、Get/SetAccessor、FunctionExpression、ArrowFunction
+// 判定点：If、For、ForIn、ForOf、While、Do、CaseClause、CatchClause、ConditionalExpression，以及 &&、||、?? 的 BinaryExpression
+```
+
+- **输出摘录**：
+
+```text
+src/commands/HelpCommand.ts  execute  M=3        ← 手算：for + if = 2 个判定点
+src/commands/Tokenizer.ts    readQuoted  M=8     ← 手算：while 1；if(… && (… || …)) 3；else if 1；if(… && …) 2 → d = 7
+src/commands/Tokenizer.ts    readPlain   M=3     ← while + && 
+src/model/IdSyntax.ts        validate    M=2
+82 files, total M=669        （0.26 s）
+```
+
+  `cc.ts` 以仓库的 `tsconfig.json` 为基础做类型检查，`tsc --noEmit` 通过（`typescript/unstable/sync` 带类型声明）。
+- **结论**：采纳 `typescript/unstable/sync`，不新增依赖；口径见 5.3。
+
+### B.5 实验 5：差异判据的路径规格
+
+- **目的**：`plugins` 作为路径规格是否会匹配 `plugins.config.json`；不存在的路径时 `git diff` 的行为。
+- **做法与输出**：在实验 1 的仓库里，一个提交同时改 `plugins.config.json` 与 `plugins/command-stats/src/StatsPlugin.ts`：
+
+```text
+$ git diff HEAD^ HEAD --name-status -- packages/kernel plugins ':(exclude)plugins/command-stats'
+（空）
+$ git diff HEAD^ HEAD --name-status -- plugins
+M	plugins/command-stats/src/StatsPlugin.ts            ← 不含 plugins.config.json
+$ git diff HEAD^ HEAD --name-status -- no/such/dir ; echo rc=$?
+rc=0                                                    ← 路径不存在时空输出、退出码 0
+$ git cat-file -e HEAD^:no/such/dir ; echo rc=$?
+fatal: path 'no/such/dir' does not exist in 'HEAD^'
+rc=128
+```
+
+- **结论**：`<既有插件目录>` 可以直接写 `plugins` 再排除新插件；判据命令之前必须用 `git cat-file -e` 断言路径存在（1.5）。
+
+---
+
+## 附录 C 自查结果
+
+### C.1 名字核对
+
+- **做法**：临时脚本（`/tmp/s4-spike/check/names.py`，不入库）从本文抽取全部反引号中的内容，分四类核对。① 路径（`src/…`、`tests/…`、`scripts/…`、`doc/…`，以及 `model/Shape.ts`、`Editor.ts` 这样的短写，按文件名在 `fe10441` 的 `src/`、`scripts/` 中唯一定位）：用 `git ls-tree` 确认存在；带行号的再确认行号不超过文件行数，并把该行打印出来人工对照。② 带类名的成员（`Shape.label`、`History.markIoBarrier` 等）：在声明该类的文件中搜索方法或静态字段的定义。③ 单独的类名、接口名：在 `fe10441` 的全部 `.ts` 中搜索 `class X` / `interface X`。④ 外部名字（TypeScript 的 `SyntaxKind` 成员、`Error`、`Map`、`Promise`、`Dirent` 等）：在 `node_modules/typescript/dist/enums/syntaxKind.enum.d.ts` 与 `@types/node` 中确认。新名字取自 0.4 的新名字表（第一张表的第一列），不参加存在性核对，只核对是否与现有的类名、文件名撞车。
+- **结果**：核对了 **330** 个不重复的“现有”名字：路径 168 个（其中带行号的 62 处，逐行打印对照过）、成员 71 个、类与接口 67 个、外部名字 24 个。**不存在的：0 个**。脚本唯一报出的 `main.ts` 是因为短写有两个候选（`src/cli/main.ts` 与 `scripts/baseline/main.ts`），文中所指都是 `src/cli/main.ts`，存在。
+- **新名字撞车**：0 个。新名字表里的类名在 `fe10441` 中都没有同名的类或接口，新文件名也没有同名文件。
+- **核对中顺带发现的现有笔误**（不在本步修改，见 PR）：README V1 写“`tree n1` 从第 18 列开始”，`tests/unit/view/TreeRenderer.test.ts:135` 的注释写“(16) + 2 = 18”；按码元计算 `└── text#n1-label` 是 17，列号是 19，同一测试第 140–141 行的期望字符串也是 19。
+
+### C.2 追溯表
+
+- 脚本逐行检查第 7 节：**199 行，全部 6 列，没有空格子**（第一次检查时发现 TR-121 中 `rg` 的正则含未转义的 `|`，把表格拆坏了；附录 A 第 68 行 `ContainerShape | null` 同样。两处都已改为 `\|`）。
+- 对照规格第二部分抽查 10 条要求，确认各有对应的行：§2.2“符号链接等特殊项的显示方式在文档中说明”（TR-032）；§2.3“两种装配下对同一固定目录执行 `dir` 输出逐字节一致”（TR-045）；§3.2“处理器执行失败时……不能再转入默认属性处理”（TR-053）；§3.4“模拟处理器在部分修改后抛错……”（TR-063）；§4 边界“重复 id……必须拒绝整个读入”（TR-078）；§5“状态必须封装在标签实例的字段里”（TR-088）；§6 加载契约“模块存在但求值或其依赖失败……不应误报为顶层模块找不到”（TR-115）；§6“检查差异时……确认指定路径实际存在”（TR-128）；§7 交付物 4 metrics（TR-132）；验收清单“独立可测 × 两种装配：四条失败路径”（TR-166）。
+
+### C.3 决策 X1–X18
+
+脚本检查 5.1、5.2 的表：X1–X30 共 30 行，每行“决定 / 备选 / 理由 / 步骤与验证”四格都非空；X1–X18 与分析 D1–D18 一一对应。ADR 6 条，每条都有背景、备选、决定、后果。
+
+### C.4 PlantUML
+
+本文共 4 张图：3.11.1 模块与依赖、3.11.2 四个扩展点的类图、3.11.3 `set` 经处理器的事务（含 `modified-star` 的事件流）、4.1 方式 A 与方式 B 汇入同一安装路径的时序图。用本机 **PlantUML 1.2026.10**（`PLANTUML_LIMIT_SIZE=8192`，包名含点号的图加了 `set separator none`）逐张渲染为 PNG，全部无语法错误，并逐张打开看过内容。第一次渲染时模块图报错（`package … { … }` 写在同一行），已改为多行写法；图片不入库。
+
+### C.5 `api.ts` 的导出与内置插件需要的名字（评审后补）
+
+临时脚本取 `fe10441` 上将搬进 `plugins/builtin-commands` 的 22 个命令与搬进 `plugins/builtin-shapes` 的 6 个图形类，收集它们从本组以外 import 的名字，共 30 个；去掉按 3.5 被 `ContainerShape` 取代的 `ChildList`，再加上按本设计 S6/S7 它们会用到的 12 个新名字：`Plugin`、`PluginContext`、`PluginOptions`、`StaticShapeProvider`、`ContainerShape`、`ShapeProvider`、`ShapeCatalog`、`CommandCatalog`、`UndoStack`、`TreeDecorator`、`AttributePlanner`、`PlannedAttributeEdit`。共 41 个名字，与 3.10 中 `@svgframe/kernel` 一行逐个比对：**缺 0 个**。评审前缺的两个是 `SetCommand` 要用的 `AttributeDispatcher`、`AttributeEdit`（S7 新增）；现改为经两个接口 `AttributePlanner`、`PlannedAttributeEdit` 以 `type` 导出，实现类仍不导出（2.4.3）。
