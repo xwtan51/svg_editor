@@ -8,6 +8,7 @@ import type { Shape } from "../../../packages/kernel/src/model/Shape.js";
 import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 import { Text } from "../../../plugins/builtin-shapes/src/Text.js";
 import { build } from "../model/build.js";
+import { BuiltinExtensions } from "../../support/BuiltinExtensions.js";
 import { MemoryFileSystem } from "./MemoryFileSystem.js";
 
 /** `other.svg` of spec §6, verbatim. */
@@ -41,7 +42,7 @@ const DIAGRAM_SVG = `<?xml version="1.0" encoding="UTF-8"?>
 `;
 
 function read(text: string, path = "in.svg"): ImportResult {
-  return new SvgImporter().read(new MemoryFileSystem({ [path]: text }), path);
+  return new SvgImporter(BuiltinExtensions.registry().shapes()).read(new MemoryFileSystem({ [path]: text }), path);
 }
 
 /** An `<svg>` file around `body` with an explicit canvas size. */
@@ -361,7 +362,7 @@ describe("SvgImporter: failures (F9)", () => {
   });
 
   it("a missing file → cannot read file: <path>", () => {
-    expect(errorOf(() => new SvgImporter().read(new MemoryFileSystem(), "nope.svg"))).toBe("cannot read file: nope.svg");
+    expect(errorOf(() => new SvgImporter(BuiltinExtensions.registry().shapes()).read(new MemoryFileSystem(), "nope.svg"))).toBe("cannot read file: nope.svg");
   });
 
   it("accepts a root svg element with a namespace prefix", () => {

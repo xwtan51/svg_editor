@@ -1,5 +1,4 @@
-import { ContainerShape } from "../../../packages/kernel/src/model/ContainerShape.js";
-import { ParamSpec } from "../../../packages/kernel/src/model/ParamSpec.js";
+import { ContainerShape, ParamSpec } from "@svgframe/kernel";
 
 /**
  * The `<g>` container. All Composite behaviour (children, forwarding of move

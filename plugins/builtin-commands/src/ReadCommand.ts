@@ -1,8 +1,5 @@
-import { SvgImporter } from "../../../packages/kernel/src/io/SvgImporter.js";
-import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
-import type { CommandContext } from "../../../packages/kernel/src/commands/CommandContext.js";
-import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
-import { DocumentCommand } from "../../../packages/kernel/src/commands/DocumentCommand.js";
+import { CommandResult, DocumentCommand, SvgImporter } from "@svgframe/kernel";
+import type { ArgList, CommandContext } from "@svgframe/kernel";
 
 /**
  * `read <file.svg>`: the file becomes the current document and its path the
@@ -32,7 +29,7 @@ export class ReadCommand extends DocumentCommand {
 
   /** Warning lines first, then `read other.svg (7 elements)` (spec §6, F13, F17). */
   execute(context: CommandContext): CommandResult {
-    const imported = new SvgImporter(context.shapeFactory()).read(context.fileSystem(), this.path);
+    const imported = new SvgImporter(context.shapes()).read(context.fileSystem(), this.path);
     const document = imported.document();
     context.replaceDocument(document, this.path);
     // `ImportResult.warnings()` already carries the `warning: ` prefix.

@@ -1,15 +1,14 @@
 import { CommandParser } from "../commands/CommandParser.js";
-import { CommandRegistry } from "../commands/CommandRegistry.js";
 import type { CommandResult } from "../commands/CommandResult.js";
-import { NodeFileSystem } from "../../../../src/adapters/NodeFileSystem.js";
 import { EditorError } from "../model/EditorError.js";
-import { ShapeRegistry } from "../model/ShapeRegistry.js";
-import { EditorSession } from "./EditorSession.js";
+import type { EditorSession } from "./EditorSession.js";
 
 /**
  * Facade and Invoker (README §2.1, §2.7): one line of input in, its output
  * lines out. It knows nothing about terminals, so the CLI, the transcript
  * tests and future channels all drive the editor through `executeLine`.
+ * It is assembled outside the kernel (`EditorAssembler` in the host), which
+ * installs the plugins and supplies the file system.
  */
 export class Editor {
   private static readonly COMMENT = "#";
@@ -20,12 +19,7 @@ export class Editor {
 
   constructor(session: EditorSession) {
     this.session = session;
-    this.parser = new CommandParser(session.registry());
-  }
-
-  /** An editor on the real file system, with the built-in commands and shape types and no document. */
-  static createDefault(): Editor {
-    return new Editor(new EditorSession(new NodeFileSystem(), new CommandRegistry(), new ShapeRegistry()));
+    this.parser = new CommandParser(session.commands());
   }
 
   /**

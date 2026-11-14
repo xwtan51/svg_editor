@@ -1,6 +1,5 @@
-import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
-import type { Command } from "../../../packages/kernel/src/commands/Command.js";
-import { CommandCategory } from "../../../packages/kernel/src/commands/CommandCategory.js";
+import { CommandCategory } from "@svgframe/kernel";
+import type { ArgList, Command } from "@svgframe/kernel";
 import { ResizeCanvasCommand } from "./ResizeCanvasCommand.js";
 import { ShowCanvasCommand } from "./ShowCanvasCommand.js";
 

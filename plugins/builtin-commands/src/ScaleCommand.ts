@@ -1,11 +1,5 @@
-import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
-import { NumberFormat } from "../../../packages/kernel/src/model/NumberFormat.js";
-import type { Shape } from "../../../packages/kernel/src/model/Shape.js";
-import type { ShapeMemento } from "../../../packages/kernel/src/model/ShapeMemento.js";
-import type { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
-import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
-import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
-import { EditCommand } from "../../../packages/kernel/src/commands/EditCommand.js";
+import { CommandResult, EditCommand, EditorError, NumberFormat } from "@svgframe/kernel";
+import type { ArgList, Shape, ShapeMemento, SvgDocument } from "@svgframe/kernel";
 
 /**
  * `scale <id> <factor>`: every geometry attribute times `factor`, about the

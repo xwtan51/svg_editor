@@ -50,6 +50,22 @@ const LOGICAL_DIRECTORIES: ReadonlyArray<readonly [real: string, logical: string
 /** The process entry script: the only file exempt from P5. */
 const ENTRY_SCRIPT = "cli/main.ts";
 
+/**
+ * Package entry files, exempt from P5 (P5a, P5b; checked separately): the files named
+ * by `exports` in packages/kernel/package.json and every plugins/<directory>/package.json.
+ */
+function packageEntryFiles(): Set<string> {
+  const manifests = ["packages/kernel", ...listDirectories(join(REPO_DIR, "plugins")).map((name) => `plugins/${name}`)];
+  const entries = new Set<string>();
+  for (const dir of manifests) {
+    const manifest = JSON.parse(readFileSync(join(REPO_DIR, dir, "package.json"), "utf8")) as { exports?: Record<string, string> };
+    for (const target of Object.values(manifest.exports ?? {})) {
+      if (target.endsWith(".ts")) entries.add(`${dir}/${target.replace(/^\.\//, "")}`);
+    }
+  }
+  return entries;
+}
+
 interface SourceFile {
   /** Logical path: relative to src/ as of tag `final`, POSIX separators, e.g. "model/Shape.ts". */
   path: string;
@@ -247,7 +263,11 @@ const ALLOWED_DEPENDENCIES: Readonly<Record<string, readonly string[]>> = {
   commands: ["model", "view", "io"],
   extension: ["commands", "view", "model", "io"],
   app: ["extension", "commands", "model", "io"],
-  cli: ["app"],
+  // S6, until the region-based rewrite: the kernel's entry files (api.ts, host-api.ts)
+  // re-export every module; the host's assembly sits between cli and the kernel (new D7).
+  "(src root)": ["model", "io", "view", "commands", "extension", "app"],
+  assembly: ["io"],
+  cli: ["assembly"],
 };
 
 /** D5: the only io files commands may import. */
@@ -472,10 +492,10 @@ function concreteShapeRegistryViolations(files: SourceFile[]): string[] {
  * interface, expression, `export { X as default }`), because the importer could
  * pick any local name and the "file name = class name" link would be lost.
  */
-function oneExportViolations(files: SourceFile[]): string[] {
+function oneExportViolations(files: SourceFile[], exempt: ReadonlySet<string> = new Set()): string[] {
   const violations: string[] = [];
   for (const file of files) {
-    if (file.path === ENTRY_SCRIPT) continue;
+    if (file.path === ENTRY_SCRIPT || exempt.has(file.location)) continue;
     if (/\bexport\s+default\b|\bas\s+default\b/.test(file.bare)) {
       violations.push(`${file.path} uses a default export; export the class by name`);
       continue;
@@ -592,7 +612,7 @@ describe("architecture (README §3) applied to the scanned source", () => {
   });
 
   it("P5: one exported class or interface per file, named like the file", () => {
-    expect(oneExportViolations(sources)).toEqual([]);
+    expect(oneExportViolations(sources, packageEntryFiles())).toEqual([]);
   });
 
   it("only ChildList calls .attachTo( / .detach(", () => {

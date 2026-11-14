@@ -3,11 +3,10 @@ import { describe, expect, it } from "vitest";
 import { Editor } from "../../../packages/kernel/src/app/Editor.js";
 import { EditorSession } from "../../../packages/kernel/src/app/EditorSession.js";
 import { Repl } from "../../../src/cli/Repl.js";
-import { CommandRegistry } from "../../../packages/kernel/src/commands/CommandRegistry.js";
 import type { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
 import { QueryCommand } from "../../../packages/kernel/src/commands/QueryCommand.js";
-import { ShapeRegistry } from "../../../packages/kernel/src/model/ShapeRegistry.js";
 import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
+import { BuiltinExtensions } from "../../support/BuiltinExtensions.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 
 // In-process tests of the loop itself, on in-memory streams. The real entry
@@ -42,9 +41,8 @@ class Capture extends Writable {
 
 /** An editor with an empty document (there is no `init` command yet) and the `broken` test command. */
 function editor(): Editor {
-  const registry = new CommandRegistry();
-  registry.register(BrokenCommand);
-  const session = new EditorSession(new MemoryFileSystem(), registry, new ShapeRegistry());
+  const registry = BuiltinExtensions.registry(BuiltinExtensions.commandsPlugin("repl-test-commands", BrokenCommand));
+  const session = new EditorSession(new MemoryFileSystem(), registry);
   session.replaceDocument(new SvgDocument(), null);
   return new Editor(session);
 }

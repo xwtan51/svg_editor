@@ -1,9 +1,4 @@
-import { Extent } from "../../../packages/kernel/src/model/Extent.js";
-import { GeometryAttribute } from "../../../packages/kernel/src/model/GeometryAttribute.js";
-import { LeafShape } from "../../../packages/kernel/src/model/LeafShape.js";
-import { ParamSpec } from "../../../packages/kernel/src/model/ParamSpec.js";
-import { XCoordinate } from "../../../packages/kernel/src/model/XCoordinate.js";
-import { YCoordinate } from "../../../packages/kernel/src/model/YCoordinate.js";
+import { Extent, GeometryAttribute, LeafShape, ParamSpec, XCoordinate, YCoordinate } from "@svgframe/kernel";
 
 /** `<circle cx cy r>`. */
 export class Circle extends LeafShape {

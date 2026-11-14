@@ -1,9 +1,5 @@
-import { CanvasSize } from "../../../packages/kernel/src/model/CanvasSize.js";
-import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
-import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
-import type { CommandContext } from "../../../packages/kernel/src/commands/CommandContext.js";
-import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
-import { DocumentCommand } from "../../../packages/kernel/src/commands/DocumentCommand.js";
+import { CanvasSize, CommandResult, DocumentCommand, SvgDocument } from "@svgframe/kernel";
+import type { ArgList, CommandContext } from "@svgframe/kernel";
 
 /**
  * `init [w] [h]`: a new empty canvas becomes the current document, with no

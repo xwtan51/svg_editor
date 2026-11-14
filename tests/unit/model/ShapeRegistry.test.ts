@@ -10,6 +10,7 @@ import { ShapeRegistry } from "../../../packages/kernel/src/model/ShapeRegistry.
 import type { ShapeType } from "../../../packages/kernel/src/model/ShapeType.js";
 import { StaticShapeProvider } from "../../../packages/kernel/src/model/StaticShapeProvider.js";
 import { Text } from "../../../plugins/builtin-shapes/src/Text.js";
+import { BuiltinExtensions } from "../../support/BuiltinExtensions.js";
 
 const BUILT_IN: Array<[string, ShapeType]> = [
   ["rect", Rect],
@@ -24,13 +25,16 @@ function usage(type: ShapeType): string {
   return [`create ${type.typeName} <id>`, ...type.params.map((p) => p.usageToken())].join(" ");
 }
 
+/** The shape catalog with the built-in shapes plugin installed. */
+const builtins = () => BuiltinExtensions.registry().shapes();
+
 describe("ShapeRegistry", () => {
   it("registers exactly the six built-in types, in order", () => {
-    expect(new ShapeRegistry().typeNames()).toEqual(["rect", "circle", "ellipse", "line", "text", "g"]);
+    expect(builtins().typeNames()).toEqual(["rect", "circle", "ellipse", "line", "text", "g"]);
   });
 
   it.each(BUILT_IN)("lookup(%s) returns a provider adapting the class", (name, type) => {
-    const registry = new ShapeRegistry();
+    const registry = builtins();
     const provider = registry.lookup(name);
     expect(provider).toBeInstanceOf(StaticShapeProvider);
     expect(provider.typeName).toBe(name);
@@ -39,13 +43,13 @@ describe("ShapeRegistry", () => {
   });
 
   it("reports an unknown type with the exact §4.2 message", () => {
-    const factory = new ShapeRegistry();
+    const factory = builtins();
     expect(() => factory.lookup("hexagon")).toThrow(EditorError);
     expect(() => factory.lookup("hexagon")).toThrow(new EditorError("unknown shape type: hexagon (is the plugin loaded?)"));
   });
 
   it.each(["box", "Rect", "RECT", "", "svg", "path"])("rejects %j (case-sensitive, box not built in)", (name) => {
-    expect(() => new ShapeRegistry().lookup(name)).toThrow(
+    expect(() => builtins().lookup(name)).toThrow(
       new EditorError(`unknown shape type: ${name} (is the plugin loaded?)`),
     );
   });
@@ -63,6 +67,7 @@ describe("ShapeRegistry", () => {
 
   it("registering a name twice is a programming error", () => {
     const factory = new ShapeRegistry();
+    factory.register(new StaticShapeProvider(Rect));
     let thrown: unknown;
     try {
       factory.register(new StaticShapeProvider(Rect));

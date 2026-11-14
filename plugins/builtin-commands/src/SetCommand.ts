@@ -1,9 +1,5 @@
-import type { Shape } from "../../../packages/kernel/src/model/Shape.js";
-import type { ShapeMemento } from "../../../packages/kernel/src/model/ShapeMemento.js";
-import type { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
-import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
-import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
-import { EditCommand } from "../../../packages/kernel/src/commands/EditCommand.js";
+import { CommandResult, EditCommand } from "@svgframe/kernel";
+import type { ArgList, Shape, ShapeMemento, SvgDocument } from "@svgframe/kernel";
 
 /**
  * `set <id> <attr> <value>` (§4.1 whitelist, E6–E9).

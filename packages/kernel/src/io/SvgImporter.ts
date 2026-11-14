@@ -3,7 +3,7 @@ import { EditorError } from "../model/EditorError.js";
 import { NumberFormat } from "../model/NumberFormat.js";
 import type { Shape } from "../model/Shape.js";
 import type { ShapeContainer } from "../model/ShapeContainer.js";
-import { ShapeRegistry } from "../model/ShapeRegistry.js";
+import type { ShapeCatalog } from "../model/ShapeCatalog.js";
 import type { ShapeProvider } from "../model/ShapeProvider.js";
 import { StyleAttributes } from "../model/StyleAttributes.js";
 import { SvgDocument } from "../model/SvgDocument.js";
@@ -15,7 +15,7 @@ import type { XmlElement } from "./XmlElement.js";
 
 /**
  * SVG file → new `SvgDocument` plus warnings. Elements are built through
- * `ShapeRegistry` by tag name; which XML attributes a type understands comes
+ * the shape catalog by tag name; which XML attributes a type understands comes
  * from its `params` (geometry and create options) plus the common style
  * attributes, so there is no per-tag code here. Everything else is kept as
  * pass-through attributes (F7).
@@ -33,11 +33,12 @@ export class SvgImporter {
   /** `inkscape:label` → `inkscape`; `xml:` is predefined and `xmlns:` declares rather than uses a prefix. */
   private static readonly USED_PREFIX = /^(?!xmlns:|xml:)([^:]+):/;
 
-  private readonly factory: ShapeRegistry;
+  private readonly factory: ShapeCatalog;
   private readonly adapter = new XmlDomAdapter();
 
-  constructor(factory: ShapeRegistry = new ShapeRegistry()) {
-    this.factory = factory;
+  /** `shapes` are the committed shape types; nothing is built in (design §2.1.3). */
+  constructor(shapes: ShapeCatalog) {
+    this.factory = shapes;
   }
 
   /**

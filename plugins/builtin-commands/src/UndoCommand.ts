@@ -1,7 +1,5 @@
-import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
-import type { CommandContext } from "../../../packages/kernel/src/commands/CommandContext.js";
-import type { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
-import { HistoryCommand } from "../../../packages/kernel/src/commands/HistoryCommand.js";
+import { HistoryCommand } from "@svgframe/kernel";
+import type { ArgList, CommandContext, CommandResult } from "@svgframe/kernel";
 
 /**
  * `undo`: undoes the latest edit and prints its undo echo. After a document
