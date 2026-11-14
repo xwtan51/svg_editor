@@ -1,5 +1,5 @@
+import type { ContainerShape } from "../../../packages/kernel/src/model/ContainerShape.js";
 import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
-import type { Group } from "../../builtin-shapes/src/Group.js";
 import type { Shape } from "../../../packages/kernel/src/model/Shape.js";
 import type { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 import { TreePosition } from "../../../packages/kernel/src/model/TreePosition.js";
@@ -26,7 +26,7 @@ export class AddToCommand extends EditCommand {
   private readonly groupId: string;
   private readonly id: string;
 
-  private group!: Group;
+  private group!: ContainerShape;
   private target!: Shape;
   private position!: TreePosition;
 

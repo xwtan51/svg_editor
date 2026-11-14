@@ -1,6 +1,6 @@
+import type { ContainerShape } from "./ContainerShape.js";
 import { EditorError } from "./EditorError.js";
 import { ExtraAttributes } from "./ExtraAttributes.js";
-import type { Group } from "../../../../plugins/builtin-shapes/src/Group.js";
 import type { ShapeContainer } from "./ShapeContainer.js";
 import { ShapeMemento } from "./ShapeMemento.js";
 import { StyleAttributes } from "./StyleAttributes.js";
@@ -75,8 +75,8 @@ export abstract class Shape {
    */
   abstract moveDescription(dx: number, dy: number): string;
 
-  /** Polymorphic "is it a container?": `null` for leaves, the group itself for `g`. */
-  asContainer(): Group | null {
+  /** Polymorphic "is it a container?": `null` for leaves, the shape itself for a container. */
+  asContainer(): ContainerShape | null {
     return null;
   }
 

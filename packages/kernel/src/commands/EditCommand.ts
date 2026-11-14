@@ -1,5 +1,5 @@
+import type { ContainerShape } from "../model/ContainerShape.js";
 import { EditorError } from "../model/EditorError.js";
-import type { Group } from "../../../../plugins/builtin-shapes/src/Group.js";
 import { IdSyntax } from "../model/IdSyntax.js";
 import type { SvgDocument } from "../model/SvgDocument.js";
 import { Command } from "./Command.js";
@@ -63,7 +63,7 @@ export abstract class EditCommand extends Command {
   }
 
   /** The container with this id; `no such container` / `not a container` otherwise (§4.2, E24). */
-  protected findContainer(document: SvgDocument, id: string): Group {
+  protected findContainer(document: SvgDocument, id: string): ContainerShape {
     const shape = document.findById(id);
     if (shape === null) {
       throw new EditorError(`no such container: ${id}`);
