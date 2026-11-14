@@ -36,6 +36,7 @@ npm run baseline    # 基线比对：doc/transcript/ 全部会话与 final 逐�
 - 目录（设计 §1.1）：内核在 `packages/kernel`（`@svgframe/kernel`），内置与可选插件在 `plugins/*`，装配处（CLI 入口、适配器）在根包的 `src/`；三者都是 npm workspaces（`packages/*`、`plugins/*`）。`vscode-svg/` 不在 workspaces、tsconfig、vitest 的范围里。
 - Node ≥ 22，ESM（`"type": "module"`，`module`/`moduleResolution` 为 NodeNext，相对 import 写 `.js` 后缀）。
 - TypeScript 是 7.x：`typescript` 包只有 `unstable/*` 接口，没有 5.x 的 Compiler API。需要解析 TS 源码时，先验证可行再选方案。
+- import 规则（设计 §1.2.1，S6 起由 architecture test 检查）：插件只能 import `@svgframe/kernel`（裸名）、本包内的相对路径和 `node:*`；装配处（`src/`）另可 import `@svgframe/kernel/host`，只有 `src/assembly/CompositionRoot.ts` 可以 import 插件包；内核内部一律用相对路径，不 import 自己的 `api.ts`/`host-api.ts`。
 - Phase 1 的范式约束由 `tests/unit/architecture.test.ts` 强制执行（`doc/README.md` §3 的 P2、P3、P5 等；扫描 `packages/kernel/src`、`src`、`plugins/*/src`，见设计 §1.2.3）：一类一文件、文件名 = 类名、不用 default export、不按名字 `switch`。
 
 ## 禁止事项
