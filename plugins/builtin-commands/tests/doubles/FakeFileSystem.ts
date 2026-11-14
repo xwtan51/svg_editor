@@ -5,6 +5,12 @@ import type { FileSystem } from "@svgframe/kernel";
 export class FakeFileSystem implements FileSystem {
   private readonly files = new Map<string, string>();
 
+  constructor(files: Record<string, string> = {}) {
+    for (const [path, text] of Object.entries(files)) {
+      this.files.set(path, text);
+    }
+  }
+
   readText(path: string): string {
     const text = this.files.get(path);
     if (text === undefined) {

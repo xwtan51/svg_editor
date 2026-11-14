@@ -1,24 +1,21 @@
 import { CanvasSize } from "../model/CanvasSize.js";
 import { EditorError } from "../model/EditorError.js";
 import { NumberFormat } from "../model/NumberFormat.js";
-import type { Shape } from "../model/Shape.js";
-import type { ShapeContainer } from "../model/ShapeContainer.js";
 import type { ShapeCatalog } from "../model/ShapeCatalog.js";
-import type { ShapeProvider } from "../model/ShapeProvider.js";
-import { StyleAttributes } from "../model/StyleAttributes.js";
 import { SvgDocument } from "../model/SvgDocument.js";
 import type { FileSystem } from "./FileSystem.js";
 import { IdAllocator } from "./IdAllocator.js";
 import { ImportResult } from "./ImportResult.js";
+import { ImportSession } from "./ImportSession.js";
 import { XmlDomAdapter } from "./XmlDomAdapter.js";
 import type { XmlElement } from "./XmlElement.js";
 
 /**
- * SVG file → new `SvgDocument` plus warnings. Elements are built through
- * the shape catalog by tag name; which XML attributes a type understands comes
- * from its `params` (geometry and create options) plus the common style
- * attributes, so there is no per-tag code here. Everything else is kept as
- * pass-through attributes (F7).
+ * SVG file → new `SvgDocument` plus warnings. This class reads and parses the
+ * file and the canvas size; the elements are read by a fresh `ImportSession`,
+ * which asks the committed shape providers which of them reads each element
+ * (`matchScore`, design §2.1.3). There is no per-tag code and no built-in
+ * shape type here: what is supported is what the catalog holds.
  *
  * Nothing is shared between calls: a failure leaves no trace (F20).
  */
@@ -30,27 +27,28 @@ export class SvgImporter {
   private static readonly BOM = /^\uFEFF/;
   private static readonly PX_LENGTH = /^(.*?)(px)?$/;
   private static readonly VIEWBOX_SEPARATOR = /[ \t\r\n,]+/;
-  /** `inkscape:label` → `inkscape`; `xml:` is predefined and `xmlns:` declares rather than uses a prefix. */
-  private static readonly USED_PREFIX = /^(?!xmlns:|xml:)([^:]+):/;
 
-  private readonly factory: ShapeCatalog;
+  private readonly shapes: ShapeCatalog;
   private readonly adapter = new XmlDomAdapter();
 
   /** `shapes` are the committed shape types; nothing is built in (design §2.1.3). */
   constructor(shapes: ShapeCatalog) {
-    this.factory = shapes;
+    this.shapes = shapes;
   }
 
   /**
    * Throws `cannot read file: <path>` (from the file system) or
-   * `cannot parse file: <path>` (F9, F10, F12).
+   * `cannot parse file: <path>` (F9, F10, F12, and the read-back rules of design §3.8).
    */
   read(fileSystem: FileSystem, path: string): ImportResult {
     const root = this.parseRoot(fileSystem.readText(path).replace(SvgImporter.BOM, ""), path);
-    const warnings: string[] = [];
-    const document = new SvgDocument(this.canvasSize(root, path, warnings));
-    this.importChildren(root, document, IdAllocator.forTree(root), path, warnings);
-    return new ImportResult(document, warnings);
+    const session = new ImportSession(this.shapes, path, IdAllocator.forTree(root));
+    const document = new SvgDocument(this.canvasSize(root, session));
+    for (const shape of session.readChildren(root)) {
+      document.insertAt(shape, document.childList().length);
+    }
+    session.finish();
+    return new ImportResult(document, session.warnings());
   }
 
   private parseRoot(text: string, path: string): XmlElement {
@@ -71,30 +69,30 @@ export class SvgImporter {
 
   // ------------------------------------------------------------ canvas (F10)
 
-  private canvasSize(root: XmlElement, path: string, warnings: string[]): CanvasSize {
-    let width = this.length(root, "width", path);
-    let height = this.length(root, "height", path);
+  private canvasSize(root: XmlElement, session: ImportSession): CanvasSize {
+    let width = this.length(root, "width", session);
+    let height = this.length(root, "height", session);
     if (width === undefined || height === undefined) {
-      const viewBox = this.viewBoxSize(root, path);
+      const viewBox = this.viewBoxSize(root, session);
       width ??= viewBox?.[0];
       height ??= viewBox?.[1];
     }
     if (width === undefined || height === undefined) {
-      warnings.push(`missing canvas size, using ${CanvasSize.DEFAULT.toString()}`);
+      session.warn(`missing canvas size, using ${CanvasSize.DEFAULT.toString()}`);
       return CanvasSize.DEFAULT;
     }
     try {
       return new CanvasSize(width, height);
     } catch (error) {
       if (error instanceof EditorError) {
-        throw this.parseError(path, error.message);
+        throw session.reject(error.message);
       }
       throw error;
     }
   }
 
   /** A plain or `px` number; other units (`%`, `mm`…) cannot be represented. */
-  private length(root: XmlElement, name: string, path: string): number | undefined {
+  private length(root: XmlElement, name: string, session: ImportSession): number | undefined {
     const raw = root.attribute(name);
     if (raw === undefined) {
       return undefined;
@@ -103,12 +101,12 @@ export class SvgImporter {
     try {
       return NumberFormat.parse(number);
     } catch (error) {
-      throw this.rethrowInvalid(error, root, path, [name, raw]);
+      throw this.rethrowInvalid(error, root, session, [name, raw]);
     }
   }
 
   /** Width and height of `viewBox="min-x min-y width height"`. */
-  private viewBoxSize(root: XmlElement, path: string): [number, number] | undefined {
+  private viewBoxSize(root: XmlElement, session: ImportSession): [number, number] | undefined {
     const raw = root.attribute("viewBox");
     if (raw === undefined) {
       return undefined;
@@ -121,170 +119,27 @@ export class SvgImporter {
       const numbers = parts.map((part) => NumberFormat.parse(part));
       return [numbers[2] ?? 0, numbers[3] ?? 0];
     } catch (error) {
-      throw this.rethrowInvalid(error, root, path, ["viewBox", raw]);
-    }
-  }
-
-  // ------------------------------------------------------------ shapes
-
-  private importChildren(
-    element: XmlElement,
-    container: ShapeContainer,
-    ids: IdAllocator,
-    path: string,
-    warnings: string[],
-  ): void {
-    for (const child of element.children()) {
-      const shape = this.importElement(child, ids, path, warnings);
-      if (shape !== null) {
-        container.insertAt(shape, container.childList().length);
-      }
-    }
-  }
-
-  /** `null` for an unsupported element, whose subtree is skipped (F6). */
-  private importElement(element: XmlElement, ids: IdAllocator, path: string, warnings: string[]): Shape | null {
-    const tag = element.name();
-    if (!this.factory.typeNames().includes(tag)) {
-      warnings.push(`skipped unsupported element <${tag}>`);
-      return null;
-    }
-    const type = this.factory.lookup(tag);
-    const shape = this.build(type, ids.idFor(tag, element.attribute("id"), warnings), element, path);
-    const container = shape.asContainer();
-    if (container !== null) {
-      this.importChildren(element, container, ids, path, warnings);
-      return shape;
-    }
-    // A leaf keeps no child elements: content-bearing types flatten them into
-    // their text (F15), the others drop them like any unsupported element (F6).
-    const flattens = type.params.some((param) => param.isContent());
-    for (const child of element.children()) {
-      warnings.push(
-        flattens
-          ? `flattened <${child.name()}> in ${shape.label()}`
-          : `skipped unsupported element <${child.name()}>`,
-      );
-    }
-    return shape;
-  }
-
-  /**
-   * Splits the attributes into create parameters, style attributes and
-   * pass-through ones (kept in document order), then builds the shape.
-   */
-  private build(type: ShapeProvider, id: string, element: XmlElement, path: string): Shape {
-    const values = new Map<string, string>();
-    const style: Array<[string, string]> = [];
-    const extras: Array<[string, string]> = [];
-    for (const [name, value] of element.attributes()) {
-      if (name === "id") {
-        continue;
-      }
-      if (type.params.some((param) => !param.isContent() && param.attributeName() === name)) {
-        values.set(name, value);
-      } else if (StyleAttributes.accepts(name)) {
-        style.push([name, value]);
-      } else {
-        extras.push([name, value]);
-      }
-    }
-    for (const param of type.params.filter((p) => p.isContent())) {
-      values.set(param.attributeName(), this.trimSpace(element.text()));
-    }
-
-    const shape = this.create(type, id, values, element, path);
-    for (const [name, value] of style) {
-      try {
-        shape.setAttribute(name, value);
-      } catch (error) {
-        throw this.rethrowInvalid(error, element, path, [name, value]);
-      }
-    }
-    for (const [name, value] of this.withNamespaceDeclarations(element, extras)) {
-      shape.addExtraAttribute(name, value);
-    }
-    return shape;
-  }
-
-  /**
-   * The root `<svg>` is not kept, so prefix declarations made there (or on a
-   * skipped element) would be lost and a saved `inkscape:label` would no longer
-   * parse. Each prefixed pass-through attribute therefore gets the declaration
-   * in scope, inserted before its first use unless the element declares it itself.
-   */
-  private withNamespaceDeclarations(
-    element: XmlElement,
-    extras: ReadonlyArray<[string, string]>,
-  ): Array<[string, string]> {
-    const result: Array<[string, string]> = [];
-    const declared = new Set<string>();
-    for (const [name, value] of extras) {
-      const prefix = SvgImporter.USED_PREFIX.exec(name)?.[1];
-      const declaration = `xmlns:${prefix}`;
-      const uri = prefix === undefined ? undefined : element.namespaceUri(prefix);
-      if (uri !== undefined && element.attribute(declaration) === undefined && !declared.has(declaration)) {
-        result.push([declaration, uri]);
-        declared.add(declaration);
-      }
-      result.push([name, value]);
-    }
-    return result;
-  }
-
-  /** On a rejected value, finds the offending attribute so that the error can name it (F12). */
-  private create(
-    type: ShapeProvider,
-    id: string,
-    values: ReadonlyMap<string, string>,
-    element: XmlElement,
-    path: string,
-  ): Shape {
-    try {
-      return type.create(id, values, this.factory);
-    } catch (error) {
-      const culprit = [...values].find(([name, value]) => this.rejects(type, id, name, value));
-      throw this.rethrowInvalid(error, element, path, culprit);
-    }
-  }
-
-  private rejects(type: ShapeProvider, id: string, name: string, value: string): boolean {
-    try {
-      type.create(id, new Map([[name, value]]), this.factory);
-      return false;
-    } catch (error) {
-      if (error instanceof EditorError) {
-        return true;
-      }
-      throw error;
+      throw this.rethrowInvalid(error, root, session, ["viewBox", raw]);
     }
   }
 
   // ------------------------------------------------------------ errors
 
-  private parseError(path: string, detail?: string): EditorError {
-    return new EditorError(`cannot parse file: ${path}${detail === undefined ? "" : ` (${detail})`}`);
+  private parseError(path: string): EditorError {
+    return new EditorError(`cannot parse file: ${path}`);
   }
 
   /**
-   * A model `EditorError` about an attribute value becomes
-   * `cannot parse file: <path> (invalid value width="50%" on <rect>)`;
+   * A model `EditorError` about a root attribute becomes
+   * `cannot parse file: <path> (invalid value width="50%" on <svg>)`;
    * anything else is a programming error and is passed on unchanged.
    */
-  private rethrowInvalid(
-    error: unknown,
-    element: XmlElement,
-    path: string,
-    attribute: readonly [string, string] | undefined,
-  ): unknown {
+  private rethrowInvalid(error: unknown, element: XmlElement, session: ImportSession, attribute: readonly [string, string]): unknown {
     if (!(error instanceof EditorError)) {
       return error;
     }
-    if (attribute === undefined) {
-      return this.parseError(path);
-    }
     const [name, raw] = attribute;
-    return this.parseError(path, `invalid value ${name}="${raw}" on <${element.name()}>`);
+    return session.reject(`invalid value ${name}="${raw}" on <${element.name()}>`);
   }
 
   private trimSpace(text: string): string {

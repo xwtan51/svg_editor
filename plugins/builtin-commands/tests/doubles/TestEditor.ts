@@ -14,7 +14,7 @@ import { FakeGroup } from "./FakeGroup.js";
  * installer. No other plugin is involved.
  */
 export class TestEditor {
-  static create(...extraShapes: ShapeProvider[]): Editor {
+  static create(extraShapes: readonly ShapeProvider[] = [], files: Record<string, string> = {}): Editor {
     const registry = new ExtensionRegistry();
     const installer = new PluginInstaller(registry);
     for (const candidate of [TestEditor.shapes(extraShapes), TestEditor.commands()]) {
@@ -23,7 +23,7 @@ export class TestEditor {
         throw new Error(`test setup: ${outcome.message()}`);
       }
     }
-    return new Editor(new EditorSession(new FakeFileSystem(), registry));
+    return new Editor(new EditorSession(new FakeFileSystem(files), registry));
   }
 
   /** The real built-in commands plugin with its real manifest. */

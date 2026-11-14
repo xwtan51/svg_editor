@@ -20,7 +20,7 @@ function run(editor: Editor, ...lines: string[]): string[] {
 }
 
 function editorWith(breaches: PairBreaches = {}): Editor {
-  const editor = TestEditor.create(new FakePairProvider(breaches));
+  const editor = TestEditor.create([new FakePairProvider(breaches)]);
   run(editor, "init");
   return editor;
 }
