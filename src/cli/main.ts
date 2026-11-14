@@ -6,7 +6,7 @@
  * it only wires up and starts the application. Every other file under src/ must
  * follow the rule.
  */
-import { Editor } from "../app/Editor.js";
+import { Editor } from "../../packages/kernel/src/app/Editor.js";
 import { Repl } from "./Repl.js";
 
 const repl = new Repl(Editor.createDefault(), process.stdin, process.stdout, process.stderr, process.stdin.isTTY === true);

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { Circle } from "../../../src/model/Circle.js";
-import { Group } from "../../../src/model/Group.js";
-import { Line } from "../../../src/model/Line.js";
-import { Rect } from "../../../src/model/Rect.js";
-import type { Shape } from "../../../src/model/Shape.js";
-import type { ShapeContainer } from "../../../src/model/ShapeContainer.js";
-import { SvgDocument } from "../../../src/model/SvgDocument.js";
-import { Text } from "../../../src/model/Text.js";
-import { ShapeDetailRenderer } from "../../../src/view/ShapeDetailRenderer.js";
+import { Circle } from "../../../plugins/builtin-shapes/src/Circle.js";
+import { Group } from "../../../plugins/builtin-shapes/src/Group.js";
+import { Line } from "../../../plugins/builtin-shapes/src/Line.js";
+import { Rect } from "../../../plugins/builtin-shapes/src/Rect.js";
+import type { Shape } from "../../../packages/kernel/src/model/Shape.js";
+import type { ShapeContainer } from "../../../packages/kernel/src/model/ShapeContainer.js";
+import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
+import { Text } from "../../../plugins/builtin-shapes/src/Text.js";
+import { ShapeDetailRenderer } from "../../../packages/kernel/src/view/ShapeDetailRenderer.js";
 import { build } from "../model/build.js";
 
 function append(container: ShapeContainer, ...shapes: Shape[]): void {

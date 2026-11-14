@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { CanvasSize } from "../../../src/model/CanvasSize.js";
-import { Circle } from "../../../src/model/Circle.js";
-import { Ellipse } from "../../../src/model/Ellipse.js";
-import { Group } from "../../../src/model/Group.js";
-import { Rect } from "../../../src/model/Rect.js";
-import { SvgDocument } from "../../../src/model/SvgDocument.js";
-import { Text } from "../../../src/model/Text.js";
+import { CanvasSize } from "../../../packages/kernel/src/model/CanvasSize.js";
+import { Circle } from "../../../plugins/builtin-shapes/src/Circle.js";
+import { Ellipse } from "../../../plugins/builtin-shapes/src/Ellipse.js";
+import { Group } from "../../../plugins/builtin-shapes/src/Group.js";
+import { Rect } from "../../../plugins/builtin-shapes/src/Rect.js";
+import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
+import { Text } from "../../../plugins/builtin-shapes/src/Text.js";
 
 /** The document of §6 after `read other.svg`. */
 function otherSvg() {

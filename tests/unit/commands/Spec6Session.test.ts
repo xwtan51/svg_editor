@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { TreeRenderer } from "../../../src/view/TreeRenderer.js";
+import { TreeRenderer } from "../../../packages/kernel/src/view/TreeRenderer.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 import { CommandRunner } from "./CommandRunner.js";
 

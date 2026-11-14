@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Tokenizer } from "../../../src/commands/Tokenizer.js";
-import { EditorError } from "../../../src/model/EditorError.js";
+import { Tokenizer } from "../../../packages/kernel/src/commands/Tokenizer.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
 
 function texts(line: string): string[] {
   return new Tokenizer().tokenize(line).map((token) => token.text());

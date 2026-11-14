@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ShowCommand } from "../../../src/commands/ShowCommand.js";
+import { ShowCommand } from "../../../plugins/builtin-commands/src/ShowCommand.js";
 import { CommandRunner } from "./CommandRunner.js";
 
 describe("show", () => {

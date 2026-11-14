@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ReadCommand } from "../../../src/commands/ReadCommand.js";
-import { SvgDocument } from "../../../src/model/SvgDocument.js";
-import { TreeRenderer } from "../../../src/view/TreeRenderer.js";
+import { ReadCommand } from "../../../plugins/builtin-commands/src/ReadCommand.js";
+import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
+import { TreeRenderer } from "../../../packages/kernel/src/view/TreeRenderer.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 import { CommandRunner } from "./CommandRunner.js";
 

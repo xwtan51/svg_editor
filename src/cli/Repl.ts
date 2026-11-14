@@ -1,6 +1,6 @@
 import { createInterface, type Interface } from "node:readline";
 import type { Readable, Writable } from "node:stream";
-import type { Editor } from "../app/Editor.js";
+import type { Editor } from "../../packages/kernel/src/app/Editor.js";
 
 /**
  * The read–eval–print loop (README §1.2): prints the banner, then hands every

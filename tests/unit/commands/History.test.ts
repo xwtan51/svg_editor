@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { CommandResult } from "../../../src/commands/CommandResult.js";
-import { EditCommand } from "../../../src/commands/EditCommand.js";
-import { History } from "../../../src/commands/History.js";
-import { EditorError } from "../../../src/model/EditorError.js";
+import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
+import { EditCommand } from "../../../packages/kernel/src/commands/EditCommand.js";
+import { History } from "../../../packages/kernel/src/commands/History.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
 
 /** An edit command that only writes to a shared log. */
 class FakeEdit extends EditCommand {

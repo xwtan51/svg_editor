@@ -1,9 +1,9 @@
-import type { FileSystem } from "../../../src/io/FileSystem.js";
-import { CommandRegistry } from "../../../src/commands/CommandRegistry.js";
-import type { CommandContext } from "../../../src/commands/CommandContext.js";
-import { History } from "../../../src/commands/History.js";
-import { ShapeFactory } from "../../../src/model/ShapeFactory.js";
-import type { SvgDocument } from "../../../src/model/SvgDocument.js";
+import type { FileSystem } from "../../../packages/kernel/src/io/FileSystem.js";
+import { CommandRegistry } from "../../../packages/kernel/src/commands/CommandRegistry.js";
+import type { CommandContext } from "../../../packages/kernel/src/commands/CommandContext.js";
+import { History } from "../../../packages/kernel/src/commands/History.js";
+import { ShapeFactory } from "../../../packages/kernel/src/model/ShapeFactory.js";
+import type { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 
 /**

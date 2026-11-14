@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { EditorError } from "../../../src/model/EditorError.js";
-import { Extent } from "../../../src/model/Extent.js";
-import { XCoordinate } from "../../../src/model/XCoordinate.js";
-import { YCoordinate } from "../../../src/model/YCoordinate.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
+import { Extent } from "../../../packages/kernel/src/model/Extent.js";
+import { XCoordinate } from "../../../packages/kernel/src/model/XCoordinate.js";
+import { YCoordinate } from "../../../packages/kernel/src/model/YCoordinate.js";
 
 describe("XCoordinate", () => {
   const role = new XCoordinate();

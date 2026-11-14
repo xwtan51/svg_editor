@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { Group } from "../../../src/model/Group.js";
-import { Rect } from "../../../src/model/Rect.js";
-import { SvgDocument } from "../../../src/model/SvgDocument.js";
-import { TreePosition } from "../../../src/model/TreePosition.js";
+import { Group } from "../../../plugins/builtin-shapes/src/Group.js";
+import { Rect } from "../../../plugins/builtin-shapes/src/Rect.js";
+import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
+import { TreePosition } from "../../../packages/kernel/src/model/TreePosition.js";
 
 describe("TreePosition", () => {
   it("records (container, index) of an attached shape", () => {

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { SvgSerializer } from "../../../src/io/SvgSerializer.js";
-import { CanvasSize } from "../../../src/model/CanvasSize.js";
-import { Circle } from "../../../src/model/Circle.js";
-import { Group } from "../../../src/model/Group.js";
-import { Line } from "../../../src/model/Line.js";
-import { Rect } from "../../../src/model/Rect.js";
-import type { Shape } from "../../../src/model/Shape.js";
-import { SvgDocument } from "../../../src/model/SvgDocument.js";
-import { Text } from "../../../src/model/Text.js";
+import { SvgSerializer } from "../../../packages/kernel/src/io/SvgSerializer.js";
+import { CanvasSize } from "../../../packages/kernel/src/model/CanvasSize.js";
+import { Circle } from "../../../plugins/builtin-shapes/src/Circle.js";
+import { Group } from "../../../plugins/builtin-shapes/src/Group.js";
+import { Line } from "../../../plugins/builtin-shapes/src/Line.js";
+import { Rect } from "../../../plugins/builtin-shapes/src/Rect.js";
+import type { Shape } from "../../../packages/kernel/src/model/Shape.js";
+import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
+import { Text } from "../../../plugins/builtin-shapes/src/Text.js";
 import { build } from "../model/build.js";
 
 const DECLARATION = '<?xml version="1.0" encoding="UTF-8"?>';

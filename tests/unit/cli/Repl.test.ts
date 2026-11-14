@@ -1,13 +1,13 @@
 import { PassThrough, Writable } from "node:stream";
 import { describe, expect, it } from "vitest";
-import { Editor } from "../../../src/app/Editor.js";
-import { EditorSession } from "../../../src/app/EditorSession.js";
+import { Editor } from "../../../packages/kernel/src/app/Editor.js";
+import { EditorSession } from "../../../packages/kernel/src/app/EditorSession.js";
 import { Repl } from "../../../src/cli/Repl.js";
-import { CommandRegistry } from "../../../src/commands/CommandRegistry.js";
-import type { CommandResult } from "../../../src/commands/CommandResult.js";
-import { QueryCommand } from "../../../src/commands/QueryCommand.js";
-import { ShapeFactory } from "../../../src/model/ShapeFactory.js";
-import { SvgDocument } from "../../../src/model/SvgDocument.js";
+import { CommandRegistry } from "../../../packages/kernel/src/commands/CommandRegistry.js";
+import type { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
+import { QueryCommand } from "../../../packages/kernel/src/commands/QueryCommand.js";
+import { ShapeFactory } from "../../../packages/kernel/src/model/ShapeFactory.js";
+import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 
 // In-process tests of the loop itself, on in-memory streams. The real entry

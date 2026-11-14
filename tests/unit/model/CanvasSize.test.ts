@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CanvasSize } from "../../../src/model/CanvasSize.js";
-import { EditorError } from "../../../src/model/EditorError.js";
+import { CanvasSize } from "../../../packages/kernel/src/model/CanvasSize.js";
+import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
 
 describe("CanvasSize", () => {
   it("exposes width, height and the WxH text form", () => {

@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { Editor } from "../../../src/app/Editor.js";
-import { EditorSession } from "../../../src/app/EditorSession.js";
-import type { ArgList } from "../../../src/commands/ArgList.js";
-import { CommandRegistry } from "../../../src/commands/CommandRegistry.js";
-import { CommandResult } from "../../../src/commands/CommandResult.js";
-import { QueryCommand } from "../../../src/commands/QueryCommand.js";
-import { SvgSerializer } from "../../../src/io/SvgSerializer.js";
-import { ShapeFactory } from "../../../src/model/ShapeFactory.js";
-import { SvgDocument } from "../../../src/model/SvgDocument.js";
+import { Editor } from "../../../packages/kernel/src/app/Editor.js";
+import { EditorSession } from "../../../packages/kernel/src/app/EditorSession.js";
+import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
+import { CommandRegistry } from "../../../packages/kernel/src/commands/CommandRegistry.js";
+import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
+import { QueryCommand } from "../../../packages/kernel/src/commands/QueryCommand.js";
+import { SvgSerializer } from "../../../packages/kernel/src/io/SvgSerializer.js";
+import { ShapeFactory } from "../../../packages/kernel/src/model/ShapeFactory.js";
+import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 
 /** Test-only display command that needs no document (like `help`), to probe the Invoker's flow. */

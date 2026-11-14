@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { IdAllocator } from "../../../src/io/IdAllocator.js";
-import { XmlElement } from "../../../src/io/XmlElement.js";
+import { IdAllocator } from "../../../packages/kernel/src/io/IdAllocator.js";
+import { XmlElement } from "../../../packages/kernel/src/io/XmlElement.js";
 
 function element(name: string, id?: string, children: XmlElement[] = []): XmlElement {
   return new XmlElement(name, id === undefined ? [] : [["id", id]], children, "");
