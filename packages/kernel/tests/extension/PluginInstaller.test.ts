@@ -252,7 +252,7 @@ describe("PluginInstaller: registration shape checks fail the activation", () =>
       read: () => null,
     } as unknown as ShapeProvider;
     expect(install((c) => c.registerShape(partial))).toBe(
-      "plugin failed to activate: @test/shape (invalid shape provider half: matchScore must be a function)",
+      "plugin failed to activate: @test/shape (invalid shape provider half: claimedIds, create, creationDetail, matchScore and read must be functions)",
     );
   });
 

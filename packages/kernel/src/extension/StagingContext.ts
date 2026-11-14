@@ -16,7 +16,6 @@ import type { PluginContext } from "./PluginContext.js";
 export class StagingContext implements PluginContext {
   private static readonly REGISTRATION_NAME = /^\S+$/;
   private static readonly ONE_LINE = /^[^\r\n]+$/;
-  private static readonly SHAPE_METHODS = ["claimedIds", "create", "creationDetail", "matchScore", "read"];
 
   private readonly registry: ExtensionRegistry;
   private readonly shapes: ShapeProvider[] = [];
@@ -93,10 +92,11 @@ export class StagingContext implements PluginContext {
     if (!Array.isArray(provider.params)) {
       throw new Error(`invalid shape provider ${provider.typeName}: params must be an array`);
     }
-    for (const method of StagingContext.SHAPE_METHODS) {
-      if (typeof Reflect.get(provider, method) !== "function") {
-        throw new Error(`invalid shape provider ${provider.typeName}: ${method} must be a function`);
-      }
+    const methods: readonly unknown[] = [provider.claimedIds, provider.create, provider.creationDetail, provider.matchScore, provider.read];
+    if (!methods.every((method) => typeof method === "function")) {
+      throw new Error(
+        `invalid shape provider ${provider.typeName}: claimedIds, create, creationDetail, matchScore and read must be functions`,
+      );
     }
   }
 
