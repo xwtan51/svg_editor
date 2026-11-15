@@ -45,7 +45,16 @@ export interface ShapeReader {
   /** Adds a warning (without the `warning: ` prefix). */
   warn(message: string): void;
 
-  /** Degrades: hands `element` to the best provider not yet tried for it; `null` (skip, with the usual warning) when none is left. */
+  /**
+   * Degrades: hands `element` to the best provider not yet tried for it; `null`
+   * (skip, with the usual warning) when none is left.
+   *
+   * Precondition: `allocateId` (directly or through `readStandard`) has not been
+   * called for `element` — degrading leaves no side effect (ADR-2), so decide
+   * before allocating. Otherwise the read is rejected as a contract breach:
+   * `cannot parse file: <path> (shape provider <type> failed: readWithNext after allocateId)`.
+   * A `warn` before degrading is fine.
+   */
   readWithNext(element: ElementView): Shape | null;
 
   /** The error that rejects the whole read: `cannot parse file: <path> (<detail>)`; the caller throws it. */

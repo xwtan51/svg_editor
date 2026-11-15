@@ -21,8 +21,9 @@ import { XmlElement } from "./XmlElement.js";
  * `matchScore`; the single highest positive score wins, a tie at the top
  * rejects the read, and all zeros skip the element with its subtree (F6).
  * A provider that breaks its contract (a throwing or malformed `matchScore`, a
- * non-`EditorError` from `read`, a result that is not a detached shape) rejects
- * the read as `shape provider <type> failed: <reason>`.
+ * non-`EditorError` from `read`, a result that is not a detached shape,
+ * `readWithNext` on an element that already has its id) rejects the read as
+ * `shape provider <type> failed: <reason>`.
  */
 export class ImportSession implements ShapeReader {
   /** XML white space (not JavaScript's wider `trim()` set, which would also eat U+00A0). */
@@ -40,6 +41,8 @@ export class ImportSession implements ShapeReader {
   private readonly unique: string[] = [];
   /** Providers already tried for an element during its current dispatch (for `readWithNext`). */
   private readonly tried = new Map<ElementView, Set<ShapeProvider>>();
+  /** The `read` calls in progress, innermost last (`readWithNext` and `readChildren` nest them). */
+  private readonly reading: Array<{ provider: ShapeProvider; element: ElementView }> = [];
 
   /** `ids` must have reserved the explicit ids of the whole file (F13). */
   constructor(shapes: ShapeCatalog, path: string, ids: IdAllocator) {
@@ -118,7 +121,15 @@ export class ImportSession implements ShapeReader {
     this.messages.push(message);
   }
 
+  /**
+   * ADR-2: degrading must leave no side effect, so the element must not have
+   * its id yet — afterwards the next provider would allocate a second one
+   * (a spurious `duplicate id … reassigned …` and a changed id).
+   */
   readWithNext(element: ElementView): Shape | null {
+    if (this.imported.has(element)) {
+      throw this.breach(this.readerOf(element), "readWithNext after allocateId");
+    }
     const provider = this.choose(element);
     if (provider === null) {
       this.skip(element);
@@ -200,6 +211,7 @@ export class ImportSession implements ShapeReader {
     tried.add(provider);
     this.tried.set(element, tried);
     let shape: unknown;
+    this.reading.push({ provider, element });
     try {
       shape = provider.read(element, this);
     } catch (error) {
@@ -207,6 +219,8 @@ export class ImportSession implements ShapeReader {
         throw error;
       }
       throw this.breach(provider, ImportSession.reason(error));
+    } finally {
+      this.reading.pop();
     }
     if (shape === null) {
       return null;
@@ -218,6 +232,20 @@ export class ImportSession implements ShapeReader {
       throw this.breach(provider, "read returned an attached shape");
     }
     return shape;
+  }
+
+  /**
+   * The provider whose `read` of `element` is innermost in progress; when no
+   * one is reading `element` itself, the innermost `read` at all (the caller).
+   * There is always one: only providers hold the reader during a read.
+   */
+  private readerOf(element: ElementView): ShapeProvider {
+    const own = this.reading.filter((frame) => frame.element === element);
+    const frame = own[own.length - 1] ?? this.reading[this.reading.length - 1];
+    if (frame === undefined) {
+      throw new Error("ShapeReader used outside a provider's read");
+    }
+    return frame.provider;
   }
 
   /** F6: an element nobody reads is dropped with its subtree. */

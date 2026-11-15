@@ -136,6 +136,58 @@ describe("read-back: degradation with readWithNext", () => {
   });
 });
 
+describe("read-back: readWithNext only before allocateId (ADR-2: no side effect before degrading)", () => {
+  const GREEDY = '<fake-group id="n1" data-kind="greedy"><fake-leaf id="x"/></fake-group>';
+  const claims = (e: { name(): string; attribute(name: string): string | undefined }) =>
+    e.name() === "fake-group" && e.attribute("data-kind") === "greedy" ? 2 : 0;
+
+  it("allocateId, then readWithNext: a contract breach that rejects the read; the current document is untouched", () => {
+    const greedy = new ScriptedProvider("greedy", claims, (e, reader) => {
+      reader.allocateId(e);
+      return reader.readWithNext(e);
+    });
+    const importer = new SvgImporter(catalog(group(), greedy, leaf()));
+    const files = new FakeFileSystem({ "a.svg": svg('<fake-leaf id="n1"/>'), "b.svg": svg(GREEDY) });
+    const current = importer.read(files, "a.svg");
+    expect(errorOf(() => importer.read(files, "b.svg"))).toBe(
+      "cannot parse file: b.svg (shape provider greedy failed: readWithNext after allocateId)",
+    );
+    expect(outline(current)).toEqual(["fake-leaf#n1"]);
+    expect(current.warnings()).toEqual([]);
+  });
+
+  it("readStandard allocates too, so readWithNext after it is the same breach", () => {
+    const greedy = new ScriptedProvider("greedy", claims, (e, reader) => {
+      reader.readStandard(FakeContainer, e);
+      return reader.readWithNext(e);
+    });
+    expect(errorOf(() => read(GREEDY, group(), greedy, leaf()))).toBe(
+      "cannot parse file: a.svg (shape provider greedy failed: readWithNext after allocateId)",
+    );
+  });
+
+  it("the breach names the provider reading the element now, also after a degradation", () => {
+    const first = new ScriptedProvider("first", (e) => 3 * Math.sign(claims(e)), (e, reader) => reader.readWithNext(e));
+    const second = new ScriptedProvider("second", claims, (e, reader) => {
+      reader.allocateId(e);
+      return reader.readWithNext(e);
+    });
+    expect(errorOf(() => read(GREEDY, group(), first, second, leaf()))).toBe(
+      "cannot parse file: a.svg (shape provider second failed: readWithNext after allocateId)",
+    );
+  });
+
+  it("control: warn, then readWithNext is allowed (the composite's degradation) and the id is kept", () => {
+    const polite = new ScriptedProvider("polite", claims, (e, reader) => {
+      reader.warn("greedy n1 read as plain fake-group: not today");
+      return reader.readWithNext(e);
+    });
+    const result = read(GREEDY, group(), polite, leaf());
+    expect(outline(result)).toEqual(["fake-group#n1 data-kind=greedy", "  fake-leaf#x"]);
+    expect(result.warnings()).toEqual(["warning: greedy n1 read as plain fake-group: not today"]);
+  });
+});
+
 describe("read-back: requireUnique counts only imported elements, checked at the end", () => {
   const providers = () => [group(), new FakeCompositeProvider(), leaf()];
 
