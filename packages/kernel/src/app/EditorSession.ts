@@ -85,4 +85,13 @@ export class EditorSession implements CommandContext {
   shapes(): ShapeCatalog {
     return this.extensions.shapes();
   }
+
+  /**
+   * The committed tree decorators, read at each call. The return type
+   * (`readonly TreeDecorator[]`) is inferred from the registry so that `app`
+   * does not import `view` (rule D6); `implements CommandContext` checks it.
+   */
+  treeDecorators() {
+    return this.extensions.treeDecorators();
+  }
 }

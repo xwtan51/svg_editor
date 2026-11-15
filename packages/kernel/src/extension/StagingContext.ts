@@ -2,6 +2,7 @@ import { CommandCategory } from "../commands/CommandCategory.js";
 import type { CommandType } from "../commands/CommandType.js";
 import type { ShapeCatalog } from "../model/ShapeCatalog.js";
 import type { ShapeProvider } from "../model/ShapeProvider.js";
+import type { TreeDecorator } from "../view/TreeDecorator.js";
 import { ContributionCategory } from "./ContributionCategory.js";
 import type { DocumentListener } from "./DocumentListener.js";
 import type { ExtensionRegistry } from "./ExtensionRegistry.js";
@@ -21,6 +22,7 @@ export class StagingContext implements PluginContext {
   private readonly registry: ExtensionRegistry;
   private readonly shapes: ShapeProvider[] = [];
   private readonly commands: CommandType[] = [];
+  private readonly decorators: TreeDecorator[] = [];
   private readonly listeners: DocumentListener[] = [];
   private readonly staged = new Map<ContributionCategory, string[]>();
   private sealed = false;
@@ -41,6 +43,13 @@ export class StagingContext implements PluginContext {
     this.checkCommand(type);
     this.commands.push(type);
     this.stage(ContributionCategory.COMMANDS, type.commandName);
+  }
+
+  registerTreeDecorator(decorator: TreeDecorator): void {
+    this.checkOpen();
+    this.checkDecorator(decorator);
+    this.decorators.push(decorator);
+    this.stage(ContributionCategory.DECORATORS, decorator.name);
   }
 
   subscribe(listener: DocumentListener): void {
@@ -76,6 +85,11 @@ export class StagingContext implements PluginContext {
   /** Staged command types, in registration order. */
   commandTypes(): readonly CommandType[] {
     return [...this.commands];
+  }
+
+  /** Staged tree decorators, in registration order. */
+  treeDecorators(): readonly TreeDecorator[] {
+    return [...this.decorators];
   }
 
   /** Staged document listeners, in subscription order. */
@@ -134,6 +148,18 @@ export class StagingContext implements PluginContext {
     }
     if (typeof type.parse !== "function") {
       throw new Error(`invalid command type ${name}: parse must be a function`);
+    }
+  }
+
+  private checkDecorator(decorator: TreeDecorator): void {
+    if (typeof decorator !== "object" || decorator === null) {
+      throw new Error("invalid tree decorator: not an object");
+    }
+    if (!StagingContext.isRegistrationName(decorator.name)) {
+      throw new Error("invalid tree decorator: name must be a non-empty string without white space");
+    }
+    if (typeof decorator.tagFor !== "function") {
+      throw new Error(`invalid tree decorator ${decorator.name}: tagFor must be a function`);
     }
   }
 

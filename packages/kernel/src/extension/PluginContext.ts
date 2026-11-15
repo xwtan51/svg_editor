@@ -1,6 +1,7 @@
 import type { CommandType } from "../commands/CommandType.js";
 import type { ShapeCatalog } from "../model/ShapeCatalog.js";
 import type { ShapeProvider } from "../model/ShapeProvider.js";
+import type { TreeDecorator } from "../view/TreeDecorator.js";
 import type { DocumentListener } from "./DocumentListener.js";
 
 /**
@@ -15,6 +16,9 @@ export interface PluginContext {
 
   /** Registration name `type.commandName`, category `commands`. */
   registerCommand(type: CommandType): void;
+
+  /** Registration name `decorator.name`, category `decorators`; `tagFor` must be a function. */
+  registerTreeDecorator(decorator: TreeDecorator): void;
 
   /**
    * Subscribes to document events (design §3.4). Not a `contributes`

@@ -7,6 +7,7 @@ import { DocumentCommand } from "../../src/commands/DocumentCommand.js";
 import type { DocumentListener } from "../../src/extension/DocumentListener.js";
 import { ExtensionRegistry } from "../../src/extension/ExtensionRegistry.js";
 import type { PluginContext } from "../../src/extension/PluginContext.js";
+import type { TreeDecorator } from "../../src/view/TreeDecorator.js";
 import { PluginInstaller } from "../../src/extension/PluginInstaller.js";
 import { SvgDocument } from "../../src/model/SvgDocument.js";
 import { AddLeafCommand } from "../doubles/AddLeafCommand.js";
@@ -14,6 +15,7 @@ import { FakeCommandType } from "../doubles/FakeCommandType.js";
 import { FakeFileSystem } from "../doubles/FakeFileSystem.js";
 import { RecordingListener } from "../doubles/RecordingListener.js";
 import { ScriptedCommandType } from "../doubles/ScriptedCommandType.js";
+import { ScriptedDecorator } from "../doubles/ScriptedDecorator.js";
 import { TestPlugin } from "../doubles/TestPlugin.js";
 import type { TestContributes } from "../doubles/TestPlugin.js";
 
@@ -124,5 +126,67 @@ describe("subscribe is transactional", () => {
       `plugin failed to activate: p (${reason})`,
     );
     expect(registry.documentListeners()).toEqual([]);
+  });
+});
+
+describe("registerTreeDecorator: category decorators", () => {
+  const tag = (name: string) => new ScriptedDecorator(name, () => null);
+
+  it("commits in registration order within a plugin and in installation order across plugins", () => {
+    const { registry, installer } = fixture();
+    const [a, b, c] = [tag("a"), tag("b"), tag("c")];
+    expect(install(installer, { decorators: ["b", "a"] }, (context) => {
+      context.registerTreeDecorator(a);
+      context.registerTreeDecorator(b);
+    })).toBe("ok");
+    expect(install(installer, { decorators: ["c"] }, (context) => context.registerTreeDecorator(c))).toBe("ok");
+    expect(registry.treeDecorators()).toEqual([a, b, c]);
+  });
+
+  it("a session reads the committed decorators when asked, not when it was built", () => {
+    const { registry, installer } = fixture();
+    const session = new EditorSession(new FakeFileSystem(), registry);
+    expect(session.treeDecorators()).toEqual([]);
+    const late = tag("late");
+    install(installer, { decorators: ["late"] }, (context) => context.registerTreeDecorator(late));
+    expect(session.treeDecorators()).toEqual([late]);
+  });
+
+  it("duplicates: against a committed decorator, and within one plugin", () => {
+    const { registry, installer } = fixture();
+    install(installer, { decorators: ["star"] }, (context) => context.registerTreeDecorator(tag("star")));
+    expect(install(installer, { decorators: ["star"] }, (context) => context.registerTreeDecorator(tag("star")))).toBe(
+      "duplicate registration: decorators/star",
+    );
+    expect(install(installer, { decorators: ["twice"] }, (context) => {
+      context.registerTreeDecorator(tag("twice"));
+      context.registerTreeDecorator(tag("twice"));
+    })).toBe("duplicate registration: decorators/twice");
+    expect(registry.treeDecorators().map((d) => d.name)).toEqual(["star"]);
+  });
+
+  it("a manifest that does not match", () => {
+    const { registry, installer } = fixture();
+    expect(install(installer, { decorators: ["declared"] }, (context) => context.registerTreeDecorator(tag("registered")))).toBe(
+      "plugin manifest mismatch: p (declared: decorators/declared, registered: decorators/registered)",
+    );
+    expect(install(installer, {}, (context) => context.registerTreeDecorator(tag("undeclared")))).toBe(
+      "plugin manifest mismatch: p (declared: (none), registered: decorators/undeclared)",
+    );
+    expect(registry.treeDecorators()).toEqual([]);
+  });
+
+  it.each([
+    ["null", null, "invalid tree decorator: not an object"],
+    ["an empty name", { name: "", tagFor: (): null => null }, "invalid tree decorator: name must be a non-empty string without white space"],
+    ["a name with a space", { name: "a b", tagFor: (): null => null }, "invalid tree decorator: name must be a non-empty string without white space"],
+    ["a name that is not a string", { name: 3, tagFor: (): null => null }, "invalid tree decorator: name must be a non-empty string without white space"],
+    ["tagFor missing", { name: "x" }, "invalid tree decorator x: tagFor must be a function"],
+  ])("shape check at registration: %s", (_name, decorator, reason) => {
+    const { registry, installer } = fixture();
+    expect(install(installer, { decorators: ["x"] }, (context) => context.registerTreeDecorator(decorator as unknown as TreeDecorator))).toBe(
+      `plugin failed to activate: p (${reason})`,
+    );
+    expect(registry.treeDecorators()).toEqual([]);
   });
 });

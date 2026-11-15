@@ -37,7 +37,7 @@ describe("kindName / label / treeLabel", () => {
       "└── fake-group#n1",
       "    └── fake-leaf#p  px=0 py=0",
     ]);
-    expect(new TreeRenderer().renderSubtree(composite)[0]).toBe("fake-group#n1");
+    expect(new TreeRenderer().renderSubtree(composite, doc)[0]).toBe("fake-group#n1");
     expect(new ShapeDetailRenderer().render(composite)[0]).toBe("composite#n1  parent=svg");
     expect(new ShapeDetailRenderer().render(leaf)[0]).toBe("fake-leaf#p  parent=composite#n1");
   });

@@ -3,14 +3,13 @@ import type { ArgList, CommandContext } from "@svgframe/kernel";
 
 /**
  * `tree [id]`: the §5.1 structure tree of the whole document, or of the
- * subtree rooted at one shape (V4, V5). The layout is entirely `TreeRenderer`'s.
+ * subtree rooted at one shape (V4, V5). The layout is entirely `TreeRenderer`'s,
+ * built per run with this editor's tree decorators (design §2.3).
  */
 export class TreeCommand extends QueryCommand {
   static readonly commandName = "tree";
   static readonly usage = "tree [id]";
   static readonly summary = "show the structure tree (of the document, or of one shape)";
-
-  private static readonly RENDERER = new TreeRenderer();
 
   /** At most one argument (R9: `tree a b` is a usage error). */
   static parse(args: ArgList): TreeCommand {
@@ -30,10 +29,9 @@ export class TreeCommand extends QueryCommand {
 
   execute(context: CommandContext): CommandResult {
     const document = context.document();
+    const renderer = new TreeRenderer(context.treeDecorators());
     const lines =
-      this.id === null
-        ? TreeCommand.RENDERER.renderDocument(document)
-        : TreeCommand.RENDERER.renderSubtree(this.findShape(document, this.id));
+      this.id === null ? renderer.renderDocument(document) : renderer.renderSubtree(this.findShape(document, this.id), document);
     return CommandResult.of(...lines);
   }
 }

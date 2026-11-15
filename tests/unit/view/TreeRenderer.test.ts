@@ -134,8 +134,9 @@ describe("TreeRenderer: the examples of the spec", () => {
     // The spec separates rect#n1-rect by 2 spaces and text#n1-label by 1
     // (both at column 17); by V1 the widest head "└── text#n1-label" (16) + 2 = 18.
     const n1 = group("n1", rect("n1-rect", "120", "100", "160", "60", "#4a90d9"), text("n1-label", "140", "135", "开始"));
-    append(new SvgDocument(), n1);
-    expect(renderer.renderSubtree(n1)).toEqual([
+    const doc = new SvgDocument();
+    append(doc, n1);
+    expect(renderer.renderSubtree(n1, doc)).toEqual([
       "g#n1",
       "├── rect#n1-rect   x=120 y=100 w=160 h=60 fill=#4a90d9",
       '└── text#n1-label  (140,135) "开始"',
@@ -186,8 +187,8 @@ describe("TreeRenderer: V1 alignment", () => {
 
 describe("TreeRenderer: tree <id> (V4) and the empty document (V5)", () => {
   it("starts at the subtree root, which has no connector", () => {
-    const { markers } = markersDocument();
-    expect(renderer.renderSubtree(markers)).toEqual([
+    const { doc, markers } = markersDocument();
+    expect(renderer.renderSubtree(markers, doc)).toEqual([
       "g#markers",
       "├── circle#c1  cx=100 cy=100 r=20 fill=red",
       "└── rect#box   x=200 y=80 w=60 h=60 fill=#3366ff",
@@ -197,8 +198,9 @@ describe("TreeRenderer: tree <id> (V4) and the empty document (V5)", () => {
   it("indents deeper levels from the subtree root, not from the document", () => {
     const inner = group("inner", rect("r", "0", "0", "1", "1"));
     const outer = group("outer", inner, circle("c", "0", "0", "1"));
-    append(new SvgDocument(), group("top", outer));
-    expect(renderer.renderSubtree(outer)).toEqual([
+    const doc = new SvgDocument();
+    append(doc, group("top", outer));
+    expect(renderer.renderSubtree(outer, doc)).toEqual([
       "g#outer",
       "├── g#inner",
       "│   └── rect#r  x=0 y=0 w=1 h=1",
@@ -207,14 +209,15 @@ describe("TreeRenderer: tree <id> (V4) and the empty document (V5)", () => {
   });
 
   it("a leaf gives one line: label, two spaces, summary", () => {
-    const { c1 } = markersDocument();
-    expect(renderer.renderSubtree(c1)).toEqual(["circle#c1  cx=100 cy=100 r=20 fill=red"]);
+    const { doc, c1 } = markersDocument();
+    expect(renderer.renderSubtree(c1, doc)).toEqual(["circle#c1  cx=100 cy=100 r=20 fill=red"]);
   });
 
   it("an empty group gives its label only", () => {
     const g = new Group("empty");
-    append(new SvgDocument(), g);
-    expect(renderer.renderSubtree(g)).toEqual(["g#empty"]);
+    const doc = new SvgDocument();
+    append(doc, g);
+    expect(renderer.renderSubtree(g, doc)).toEqual(["g#empty"]);
   });
 
   it("an empty document gives `svg (800x600)` only", () => {

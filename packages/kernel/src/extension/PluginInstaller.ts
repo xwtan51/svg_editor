@@ -1,4 +1,5 @@
 import { EditorError } from "../model/EditorError.js";
+import { FailureReason } from "../model/FailureReason.js";
 import { ContributionCategory } from "./ContributionCategory.js";
 import type { ExtensionRegistry } from "./ExtensionRegistry.js";
 import { InstallOutcome } from "./InstallOutcome.js";
@@ -72,7 +73,7 @@ export class PluginInstaller {
       }
       return null;
     } catch (error) {
-      return PluginInstaller.reason(error);
+      return FailureReason.of(error);
     } finally {
       staging.seal();
     }
@@ -113,11 +114,5 @@ export class PluginInstaller {
       value !== null &&
       typeof (value as { then?: unknown }).then === "function"
     );
-  }
-
-  /** `<reason>`: the first line of an `Error`'s message, otherwise `String(value)`. */
-  private static reason(error: unknown): string {
-    const text = error instanceof Error ? error.message : String(error);
-    return text.split(/\r?\n/, 1)[0] ?? "";
   }
 }

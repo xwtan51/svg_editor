@@ -5,6 +5,7 @@ import { History } from "../../../packages/kernel/src/commands/History.js";
 import type { ExtensionRegistry } from "../../../packages/kernel/src/extension/ExtensionRegistry.js";
 import type { ShapeCatalog } from "../../../packages/kernel/src/model/ShapeCatalog.js";
 import type { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
+import type { TreeDecorator } from "../../../packages/kernel/src/view/TreeDecorator.js";
 import { BuiltinExtensions } from "../../support/BuiltinExtensions.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 
@@ -68,5 +69,9 @@ export class TestContext implements CommandContext {
 
   shapes(): ShapeCatalog {
     return this.extensions.shapes();
+  }
+
+  treeDecorators(): readonly TreeDecorator[] {
+    return this.extensions.treeDecorators();
   }
 }

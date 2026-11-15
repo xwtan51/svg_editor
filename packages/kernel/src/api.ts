@@ -35,6 +35,8 @@ export { SvgImporter } from "./io/SvgImporter.js";
 export { SvgSerializer } from "./io/SvgSerializer.js";
 export { TreeRenderer } from "./view/TreeRenderer.js";
 export { ShapeDetailRenderer } from "./view/ShapeDetailRenderer.js";
+export type { TreeDecorator } from "./view/TreeDecorator.js";
+export type { TreeRowView } from "./view/TreeRowView.js";
 export { Command } from "./commands/Command.js";
 export { EditCommand } from "./commands/EditCommand.js";
 export { QueryCommand } from "./commands/QueryCommand.js";
