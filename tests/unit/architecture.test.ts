@@ -486,6 +486,45 @@ function topLevelStatementViolations(files: readonly SourceFile[]): string[] {
   );
 }
 
+// ---------------------------------------------------------------- tsconfig paths mirror the kernel's exports
+
+/**
+ * Design §1.4: tsconfig.json `paths` map exactly the kernel's `exports`, one to
+ * one — key = package name + subpath, value = the same file. `tsc` resolves the
+ * workspace symlink to the real path while root tests import the kernel by
+ * relative path, so without these entries a checkout opened through a symlinked
+ * path loads the kernel twice. Changing only one of the two files breaks that.
+ */
+function tsconfigPathViolations(paths: Record<string, unknown>, kernelExports: Record<string, unknown>): string[] {
+  const expected = new Map<string, string>();
+  for (const [key, target] of Object.entries(kernelExports)) {
+    const location = exportTarget(KERNEL_DIR, target);
+    if (location !== null) expected.set(posix.join(KERNEL_PACKAGE, key), location);
+  }
+  const violations: string[] = [];
+  for (const [specifier, location] of expected) {
+    const value = paths[specifier];
+    if (value === undefined) {
+      violations.push(`tsconfig.json paths lacks "${specifier}" (kernel exports it as ${location})`);
+      continue;
+    }
+    const files = Array.isArray(value) ? value : [];
+    if (files.length !== 1 || typeof files[0] !== "string" || posix.normalize(files[0]) !== location) {
+      violations.push(`tsconfig.json paths["${specifier}"] is ${JSON.stringify(value)}; expected ["./${location}"]`);
+    }
+  }
+  for (const specifier of Object.keys(paths)) {
+    if (!expected.has(specifier)) violations.push(`tsconfig.json paths has "${specifier}", which the kernel's exports do not define`);
+  }
+  return violations;
+}
+
+function tsconfigPaths(): Record<string, unknown> {
+  const options = readJson("tsconfig.json")["compilerOptions"];
+  const paths = typeof options === "object" && options !== null ? (options as Record<string, unknown>)["paths"] : undefined;
+  return typeof paths === "object" && paths !== null && !Array.isArray(paths) ? (paths as Record<string, unknown>) : {};
+}
+
 // ---------------------------------------------------------------- L10 and D1–D8: dependency graph
 
 /** L10: the region graph (kernel, host, plugin:<directory>) is acyclic. */
@@ -959,6 +998,11 @@ describe("layer rules (design §1.2.1) applied to the source", () => {
   it("L10: the regions depend on each other without cycles", () => {
     expect(regionCycleViolations(sources)).toEqual([]);
   });
+
+  it("tsconfig.json paths mirror the kernel's package.json exports one to one (design §1.4)", () => {
+    expect(Object.keys(tsconfigPaths()).sort()).toEqual([KERNEL_PACKAGE, `${KERNEL_PACKAGE}/host`]);
+    expect(tsconfigPathViolations(tsconfigPaths(), exportsOf(readJson(`${KERNEL_DIR}/package.json`)))).toEqual([]);
+  });
 });
 
 describe("dependency rules D1–D8 (design §1.2.2) applied to the source", () => {
@@ -1239,6 +1283,25 @@ describe("architecture rules detect synthetic violations", () => {
     const k = kernel("model/A.ts", 'import { P } from "../../../../plugins/p/src/P.js";');
     const p = plugin("p", "P.ts", 'import { A } from "../../../packages/kernel/src/model/A.js";');
     expect(regionCycleViolations([k, p])).toEqual(["kernel -> plugin:p -> kernel"]);
+  });
+
+  it("tsconfig paths: a missing, a different, a multi-file and an extra entry; the mirror passes", () => {
+    const exports = { ".": "./src/api.ts", "./host": "./src/host-api.ts" };
+    const mirror = { "@svgframe/kernel": ["./packages/kernel/src/api.ts"], "@svgframe/kernel/host": ["./packages/kernel/src/host-api.ts"] };
+    expect(tsconfigPathViolations(mirror, exports)).toEqual([]);
+    expect(tsconfigPathViolations({ "@svgframe/kernel": mirror["@svgframe/kernel"] }, exports)).toEqual([
+      `tsconfig.json paths lacks "@svgframe/kernel/host" (kernel exports it as ${KERNEL_SRC}host-api.ts)`,
+    ]);
+    const moved = { ...exports, "./host": "./src/host.ts" };
+    expect(tsconfigPathViolations(mirror, moved)).toEqual([
+      `tsconfig.json paths["@svgframe/kernel/host"] is ["./packages/kernel/src/host-api.ts"]; expected ["./${KERNEL_SRC}host.ts"]`,
+    ]);
+    const twoFiles = { ...mirror, "@svgframe/kernel": ["./packages/kernel/src/api.ts", "./x.ts"] };
+    expect(tsconfigPathViolations(twoFiles, exports)).toHaveLength(1);
+    const extra = { ...mirror, "@svgframe/kernel/internal": ["./packages/kernel/src/internal.ts"] };
+    expect(tsconfigPathViolations(extra, exports)).toEqual([
+      `tsconfig.json paths has "@svgframe/kernel/internal", which the kernel's exports do not define`,
+    ]);
   });
 
   it.each([
