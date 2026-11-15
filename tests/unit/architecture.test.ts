@@ -45,6 +45,7 @@ const REPO_DIR = fileURLToPath(new URL("../../", import.meta.url));
 
 const KERNEL_DIR = "packages/kernel";
 const KERNEL_SRC = `${KERNEL_DIR}/src/`;
+const KERNEL_TESTS = `${KERNEL_DIR}/tests/`;
 const HOST_SRC = "src/";
 const PLUGINS_DIR = "plugins";
 const KERNEL_PACKAGE = "@svgframe/kernel";
@@ -375,6 +376,24 @@ function kernelEntryImportViolations(files: readonly SourceFile[], entries: read
   return allImports(inRegion(files, (r) => r === "kernel"))
     .filter((ref) => ref.target !== null && entries.includes(ref.target))
     .map((ref) => `${describeImport(ref)} (kernel files use relative imports, never the kernel's entry files)`);
+}
+
+/**
+ * Kernel tests depend only on the kernel: packages/kernel/tests imports
+ * vitest, node:* and relative paths into packages/kernel/src or the tests'
+ * own files — no `@svgframe/*` package (not even the kernel's own entries), no
+ * relative path into plugins/ or the root's src/ and tests/. The kernel is
+ * tested with its own doubles, so it stays usable without any plugin.
+ */
+function kernelTestImportViolations(files: readonly SourceFile[]): string[] {
+  return allImports(files.filter((file) => file.location.startsWith(KERNEL_TESTS)))
+    .filter((ref) => {
+      if (ref.specifier.startsWith(".")) {
+        return ref.target === null || !(ref.target.startsWith(KERNEL_SRC) || ref.target.startsWith(KERNEL_TESTS));
+      }
+      return ref.specifier !== "vitest" && !isNodeBuiltin(ref.specifier);
+    })
+    .map((ref) => `${describeImport(ref)} (kernel tests import only vitest, node:*, ${KERNEL_SRC} and ${KERNEL_TESTS})`);
 }
 
 /**
@@ -851,6 +870,85 @@ function pluginEntryViolations(files: readonly SourceFile[], entries: readonly s
     });
 }
 
+/**
+ * Design §3.10 "not exported": kernel-internal classes that neither entry file
+ * may export (plus ImportSession, the read session added in S6). Names of later
+ * steps are listed already so that the rule holds when they arrive.
+ */
+const KERNEL_INTERNALS = [
+  "ChildList",
+  "StyleAttributes",
+  "StyleProperty",
+  "ColorProperty",
+  "StrokeWidthProperty",
+  "ExtraAttributes",
+  "ShapeRegistry",
+  "CommandRegistry",
+  "CommandParser",
+  "CommandLine",
+  "Token",
+  "Tokenizer",
+  "XmlDomAdapter",
+  "XmlElement",
+  "IdAllocator",
+  "ImportResult",
+  "ImportSession",
+  "AttributeDispatcher",
+  "AttributeEdit",
+  "EditableSubtree",
+  "TreeRow",
+  "StagingContext",
+  "ContributionCategory",
+  "DocumentEvents",
+];
+
+/**
+ * The names an entry file exports, each with the local name it stands for:
+ * `export { A }`, `export { A as B }` (both A and B count), `export type { … }`
+ * and declarations. `export *` cannot be checked and is reported as "*".
+ */
+function exportedNames(file: SourceFile): string[] {
+  const names: string[] = [];
+  for (const m of file.code.matchAll(/\bexport\s+(?:type\s+)?\{([^}]*)\}/g)) {
+    for (const specifier of (m[1] ?? "").split(",")) {
+      const parts = specifier.trim().replace(/^type\s+/, "").split(/\s+as\s+/).map((part) => part.trim());
+      names.push(...parts.filter((part) => part.length > 0));
+    }
+  }
+  for (const m of file.code.matchAll(/\bexport\s+(?:declare\s+)?(?:abstract\s+)?(?:class|interface|type|enum|const|let|var|function)\s+(\w+)/g)) {
+    names.push(m[1] ?? "");
+  }
+  if (/\bexport\s+(?:type\s+)?\*/.test(file.code)) names.push("*");
+  return names;
+}
+
+/**
+ * The kernel's entry files export none of the §3.10 internals, no `export *`,
+ * and no name is exported by both (or twice).
+ */
+function entryInternalViolations(
+  files: readonly SourceFile[],
+  entries: readonly string[] = KERNEL_ENTRY_FILES,
+  internals: readonly string[] = KERNEL_INTERNALS,
+): string[] {
+  const violations: string[] = [];
+  const exporters = new Map<string, string[]>();
+  for (const entry of files.filter((file) => entries.includes(file.location))) {
+    for (const name of exportedNames(entry)) {
+      if (name === "*") {
+        violations.push(`${entry.location} uses export *, so its names cannot be checked against design §3.10`);
+      } else if (internals.includes(name)) {
+        violations.push(`${entry.location} exports the kernel-internal ${name} (design §3.10)`);
+      }
+      exporters.set(name, [...(exporters.get(name) ?? []), entry.location]);
+    }
+  }
+  for (const [name, locations] of exporters) {
+    if (name !== "*" && locations.length > 1) violations.push(`${name} is exported more than once: ${locations.join(", ")}`);
+  }
+  return violations;
+}
+
 // ---------------------------------------------------------------- P7: the `error:` prefix
 
 /** P7: string literals that start with `error:` appear only where the prefix is added (design §1.2.4). */
@@ -907,6 +1005,7 @@ function viewMutationViolations(files: readonly SourceFile[]): string[] {
 // ---------------------------------------------------------------- the rules applied to the source
 
 const sources = loadFiles(scanRoots(PLUGINS));
+const kernelTests = loadFiles([`${KERNEL_DIR}/tests`]);
 const pluginTests = loadFiles(PLUGINS.map((plugin) => `${PLUGINS_DIR}/${plugin.directory}/tests`));
 
 describe("scanning (design §1.2.3)", () => {
@@ -965,6 +1064,12 @@ describe("layer rules (design §1.2.1) applied to the source", () => {
 
   it("L1: kernel files never import the kernel's entry files (api.ts, host-api.ts)", () => {
     expect(kernelEntryImportViolations(sources)).toEqual([]);
+  });
+
+  it("kernel tests import only vitest, node:* and the kernel's own files (no plugin, no root src/ or tests/)", () => {
+    expect(kernelTests.length).toBeGreaterThan(0);
+    expect(kernelTests.map((f) => f.location)).toContain(`${KERNEL_TESTS}model/ShapeNames.test.ts`);
+    expect(kernelTestImportViolations(kernelTests)).toEqual([]);
   });
 
   it("L2: plugin source imports only @svgframe/kernel, its own files and node:*", () => {
@@ -1080,6 +1185,11 @@ describe("paradigm rules per region (design §1.2.4, §1.3) applied to the sourc
     expect(pluginEntryViolations(sources)).toEqual([]);
   });
 
+  it("the kernel's entry files export none of the internals of design §3.10, and no name twice", () => {
+    expect(exportedNames(sources.find((f) => f.location === `${KERNEL_SRC}host-api.ts`) ?? file("x", ""))).toContain("Editor");
+    expect(entryInternalViolations(sources)).toEqual([]);
+  });
+
   it("P7: only Editor and EditorAssembler add the error: prefix", () => {
     expect(errorPrefixViolations(sources)).toEqual([]);
   });
@@ -1164,6 +1274,31 @@ describe("architecture rules detect synthetic violations", () => {
     const entries = [`${KERNEL_SRC}api.ts`];
     expect(kernelEntryImportViolations([kernel("model/X.ts", 'import { Shape } from "../api.js";')], entries)).toHaveLength(1);
     expect(kernelEntryImportViolations([kernel("model/X.ts", 'import { Shape } from "./Shape.js";')], entries)).toEqual([]);
+  });
+
+  it.each([
+    ["a plugin package", 'import { BuiltinShapesPlugin } from "@svgframe/plugin-builtin-shapes";'],
+    ["the kernel's own entry", 'import { Shape } from "@svgframe/kernel";'],
+    ["the kernel's host entry", 'import { Editor } from "@svgframe/kernel/host";'],
+    ["a relative path into a plugin", 'import { Group } from "../../../../plugins/builtin-shapes/src/Group.js";'],
+    ["a relative path into the root src/", 'import { NodeFileSystem } from "../../../../src/adapters/NodeFileSystem.js";'],
+    ["a relative path into the root tests/", 'import { BuiltinExtensions } from "../../../../tests/support/BuiltinExtensions.js";'],
+    ["a dynamic import of a plugin", 'const m = await import("@svgframe/plugin-builtin-commands");'],
+    ["another package", 'import { DOMParser } from "@xmldom/xmldom";'],
+  ])("kernel tests importing %s", (_case, line) => {
+    expect(kernelTestImportViolations([file(`${KERNEL_TESTS}model/X.test.ts`, line)])).toHaveLength(1);
+  });
+
+  it("kernel tests: vitest, node:*, the kernel's src/ and the tests' own files are fine; other places are not checked", () => {
+    const text = [
+      'import { describe, it } from "vitest";',
+      'import { readFileSync } from "node:fs";',
+      'import { Shape } from "../../src/model/Shape.js";',
+      'import { FakeLeaf } from "../doubles/FakeLeaf.js";',
+      'import { FakeContainer } from "./FakeContainer.js";',
+    ].join("\n");
+    expect(kernelTestImportViolations([file(`${KERNEL_TESTS}model/X.test.ts`, text)])).toEqual([]);
+    expect(kernelTestImportViolations([file("tests/unit/X.test.ts", 'import { B } from "@svgframe/plugin-builtin-shapes";')])).toEqual([]);
   });
 
   it.each([
@@ -1513,6 +1648,32 @@ describe("architecture rules detect synthetic violations", () => {
     ["a class unlike its file", "export default class OtherPlugin {}"],
   ])("P5b: %s in a plugin entry", (_case, text) => {
     expect(pluginEntryViolations([plugin("x", "XPlugin.ts", text)], ["plugins/x/src/XPlugin.ts"])).toHaveLength(1);
+  });
+
+  it.each([
+    ["api.ts", "ShapeRegistry", 'export { ShapeRegistry } from "./model/ShapeRegistry.js";'],
+    ["host-api.ts", "ImportSession", 'export { ImportSession } from "./io/ImportSession.js";'],
+    ["api.ts", "StagingContext", 'export type { StagingContext } from "./extension/StagingContext.js";'],
+    ["api.ts", "ChildList (under another name)", 'export { ChildList as Children } from "./model/ChildList.js";'],
+    ["api.ts", "ContributionCategory (declared)", "export class ContributionCategory {}"],
+  ])("entry files: %s exporting %s", (entry, name, line) => {
+    const f = kernel(entry, line);
+    const internal = name.split(" ")[0] ?? "";
+    expect(entryInternalViolations([f], [f.location])).toEqual([`${f.location} exports the kernel-internal ${internal} (design §3.10)`]);
+  });
+
+  it("entry files: export * cannot be checked; a name in both entries; a clean pair passes", () => {
+    const star = kernel("api.ts", 'export * from "./model/Shape.js";');
+    expect(entryInternalViolations([star], [star.location])).toEqual([
+      `${KERNEL_SRC}api.ts uses export *, so its names cannot be checked against design §3.10`,
+    ]);
+    const api = kernel("api.ts", 'export { EditorError } from "./model/EditorError.js";\nexport type { ShapeReader } from "./model/ShapeReader.js";');
+    const twice = kernel("host-api.ts", 'export { Editor } from "./app/Editor.js";\nexport { EditorError } from "./model/EditorError.js";');
+    expect(entryInternalViolations([api, twice], [api.location, twice.location])).toEqual([
+      `EditorError is exported more than once: ${KERNEL_SRC}api.ts, ${KERNEL_SRC}host-api.ts`,
+    ]);
+    const host = kernel("host-api.ts", 'export { Editor } from "./app/Editor.js";');
+    expect(entryInternalViolations([api, host], [api.location, host.location])).toEqual([]);
   });
 
   it("P5b: one default-exported class named like the file passes", () => {
