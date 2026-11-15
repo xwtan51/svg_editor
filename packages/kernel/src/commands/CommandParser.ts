@@ -1,6 +1,6 @@
 import { ArgList } from "./ArgList.js";
 import { CommandLine } from "./CommandLine.js";
-import type { CommandRegistry } from "./CommandRegistry.js";
+import type { CommandCatalog } from "./CommandCatalog.js";
 import { Tokenizer } from "./Tokenizer.js";
 
 /**
@@ -10,10 +10,10 @@ import { Tokenizer } from "./Tokenizer.js";
  * filtered by the Invoker before (R2, R3).
  */
 export class CommandParser {
-  private readonly registry: CommandRegistry;
+  private readonly registry: CommandCatalog;
   private readonly tokenizer = new Tokenizer();
 
-  constructor(registry: CommandRegistry) {
+  constructor(registry: CommandCatalog) {
     this.registry = registry;
   }
 

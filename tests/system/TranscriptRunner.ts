@@ -1,8 +1,7 @@
 import { readFileSync } from "node:fs";
 import { Editor } from "../../packages/kernel/src/app/Editor.js";
 import { EditorSession } from "../../packages/kernel/src/app/EditorSession.js";
-import { CommandRegistry } from "../../packages/kernel/src/commands/CommandRegistry.js";
-import { ShapeFactory } from "../../packages/kernel/src/model/ShapeFactory.js";
+import { BuiltinExtensions } from "../support/BuiltinExtensions.js";
 import { MemoryFileSystem } from "../unit/io/MemoryFileSystem.js";
 
 /** One line of a transcript file, with its 1-based line number. */
@@ -40,7 +39,7 @@ export class TranscriptRunner {
     this.name = name;
     this.steps = TranscriptRunner.parse(name, text);
     this.files = new MemoryFileSystem({ "other.svg": TranscriptRunner.OTHER_SVG });
-    this.session = new EditorSession(this.files, new CommandRegistry(), new ShapeFactory());
+    this.session = new EditorSession(this.files, BuiltinExtensions.registry());
     this.editor = new Editor(this.session);
   }
 

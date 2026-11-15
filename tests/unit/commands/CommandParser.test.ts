@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
+import type { CommandCatalog } from "../../../packages/kernel/src/commands/CommandCatalog.js";
 import { CommandCategory } from "../../../packages/kernel/src/commands/CommandCategory.js";
 import type { CommandContext } from "../../../packages/kernel/src/commands/CommandContext.js";
 import { CommandParser } from "../../../packages/kernel/src/commands/CommandParser.js";
@@ -10,6 +11,7 @@ import { History } from "../../../packages/kernel/src/commands/History.js";
 import { HistoryCommand } from "../../../packages/kernel/src/commands/HistoryCommand.js";
 import { QueryCommand } from "../../../packages/kernel/src/commands/QueryCommand.js";
 import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
+import { BuiltinExtensions } from "../../support/BuiltinExtensions.js";
 
 /** A query command type that echoes its arguments. */
 class EchoCommand extends QueryCommand {
@@ -64,12 +66,15 @@ class BackCommandStub extends HistoryCommand {
   }
 }
 
-function registry(): CommandRegistry {
-  const result = new CommandRegistry();
-  result.register(EchoCommand);
-  result.register(StartCommand);
-  result.register(BackCommandStub);
-  return result;
+/** The built-in commands followed by the three stubs, installed as plugins. */
+function registry(): CommandCatalog {
+  const stubs = BuiltinExtensions.commandsPlugin("parser-test-commands", EchoCommand, StartCommand, BackCommandStub);
+  return BuiltinExtensions.registry(stubs).commands();
+}
+
+/** The built-in commands only. */
+function builtins(): CommandCatalog {
+  return BuiltinExtensions.registry().commands();
 }
 
 function errorOf(action: () => unknown): string {
@@ -141,7 +146,7 @@ describe("CommandRegistry", () => {
   });
 
   it("each group has the category of spec §3; only init, read and help need no document (R11)", () => {
-    const types = new CommandRegistry().commandTypes();
+    const types = builtins().commandTypes();
     for (const [category, group] of GROUPS) {
       expect(types.filter((t) => t.category === category).map((t) => t.commandName)).toEqual(group);
     }
@@ -151,13 +156,14 @@ describe("CommandRegistry", () => {
   });
 
   it("every usage starts with the command name", () => {
-    for (const type of new CommandRegistry().commandTypes()) {
+    for (const type of builtins().commandTypes()) {
       expect(type.usage === type.commandName || type.usage.startsWith(`${type.commandName} `)).toBe(true);
     }
   });
 
   it("rejects a second registration of the same name", () => {
-    const r = registry();
+    const r = new CommandRegistry();
+    r.register(EchoCommand);
     expect(() => r.register(EchoCommand)).toThrow("command already registered: echo");
   });
 

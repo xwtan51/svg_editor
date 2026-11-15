@@ -1,10 +1,13 @@
+import type { ElementView } from "../model/ElementView.js";
+
 /**
  * The io layer's own XML element, independent of any XML library (Adapter
  * target, README §2.8): local tag name, attributes in document order, child
  * elements, and the character data of the whole subtree.
- * Comments and processing instructions are not represented.
+ * Comments and processing instructions are not represented. Shape providers
+ * see it only as an `ElementView` (design §2.1.4).
  */
-export class XmlElement {
+export class XmlElement implements ElementView {
   private readonly tag: string;
   private readonly attributeList: ReadonlyArray<readonly [string, string]>;
   private readonly childElements: readonly XmlElement[];

@@ -1,9 +1,5 @@
-import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
-import type { CommandCategory } from "../../../packages/kernel/src/commands/CommandCategory.js";
-import type { CommandContext } from "../../../packages/kernel/src/commands/CommandContext.js";
-import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
-import type { CommandType } from "../../../packages/kernel/src/commands/CommandType.js";
-import { QueryCommand } from "../../../packages/kernel/src/commands/QueryCommand.js";
+import { CommandResult, QueryCommand } from "@svgframe/kernel";
+import type { ArgList, CommandCategory, CommandContext, CommandType } from "@svgframe/kernel";
 
 /**
  * `help`: every registered command, grouped by the four categories of spec §3
@@ -32,7 +28,7 @@ export class HelpCommand extends QueryCommand {
 
   execute(context: CommandContext): CommandResult {
     // Array.prototype.sort is stable, so registration order survives within a category.
-    const types = context.registry().commandTypes().sort((a, b) => a.category.order() - b.category.order());
+    const types = [...context.commands().commandTypes()].sort((a, b) => a.category.order() - b.category.order());
     const column = Math.max(0, ...types.map((type) => type.usage.length)) + HelpCommand.GAP;
     const lines: string[] = [];
     let current: CommandCategory | null = null;

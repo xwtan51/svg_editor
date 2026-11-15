@@ -1,12 +1,5 @@
-import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
-import { Group } from "../../builtin-shapes/src/Group.js";
-import type { Shape } from "../../../packages/kernel/src/model/Shape.js";
-import type { ShapeContainer } from "../../../packages/kernel/src/model/ShapeContainer.js";
-import type { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
-import { TreePosition } from "../../../packages/kernel/src/model/TreePosition.js";
-import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
-import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
-import { EditCommand } from "../../../packages/kernel/src/commands/EditCommand.js";
+import { CommandResult, EditCommand, EditorError, TreePosition } from "@svgframe/kernel";
+import type { ArgList, CommandContext, ContainerShape, Shape, ShapeContainer, SvgDocument } from "@svgframe/kernel";
 
 /**
  * `group <newGid> <id1> <id2>…`: a new `g` takes in existing shapes, which
@@ -19,6 +12,12 @@ import { EditCommand } from "../../../packages/kernel/src/commands/EditCommand.j
  * in document order), so nothing has to be subtracted from that index.
  */
 export class GroupCommand extends EditCommand {
+  /**
+   * The shape type of the new container, built through the shape catalog
+   * (design §3.5); `BuiltinCommandsPlugin` checks at activation that it is registered.
+   */
+  static readonly CONTAINER_TYPE = "g";
+
   static readonly commandName = "group";
   static readonly usage = "group <newGid> <id1> <id2>…";
   static readonly summary = "make a new container holding the given shapes";
@@ -32,7 +31,7 @@ export class GroupCommand extends EditCommand {
   private readonly groupId: string;
   private readonly memberIds: readonly string[];
 
-  private group!: Group;
+  private group!: ContainerShape;
   /** In document order. */
   private members!: Shape[];
   /** Original positions, parallel to `members`. */
@@ -59,7 +58,7 @@ export class GroupCommand extends EditCommand {
   }
 
   /** Order: new id, then each member from left to right, then ancestry (R10, E18). */
-  protected prepare(document: SvgDocument): void {
+  protected prepare(document: SvgDocument, context: CommandContext): void {
     this.checkNewId(document, this.groupId);
     const chosen: Shape[] = [];
     this.memberIds.forEach((id) => {
@@ -82,7 +81,7 @@ export class GroupCommand extends EditCommand {
     }
     this.parent = first.container();
     this.index = first.index();
-    this.group = new Group(this.groupId);
+    this.group = this.newContainer(context);
   }
 
   protected apply(): void {
@@ -94,5 +93,15 @@ export class GroupCommand extends EditCommand {
   /** `g#markers created with 2 children` (E19). */
   protected describe(): string {
     return `${this.group.label()} created with ${this.members.length} children`;
+  }
+
+  /** An empty, detached container of `CONTAINER_TYPE`; any other result is a programming error. */
+  private newContainer(context: CommandContext): ContainerShape {
+    const shapes = context.shapes();
+    const container = shapes.lookup(GroupCommand.CONTAINER_TYPE).create(this.groupId, new Map(), shapes).asContainer();
+    if (container === null) {
+      throw new Error(`shape type ${GroupCommand.CONTAINER_TYPE} does not build a container`);
+    }
+    return container;
   }
 }

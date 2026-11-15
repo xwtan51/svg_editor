@@ -14,6 +14,11 @@
 
     "noEmit": true,
     "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "paths": {
+      "@svgframe/kernel": ["./packages/kernel/src/api.ts"],
+      "@svgframe/kernel/host": ["./packages/kernel/src/host-api.ts"]
+    },
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true
   },

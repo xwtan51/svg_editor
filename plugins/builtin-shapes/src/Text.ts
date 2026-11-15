@@ -1,9 +1,5 @@
-import { GeometryAttribute } from "../../../packages/kernel/src/model/GeometryAttribute.js";
-import { LeafShape } from "../../../packages/kernel/src/model/LeafShape.js";
-import { ParamSpec } from "../../../packages/kernel/src/model/ParamSpec.js";
-import type { ShapeMemento } from "../../../packages/kernel/src/model/ShapeMemento.js";
-import { XCoordinate } from "../../../packages/kernel/src/model/XCoordinate.js";
-import { YCoordinate } from "../../../packages/kernel/src/model/YCoordinate.js";
+import { GeometryAttribute, LeafShape, ParamSpec, XCoordinate, YCoordinate } from "@svgframe/kernel";
+import type { ShapeMemento } from "@svgframe/kernel";
 
 /** `<text x y>content</text>`: besides geometry it holds the text content. */
 export class Text extends LeafShape {

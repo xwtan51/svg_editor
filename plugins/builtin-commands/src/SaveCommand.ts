@@ -1,9 +1,5 @@
-import { SvgSerializer } from "../../../packages/kernel/src/io/SvgSerializer.js";
-import { EditorError } from "../../../packages/kernel/src/model/EditorError.js";
-import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
-import type { CommandContext } from "../../../packages/kernel/src/commands/CommandContext.js";
-import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
-import { DocumentCommand } from "../../../packages/kernel/src/commands/DocumentCommand.js";
+import { CommandResult, DocumentCommand, EditorError, SvgSerializer } from "@svgframe/kernel";
+import type { ArgList, CommandContext } from "@svgframe/kernel";
 
 /**
  * `save [file.svg]`: writes the current document. Without an argument it uses

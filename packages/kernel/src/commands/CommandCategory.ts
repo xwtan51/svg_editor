@@ -9,6 +9,11 @@ export class CommandCategory {
   static readonly DISPLAY = new CommandCategory("Display", 2);
   static readonly HISTORY = new CommandCategory("Undo / redo", 3);
 
+  /** The four categories in `help` order; a registered command must use one of them (design §3.2). */
+  static all(): readonly CommandCategory[] {
+    return [CommandCategory.DOCUMENT, CommandCategory.EDIT, CommandCategory.DISPLAY, CommandCategory.HISTORY];
+  }
+
   private readonly heading: string;
   private readonly position: number;
 

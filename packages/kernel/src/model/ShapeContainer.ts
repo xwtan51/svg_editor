@@ -1,7 +1,7 @@
 import type { Shape } from "./Shape.js";
 
 /**
- * What can hold child shapes: `Group` and the document root `SvgDocument`.
+ * What can hold child shapes: a `ContainerShape` and the document root `SvgDocument`.
  * Both delegate to a `ChildList`, so attaching under the root and under a
  * container is the same code path.
  */

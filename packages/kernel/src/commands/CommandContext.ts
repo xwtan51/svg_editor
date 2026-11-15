@@ -1,7 +1,7 @@
 import type { FileSystem } from "../io/FileSystem.js";
-import type { ShapeFactory } from "../model/ShapeFactory.js";
+import type { ShapeCatalog } from "../model/ShapeCatalog.js";
 import type { SvgDocument } from "../model/SvgDocument.js";
-import type { CommandRegistry } from "./CommandRegistry.js";
+import type { CommandCatalog } from "./CommandCatalog.js";
 import type { History } from "./History.js";
 
 /**
@@ -33,9 +33,9 @@ export interface CommandContext {
 
   history(): History;
 
-  /** For `help`. */
-  registry(): CommandRegistry;
+  /** The committed commands, read-only (for `help`; design §2.2.5). */
+  commands(): CommandCatalog;
 
-  /** For `create` (shape type by name, spec §2.1 name dispatch #1). */
-  shapeFactory(): ShapeFactory;
+  /** The committed shape types, read-only plus build by name (for `create`, `group`, `read`; design §2.2.5). */
+  shapes(): ShapeCatalog;
 }

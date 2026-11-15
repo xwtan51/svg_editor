@@ -7,7 +7,7 @@ import type { SvgDocument } from "../model/SvgDocument.js";
  * "prefix + label" of this output + 2; lines without a summary (`g`) are not
  * padded. Widths are counted in UTF-16 code units (V9).
  *
- * Line content comes only from `Shape.label()` / `Shape.summary()` and the
+ * Line content comes only from `Shape.treeLabel()` / `Shape.summary()` and the
  * traversal from `asContainer()`, so new shape types need no change here
  * (README §2.10). The alignment rule lives only in this class (README §4.9).
  */
@@ -28,7 +28,7 @@ export class TreeRenderer {
 
   /** `tree <id>` (V4): the shape's own line has no connector; a leaf gives one line. */
   renderSubtree(shape: Shape): string[] {
-    const rows: Array<[string, string]> = [[shape.label(), shape.summary()]];
+    const rows: Array<[string, string]> = [[shape.treeLabel(), shape.summary()]];
     this.collectChildren(shape.asContainer()?.childList() ?? [], "", rows);
     return this.align(rows);
   }
@@ -38,7 +38,7 @@ export class TreeRenderer {
     children.forEach((child, i) => {
       const last = i === children.length - 1;
       const branch = last ? TreeRenderer.LAST_BRANCH : TreeRenderer.BRANCH;
-      rows.push([`${indent}${branch}${child.label()}`, child.summary()]);
+      rows.push([`${indent}${branch}${child.treeLabel()}`, child.summary()]);
       const continuation = last ? TreeRenderer.LAST_CONTINUATION : TreeRenderer.CONTINUATION;
       this.collectChildren(child.asContainer()?.childList() ?? [], `${indent}${continuation}`, rows);
     });

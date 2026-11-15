@@ -2,5 +2,15 @@
   "name": "@svgframe/plugin-builtin-shapes",
   "version": "0.1.0",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "exports": {
+    ".": "./src/BuiltinShapesPlugin.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@svgframe/kernel": "0.1.0"
+  },
+  "contributes": {
+    "shapes": ["rect", "circle", "ellipse", "line", "text", "g"]
+  }
 }

@@ -1,8 +1,5 @@
-import { TreeRenderer } from "../../../packages/kernel/src/view/TreeRenderer.js";
-import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
-import type { CommandContext } from "../../../packages/kernel/src/commands/CommandContext.js";
-import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
-import { QueryCommand } from "../../../packages/kernel/src/commands/QueryCommand.js";
+import { CommandResult, QueryCommand, TreeRenderer } from "@svgframe/kernel";
+import type { ArgList, CommandContext } from "@svgframe/kernel";
 
 /**
  * `tree [id]`: the §5.1 structure tree of the whole document, or of the

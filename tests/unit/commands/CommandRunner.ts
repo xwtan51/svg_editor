@@ -24,7 +24,7 @@ export class CommandRunner {
   /** `document` `null` starts without a document, as the editor does (R11). */
   constructor(document: SvgDocument | null = new SvgDocument(), fileSystem?: FileSystem) {
     this.context = new TestContext(document, fileSystem);
-    this.parser = new CommandParser(this.context.registry());
+    this.parser = new CommandParser(this.context.commands());
   }
 
   /** A runner whose document was built by these lines (each must succeed). */

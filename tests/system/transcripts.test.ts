@@ -2,6 +2,7 @@ import { readdirSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { SvgImporter } from "../../packages/kernel/src/io/SvgImporter.js";
 import { SvgSerializer } from "../../packages/kernel/src/io/SvgSerializer.js";
+import { BuiltinExtensions } from "../support/BuiltinExtensions.js";
 import { TranscriptRunner } from "./TranscriptRunner.js";
 
 /** Every transcript in tests/transcripts/, in name order. */
@@ -55,7 +56,7 @@ describe.each(NAMES)("%s through Editor.executeLine", (name) => {
   for (const [path, count] of SAVED[name] ?? []) {
     it(`${path} written by save can be read back by SvgImporter`, () => {
       const saved = runner.files.readText(path);
-      const imported = new SvgImporter().read(runner.files, path);
+      const imported = new SvgImporter(BuiltinExtensions.registry().shapes()).read(runner.files, path);
       expect(imported.warnings()).toEqual([]);
       expect(imported.document().elementCount()).toBe(count);
       // Reading back loses nothing: writing the imported document gives the same bytes.

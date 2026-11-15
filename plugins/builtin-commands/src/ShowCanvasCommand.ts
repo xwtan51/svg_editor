@@ -1,6 +1,5 @@
-import type { CommandContext } from "../../../packages/kernel/src/commands/CommandContext.js";
-import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
-import { QueryCommand } from "../../../packages/kernel/src/commands/QueryCommand.js";
+import { CommandResult, QueryCommand } from "@svgframe/kernel";
+import type { CommandContext } from "@svgframe/kernel";
 
 /**
  * `canvas` without arguments: shows the canvas size. A display command, so it

@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { Editor } from "../../../packages/kernel/src/app/Editor.js";
 import { EditorSession } from "../../../packages/kernel/src/app/EditorSession.js";
 import type { ArgList } from "../../../packages/kernel/src/commands/ArgList.js";
-import { CommandRegistry } from "../../../packages/kernel/src/commands/CommandRegistry.js";
 import { CommandResult } from "../../../packages/kernel/src/commands/CommandResult.js";
 import { QueryCommand } from "../../../packages/kernel/src/commands/QueryCommand.js";
 import { SvgSerializer } from "../../../packages/kernel/src/io/SvgSerializer.js";
-import { ShapeFactory } from "../../../packages/kernel/src/model/ShapeFactory.js";
 import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
+import { EditorAssembler } from "../../../src/assembly/EditorAssembler.js";
+import { BuiltinExtensions } from "../../support/BuiltinExtensions.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
 
 /** Test-only display command that needs no document (like `help`), to probe the Invoker's flow. */
@@ -45,10 +45,8 @@ class BrokenCommand extends QueryCommand {
 
 /** An editor whose session holds `document` (none for `null`); there is no `init` command yet. */
 function editorWith(document: SvgDocument | null = new SvgDocument()): { editor: Editor; session: EditorSession } {
-  const registry = new CommandRegistry();
-  registry.register(PingCommand);
-  registry.register(BrokenCommand);
-  const session = new EditorSession(new MemoryFileSystem(), registry, new ShapeFactory());
+  const registry = BuiltinExtensions.registry(BuiltinExtensions.commandsPlugin("editor-test-commands", PingCommand, BrokenCommand));
+  const session = new EditorSession(new MemoryFileSystem(), registry);
   if (document !== null) {
     session.replaceDocument(document, null);
   }
@@ -234,9 +232,9 @@ describe("Editor.executeLine: output", () => {
   });
 });
 
-describe("Editor.createDefault", () => {
+describe("EditorAssembler.bare (formerly Editor.createDefault)", () => {
   it("starts without a document and with only the built-in commands", () => {
-    const editor = Editor.createDefault();
+    const editor = new EditorAssembler(new MemoryFileSystem()).bare();
     expect(editor.executeLine("create rect r 0 0 1 1")).toEqual(["error: no document. use 'init' or 'read' first"]);
     expect(editor.executeLine("ping")).toEqual(["error: unknown command: ping"]);
   });

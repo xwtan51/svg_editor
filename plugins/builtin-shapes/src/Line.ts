@@ -1,8 +1,4 @@
-import { GeometryAttribute } from "../../../packages/kernel/src/model/GeometryAttribute.js";
-import { LeafShape } from "../../../packages/kernel/src/model/LeafShape.js";
-import { ParamSpec } from "../../../packages/kernel/src/model/ParamSpec.js";
-import { XCoordinate } from "../../../packages/kernel/src/model/XCoordinate.js";
-import { YCoordinate } from "../../../packages/kernel/src/model/YCoordinate.js";
+import { GeometryAttribute, LeafShape, ParamSpec, XCoordinate, YCoordinate } from "@svgframe/kernel";
 
 /** `<line x1 y1 x2 y2>`. */
 export class Line extends LeafShape {

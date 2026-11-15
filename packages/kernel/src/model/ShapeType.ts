@@ -3,7 +3,7 @@ import type { Shape } from "./Shape.js";
 
 /**
  * The static side of a shape class: the class object itself satisfies this
- * interface (static `typeName`, `params`, `create`), so `ShapeFactory` stores
+ * interface (static `typeName`, `params`, `create`), so `ShapeRegistry` stores
  * classes directly and the compiler checks each class when it is registered.
  */
 export interface ShapeType {
