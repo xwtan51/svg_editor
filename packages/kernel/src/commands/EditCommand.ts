@@ -1,6 +1,7 @@
 import type { ContainerShape } from "../model/ContainerShape.js";
 import { EditorError } from "../model/EditorError.js";
 import { IdSyntax } from "../model/IdSyntax.js";
+import type { Shape } from "../model/Shape.js";
 import type { SvgDocument } from "../model/SvgDocument.js";
 import { Command } from "./Command.js";
 import { CommandCategory } from "./CommandCategory.js";
@@ -80,6 +81,22 @@ export abstract class EditCommand extends Command {
     IdSyntax.validate(id);
     if (document.findById(id) !== null) {
       throw new EditorError(`id already exists: ${id}`);
+    }
+  }
+
+  /**
+   * The required-part guard (design §3.7), for commands that take `shape` out
+   * of its current container (`delete`, `addto` into another container,
+   * `group`). Call it in `prepare`, after the Phase 1 checks, so that their
+   * order of errors is unchanged.
+   * Pre: none (a detached shape passes). Post: no state changes.
+   * Fails: the parent container's `canRelease(shape)` is `false` →
+   * `EditorError` `cannot detach required part of composite shape: <id>`.
+   */
+  protected checkReleasable(shape: Shape): void {
+    const container = shape.parentContainer();
+    if (container !== null && !container.canRelease(shape)) {
+      throw new EditorError(`cannot detach required part of composite shape: ${shape.getId()}`);
     }
   }
 

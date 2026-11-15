@@ -37,12 +37,19 @@ export class AddToCommand extends EditCommand {
     return CommandResult.of(`${this.target.label()} moved back into ${this.position.container().containerLabel()}`);
   }
 
-  /** Order: container (exists, is a `g`), shape, then the cycle check (R10, E24). */
+  /**
+   * Order: container (exists, is a `g`), shape, then the cycle check (R10,
+   * E24), then the required-part guard (design §3.7), only when the shape
+   * leaves another container; moving to the end of the same one is allowed.
+   */
   protected prepare(document: SvgDocument): void {
     const group = this.findContainer(document, this.groupId);
     const target = this.findShape(document, this.id);
     if (target === group || target.isAncestorOf(group)) {
       throw new EditorError(`cannot group a container into its own descendant: ${this.id}`);
+    }
+    if (target.parentContainer() !== group) {
+      this.checkReleasable(target);
     }
     this.group = group;
     this.target = target;

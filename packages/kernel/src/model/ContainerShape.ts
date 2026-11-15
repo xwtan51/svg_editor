@@ -13,7 +13,8 @@ import type { ShapeMemento } from "./ShapeMemento.js";
  * Commands work with this class, never with a concrete container type, so the
  * kernel does not depend on `g` or on any other container that a plugin adds.
  * A subclass supplies its static side (type name, parameters, `create`) and
- * `tagName()`; composite shape types may also answer `false` from `canUngroup`.
+ * `tagName()`; composite shape types may also answer `false` from `canUngroup`
+ * and from `canRelease` (for their required parts).
  */
 export abstract class ContainerShape extends Shape implements ShapeContainer {
   private readonly children: ChildList = new ChildList(this);
@@ -50,6 +51,11 @@ export abstract class ContainerShape extends Shape implements ShapeContainer {
 
   /** Hook for composite shape types, which answer `false` (E20, §4.4). */
   canUngroup(): boolean {
+    return true;
+  }
+
+  /** Hook for composite shape types, which answer `false` for their required parts (design §3.7). */
+  canRelease(_child: Shape): boolean {
     return true;
   }
 

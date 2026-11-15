@@ -16,13 +16,14 @@ export interface PairBreaches {
  * detail lists the parts. `breaches` replaces single methods to break the contract.
  */
 export class FakePairProvider implements ShapeProvider {
-  readonly typeName = "pair";
+  readonly typeName: string;
   readonly params: readonly ParamSpec[] = FakeDot.params;
 
   private readonly breaches: PairBreaches;
 
-  constructor(breaches: PairBreaches = {}) {
+  constructor(breaches: PairBreaches = {}, typeName: string = "pair") {
     this.breaches = breaches;
+    this.typeName = typeName;
   }
 
   claimedIds(id: string): readonly string[] {

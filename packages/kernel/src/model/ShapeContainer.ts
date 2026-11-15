@@ -26,4 +26,13 @@ export interface ShapeContainer {
    * own id when it is a shape, `null` for the document root. Pure query.
    */
   containerId(): string | null;
+
+  /**
+   * Whether the direct child `child` may leave this container, by deletion or
+   * by moving it into another container (design §3.7). Pure query.
+   * Pre: `child` is a direct child. Post: no state changes.
+   * The document root and `ContainerShape` answer `true`; a composite shape
+   * type answers `false` for its required parts.
+   */
+  canRelease(child: Shape): boolean;
 }

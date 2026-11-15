@@ -4,7 +4,8 @@ import type { ArgList, Shape, SvgDocument } from "@svgframe/kernel";
 /**
  * `delete <id>`: detaches the shape (a container with its whole subtree). The
  * command keeps the same object and its position, so undo puts it back at its
- * original index (README §2.1).
+ * original index (README §2.1). A required part of a composite shape cannot
+ * be deleted on its own (design §3.7).
  */
 export class DeleteCommand extends EditCommand {
   static readonly commandName = "delete";
@@ -38,6 +39,7 @@ export class DeleteCommand extends EditCommand {
   protected prepare(document: SvgDocument): void {
     this.document = document;
     this.target = this.findShape(document, this.id);
+    this.checkReleasable(this.target);
     this.position = TreePosition.of(this.target);
   }
 

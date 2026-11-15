@@ -78,6 +78,11 @@ export class SvgDocument implements ShapeContainer, DocumentView {
     return "svg";
   }
 
+  /** Any top-level shape may leave the root (design §3.7). */
+  canRelease(_child: Shape): boolean {
+    return true;
+  }
+
   /** Top-level shapes have no parent shape. */
   containerId(): null {
     return null;
