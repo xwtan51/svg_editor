@@ -27,10 +27,14 @@ interface TrialResult {
  * 2. none → `null` (the whitelist path);
  * 3. the highest `priority` wins; a tie at the top → `ambiguous attribute handlers …`;
  * 4. snapshot the target subtree and record its id sequence;
- * 5–7. under one rollback guard: `apply`, check its answer, check the id
- *    sequence, obtain both echoes, snapshot "after". Any failure in these
- *    steps restores "before" first, then reports: an `EditorError` as is,
- *    anything else as `attribute handler failed: <name> (<reason>)`;
+ * 5–7. under one rollback guard: `apply`, check its answer, obtain both
+ *    echoes, check the id sequence, snapshot "after". On any failure in these
+ *    steps the id sequence is compared first: if the structure of the subtree
+ *    changed (only possible by bypassing the interface), the rollback cannot
+ *    be trusted, so a plain `Error` (a programming error) is thrown, without
+ *    restoring and without wrapping. Otherwise "before" is restored, then an
+ *    `EditorError` is reported as is and anything else as
+ *    `attribute handler failed: <name> (<reason>)`;
  * 8. restore "before" (the document is unchanged when planning ends);
  * 9. answer the snapshots and echoes as an `AttributeEdit`.
  */
@@ -55,10 +59,12 @@ export class AttributeDispatcher implements AttributePlanner {
       );
     }
     const before = target.snapshot();
+    const ids = AttributeDispatcher.idSequence(target);
     let trial: TrialResult;
     try {
-      trial = this.tryOut(winner, target, attribute, value);
+      trial = this.tryOut(winner, target, attribute, value, ids);
     } catch (error) {
+      AttributeDispatcher.checkStructure(winner, target, ids);
       target.restore(before);
       if (error instanceof EditorError) {
         throw error;
@@ -86,19 +92,30 @@ export class AttributeDispatcher implements AttributePlanner {
     return answer;
   }
 
-  /** Steps 5–7; the caller restores "before" if anything here throws. */
-  private tryOut(handler: AttributeHandler, target: Shape, attribute: string, value: string): TrialResult {
-    const ids = AttributeDispatcher.idSequence(target);
+  /**
+   * Steps 5–7; `ids` is the id sequence recorded in step 4. The caller
+   * handles anything thrown here (structure check, then restore).
+   */
+  private tryOut(handler: AttributeHandler, target: Shape, attribute: string, value: string, ids: string): TrialResult {
     const change: unknown = handler.apply(new EditableSubtree(target), attribute, value);
     if (!AttributeDispatcher.isChange(change)) {
       throw new Error("apply must return an AttributeChange (appliedMessage and undoneMessage)");
     }
-    if (AttributeDispatcher.idSequence(target) !== ids) {
-      throw new Error(`the structure of ${target.label()} changed`);
-    }
     const applied = AttributeDispatcher.message(change.appliedMessage(), "appliedMessage");
     const undone = AttributeDispatcher.message(change.undoneMessage(), "undoneMessage");
+    AttributeDispatcher.checkStructure(handler, target, ids);
     return { after: target.snapshot(), applied, undone };
+  }
+
+  /**
+   * Step 6: the id sequence of the subtree must be the one of step 4. A
+   * change (removed, added or reordered parts) is a programming error: a
+   * plain `Error`, thrown before any restore and never wrapped (design §3.9).
+   */
+  private static checkStructure(handler: AttributeHandler, target: Shape, ids: string): void {
+    if (AttributeDispatcher.idSequence(target) !== ids) {
+      throw new Error(`attribute handler ${handler.name} changed the structure of ${target.label()}`);
+    }
   }
 
   private static isChange(value: unknown): value is AttributeChange {

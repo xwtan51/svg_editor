@@ -193,21 +193,53 @@ describe("AttributeDispatcher: the transaction rolls back every failure of steps
     expect(text()).toBe(before);
   });
 
-  it("a handler that bypasses the interface to change the structure is a programming error, not an EditorError", () => {
-    const { n1 } = fixture();
-    const cheat = new ScriptedHandler("cheat", 0, onComposite("fill"), (target) => {
-      const container = target.view() as unknown as ContainerShape;
-      container.remove(container.childList()[0] as FakeLeaf);
-      return new ScriptedChange("a", "u");
-    });
-    let error: unknown;
+  /** The error `plan` throws, which must be a programming error (not an `EditorError`). */
+  function programmingError(run: () => unknown): string {
     try {
-      new AttributeDispatcher([cheat]).plan(n1, "fill", "red");
-    } catch (e) {
-      error = e;
+      run();
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect(error).not.toBeInstanceOf(EditorError);
+      return (error as Error).message;
     }
-    expect(error).toBeInstanceOf(Error);
-    expect(error).not.toBeInstanceOf(EditorError);
+    return "no error";
+  }
+
+  /** A handler that bypasses the interface to change the structure of `n1`, then runs `then`. */
+  function cheat(change: (container: ContainerShape) => void, then: () => unknown): ScriptedHandler {
+    return new ScriptedHandler("cheat", 0, onComposite("fill"), (target, _attribute, value) => {
+      target.part("n1-a").setAttribute("fill", value);
+      change(target.view() as unknown as ContainerShape);
+      return then();
+    });
+  }
+
+  const removeFirst = (container: ContainerShape) => container.remove(container.childList()[0] as FakeLeaf);
+  const swapTwo = (container: ContainerShape) => {
+    const first = container.childList()[0] as FakeLeaf;
+    container.remove(first);
+    container.insertAt(first, 1);
+  };
+  const echoes = () => new ScriptedChange("a", "u");
+  const structure = "attribute handler cheat changed the structure of composite#n1";
+
+  it("a handler that bypasses the interface to remove a part is a programming error, not an EditorError", () => {
+    const { n1 } = fixture();
+    expect(programmingError(() => new AttributeDispatcher([cheat(removeFirst, echoes)]).plan(n1, "fill", "red"))).toBe(structure);
+  });
+
+  it("only swapping two parts (same number of children) is a programming error too", () => {
+    const { n1 } = fixture();
+    expect(programmingError(() => new AttributeDispatcher([cheat(swapTwo, echoes)]).plan(n1, "fill", "red"))).toBe(structure);
+    expect(n1.childList().map((child) => child.getId())).toEqual(["n1-b", "n1-a"]);
+  });
+
+  it("changing the structure, then throwing an EditorError, is still a programming error", () => {
+    const { n1 } = fixture();
+    const then = () => {
+      throw new EditorError("invalid value for fill: red");
+    };
+    expect(programmingError(() => new AttributeDispatcher([cheat(swapTwo, then)]).plan(n1, "fill", "red"))).toBe(structure);
   });
 });
 

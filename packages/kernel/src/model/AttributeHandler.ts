@@ -39,6 +39,10 @@ export interface AttributeHandler {
    * `AttributeChange`): the kernel rolls back and reports
    * `error: attribute handler failed: <name> (<reason>)`.
    * In neither case does `set` fall back to the whitelist (spec §3.2).
+   * Breach (changing the structure of the subtree by bypassing the interface:
+   * parts removed, added or reordered): a programming error; the kernel throws
+   * a plain `Error` (`attribute handler <name> changed the structure of <label>`)
+   * without rolling back or wrapping, whatever `apply` threw afterwards.
    */
   apply(target: AttributeTarget, attribute: string, value: string): AttributeChange;
 }
