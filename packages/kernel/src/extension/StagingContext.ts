@@ -3,6 +3,7 @@ import type { CommandType } from "../commands/CommandType.js";
 import type { ShapeCatalog } from "../model/ShapeCatalog.js";
 import type { ShapeProvider } from "../model/ShapeProvider.js";
 import { ContributionCategory } from "./ContributionCategory.js";
+import type { DocumentListener } from "./DocumentListener.js";
 import type { ExtensionRegistry } from "./ExtensionRegistry.js";
 import type { PluginContext } from "./PluginContext.js";
 
@@ -20,6 +21,7 @@ export class StagingContext implements PluginContext {
   private readonly registry: ExtensionRegistry;
   private readonly shapes: ShapeProvider[] = [];
   private readonly commands: CommandType[] = [];
+  private readonly listeners: DocumentListener[] = [];
   private readonly staged = new Map<ContributionCategory, string[]>();
   private sealed = false;
 
@@ -39,6 +41,12 @@ export class StagingContext implements PluginContext {
     this.checkCommand(type);
     this.commands.push(type);
     this.stage(ContributionCategory.COMMANDS, type.commandName);
+  }
+
+  subscribe(listener: DocumentListener): void {
+    this.checkOpen();
+    this.checkListener(listener);
+    this.listeners.push(listener);
   }
 
   shapeTypes(): ShapeCatalog {
@@ -68,6 +76,11 @@ export class StagingContext implements PluginContext {
   /** Staged command types, in registration order. */
   commandTypes(): readonly CommandType[] {
     return [...this.commands];
+  }
+
+  /** Staged document listeners, in subscription order. */
+  documentListeners(): readonly DocumentListener[] {
+    return [...this.listeners];
   }
 
   private stage(category: ContributionCategory, name: string): void {
@@ -121,6 +134,16 @@ export class StagingContext implements PluginContext {
     }
     if (typeof type.parse !== "function") {
       throw new Error(`invalid command type ${name}: parse must be a function`);
+    }
+  }
+
+  private checkListener(listener: DocumentListener): void {
+    if (typeof listener !== "object" || listener === null) {
+      throw new Error("invalid document listener: not an object");
+    }
+    const methods: readonly unknown[] = [listener.documentReplaced, listener.documentSaved, listener.documentEdited];
+    if (!methods.every((method) => typeof method === "function")) {
+      throw new Error("invalid document listener: documentReplaced, documentSaved and documentEdited must be functions");
     }
   }
 

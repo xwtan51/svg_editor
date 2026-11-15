@@ -37,10 +37,10 @@ describe("EditorSession", () => {
     expect(s.filePath()).toBeNull();
   });
 
-  it("replaceDocument(doc, null) clears a default path set by setFilePath, as init after save does (F5)", () => {
+  it("replaceDocument(doc, null) clears a default path set by markSaved, as init after save does (F5)", () => {
     const s = session();
     s.replaceDocument(new SvgDocument(), null);
-    s.setFilePath("saved.svg");
+    s.markSaved("saved.svg");
     expect(s.filePath()).toBe("saved.svg");
 
     const fresh = new SvgDocument();
@@ -49,11 +49,11 @@ describe("EditorSession", () => {
     expect(s.filePath()).toBeNull();
   });
 
-  it("setFilePath changes only the save path", () => {
+  it("markSaved changes only the save path", () => {
     const s = session();
     const doc = new SvgDocument();
     s.replaceDocument(doc, null);
-    s.setFilePath("b.svg");
+    s.markSaved("b.svg");
     expect(s.filePath()).toBe("b.svg");
     expect(s.document()).toBe(doc);
   });

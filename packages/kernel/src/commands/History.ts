@@ -1,22 +1,34 @@
 import { EditorError } from "../model/EditorError.js";
 import type { CommandResult } from "./CommandResult.js";
 import type { EditCommand } from "./EditCommand.js";
+import type { UndoStack } from "./UndoStack.js";
 
 /**
  * Undo and redo stacks of edit commands plus the io lock (spec §4.3, U1–U8).
  * It only ever holds whole command objects, so one command is one undo unit
  * however many steps it performs internally (README §2.1).
+ *
+ * `edited` is called after every successful `record`, `undo` and `redo`
+ * (never after a failure, never by `markIoBarrier`); the session passes a
+ * callback that buffers a `documentEdited` event (design §3.4). The history
+ * does not know about events itself (rule D4: commands do not import app).
  */
-export class History {
+export class History implements UndoStack {
   private readonly undoStack: EditCommand[] = [];
   private readonly redoStack: EditCommand[] = [];
   private ioLocked = false;
+  private readonly edited: () => void;
+
+  constructor(edited: () => void = () => undefined) {
+    this.edited = edited;
+  }
 
   /** A successful edit: pushed for undo, redo cleared, io lock lifted. */
   record(command: EditCommand): void {
     this.undoStack.push(command);
     this.redoStack.length = 0;
     this.ioLocked = false;
+    this.edited();
   }
 
   /** A successful document command: both stacks cleared and undo / redo locked (U2). */
@@ -32,6 +44,7 @@ export class History {
     const result = command.undo();
     this.undoStack.pop();
     this.redoStack.push(command);
+    this.edited();
     return result;
   }
 
@@ -41,6 +54,7 @@ export class History {
     const result = command.redo();
     this.redoStack.pop();
     this.undoStack.push(command);
+    this.edited();
     return result;
   }
 

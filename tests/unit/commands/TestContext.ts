@@ -50,7 +50,7 @@ export class TestContext implements CommandContext {
     return this.path;
   }
 
-  setFilePath(path: string): void {
+  markSaved(path: string): void {
     this.path = path;
   }
 
