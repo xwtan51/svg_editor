@@ -1,6 +1,9 @@
 import type { CommandType } from "../commands/CommandType.js";
+import type { AttributeHandler } from "../model/AttributeHandler.js";
 import type { ShapeCatalog } from "../model/ShapeCatalog.js";
 import type { ShapeProvider } from "../model/ShapeProvider.js";
+import type { TreeDecorator } from "../view/TreeDecorator.js";
+import type { DocumentListener } from "./DocumentListener.js";
 
 /**
  * Everything a plugin can do while it is activated (design §3.2). Each
@@ -14,6 +17,23 @@ export interface PluginContext {
 
   /** Registration name `type.commandName`, category `commands`. */
   registerCommand(type: CommandType): void;
+
+  /** Registration name `decorator.name`, category `decorators`; `tagFor` must be a function. */
+  registerTreeDecorator(decorator: TreeDecorator): void;
+
+  /**
+   * Registration name `handler.name`, category `attributes`; `priority` must
+   * be an integer, `handles` and `apply` functions.
+   */
+  registerAttributeHandler(handler: AttributeHandler): void;
+
+  /**
+   * Subscribes to document events (design §3.4). Not a `contributes`
+   * category, so neither checked for duplicates nor against the manifest, but
+   * staged like the registrations: the listener receives events only once the
+   * installation is committed, and never if it fails.
+   */
+  subscribe(listener: DocumentListener): void;
 
   /**
    * The shape types committed so far (by plugins installed earlier), read-only;

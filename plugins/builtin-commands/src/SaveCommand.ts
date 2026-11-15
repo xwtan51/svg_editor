@@ -5,8 +5,8 @@ import type { ArgList, CommandContext } from "@svgframe/kernel";
  * `save [file.svg]`: writes the current document. Without an argument it uses
  * the default path (from `read`, or from an earlier `save <file>`); after
  * `init` there is none (F5). The file content is built completely before the
- * single write, and the default path changes only after the write succeeded
- * (README §2.1 point 5).
+ * single write, and only after the write succeeded does `markSaved` change
+ * the default path and raise `documentSaved` (README §2.1 point 5, design §3.4).
  */
 export class SaveCommand extends DocumentCommand {
   static readonly commandName = "save";
@@ -36,7 +36,7 @@ export class SaveCommand extends DocumentCommand {
     }
     const document = context.document();
     context.fileSystem().writeText(path, new SvgSerializer().serialize(document));
-    context.setFilePath(path);
+    context.markSaved(path);
     return CommandResult.of(`saved to ${path} (${document.elementCount()} elements)`);
   }
 }

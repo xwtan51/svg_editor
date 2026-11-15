@@ -1,15 +1,17 @@
+import type { DocumentView } from "../model/DocumentView.js";
 import { NumberFormat } from "../model/NumberFormat.js";
-import type { Shape } from "../model/Shape.js";
-import type { SvgDocument } from "../model/SvgDocument.js";
+import type { ShapeView } from "../model/ShapeView.js";
 
 /**
- * `SvgDocument` → SVG text in the F18 format: XML declaration, 2-space
- * indentation, attributes in `Shape.svgAttributes()` order, childless elements
+ * A document → SVG text in the F18 format: XML declaration, 2-space
+ * indentation, attributes in `svgAttributes()` order, childless elements
  * self-closed, `& < > "` escaped in attribute values and text, final newline.
  *
- * The traversal only uses the serialization protocol of `Shape` (`tagName`,
- * `svgAttributes`, `textContent`, `asContainer`), so new shape types need no
- * change here (README §2.10). Hand-written on purpose: no XML library (§2.8).
+ * It reads only the read-only views (design §3.6.1): `DocumentView`
+ * (`canvasSize`, `childViews`) and `ShapeView` (`tagName`, `svgAttributes`,
+ * `textContent`, `childViews`), so new shape types need no change here
+ * (README §2.10) and plugins can serialize the view they were given (design
+ * §2.3.5). Hand-written on purpose: no XML library (§2.8).
  */
 export class SvgSerializer {
   private static readonly DECLARATION = '<?xml version="1.0" encoding="UTF-8"?>';
@@ -17,7 +19,7 @@ export class SvgSerializer {
   private static readonly INDENT = "  ";
 
   /** The complete file content; pure, so `save` can build it before writing anything. */
-  serialize(document: SvgDocument): string {
+  serialize(document: DocumentView): string {
     const size = document.canvasSize();
     const width = NumberFormat.format(size.width());
     const height = NumberFormat.format(size.height());
@@ -29,13 +31,12 @@ export class SvgSerializer {
       ["viewBox", `0 0 ${width} ${height}`],
     ];
     const lines = [SvgSerializer.DECLARATION];
-    this.writeElement("svg", rootAttributes, null, document.childList(), 0, lines);
+    this.writeElement("svg", rootAttributes, null, document.childViews(), 0, lines);
     return `${lines.join("\n")}\n`;
   }
 
-  private writeShape(shape: Shape, depth: number, lines: string[]): void {
-    const children = shape.asContainer()?.childList() ?? [];
-    this.writeElement(shape.tagName(), shape.svgAttributes(), shape.textContent(), children, depth, lines);
+  private writeShape(shape: ShapeView, depth: number, lines: string[]): void {
+    this.writeElement(shape.tagName(), shape.svgAttributes(), shape.textContent(), shape.childViews(), depth, lines);
   }
 
   /** Text content is written inline; children go one level deeper; neither → `<tag …/>`. */
@@ -43,7 +44,7 @@ export class SvgSerializer {
     tag: string,
     attributes: ReadonlyArray<readonly [string, string]>,
     text: string | null,
-    children: readonly Shape[],
+    children: readonly ShapeView[],
     depth: number,
     lines: string[],
   ): void {

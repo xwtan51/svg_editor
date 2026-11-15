@@ -1,5 +1,12 @@
-import type { Shape } from "../model/Shape.js";
-import type { SvgDocument } from "../model/SvgDocument.js";
+import type { DocumentView } from "../model/DocumentView.js";
+import { EditorError } from "../model/EditorError.js";
+import { FailureReason } from "../model/FailureReason.js";
+import type { ShapeView } from "../model/ShapeView.js";
+import type { TreeDecorator } from "./TreeDecorator.js";
+import { TreeRow } from "./TreeRow.js";
+
+/** One shape line before alignment: "connector prefix + tree label", summary, and the shape itself. */
+type ShapeLine = readonly [head: string, summary: string, shape: ShapeView];
 
 /**
  * The §5.1 structure tree. Each shape line is "connector prefix + label",
@@ -7,8 +14,13 @@ import type { SvgDocument } from "../model/SvgDocument.js";
  * "prefix + label" of this output + 2; lines without a summary (`g`) are not
  * padded. Widths are counted in UTF-16 code units (V9).
  *
- * Line content comes only from `Shape.treeLabel()` / `Shape.summary()` and the
- * traversal from `asContainer()`, so new shape types need no change here
+ * Then the tree decorators (design §2.3) are asked on every line — the root
+ * line, the first line of `tree <id>` and every shape line — in registration
+ * order, and each non-empty tag is appended after one space. Tags come after
+ * the alignment and take no part in it; with no tag nothing is appended.
+ *
+ * Line content comes only from the read-only views (`treeLabel()`,
+ * `summary()`, `childViews()`), so new shape types need no change here
  * (README §2.10). The alignment rule lives only in this class (README §4.9).
  */
 export class TreeRenderer {
@@ -17,35 +29,93 @@ export class TreeRenderer {
   private static readonly CONTINUATION = "│   ";
   private static readonly LAST_CONTINUATION = "    ";
   private static readonly GAP = 2;
+  private static readonly TAG_SEPARATOR = " ";
 
-  /** `tree`: `svg (800x600)`, then every shape; an empty document gives that line alone (V5). */
-  renderDocument(document: SvgDocument): string[] {
-    const rows: Array<[string, string]> = [];
-    this.collectChildren(document.childList(), "", rows);
+  private readonly decorators: readonly TreeDecorator[];
+
+  /** `decorators`: the committed tree decorators in registration order (none by default). */
+  constructor(decorators: readonly TreeDecorator[] = []) {
+    this.decorators = [...decorators];
+  }
+
+  /**
+   * `tree`: `svg (800x600)`, then every shape; an empty document gives that
+   * line alone (V5). A decorator breach throws `EditorError` before any line is returned.
+   */
+  renderDocument(document: DocumentView): string[] {
+    const lines: ShapeLine[] = [];
+    this.collectChildren(document.childViews(), "", lines);
     // The document line is not a shape line: it takes no part in the alignment.
-    return [`svg (${document.canvasSize().toString()})`, ...this.align(rows)];
+    const root = this.decorate(`svg (${document.canvasSize().toString()})`, new TreeRow(document, null));
+    return [root, ...this.alignAndDecorate(lines, document)];
   }
 
-  /** `tree <id>` (V4): the shape's own line has no connector; a leaf gives one line. */
-  renderSubtree(shape: Shape): string[] {
-    const rows: Array<[string, string]> = [[shape.treeLabel(), shape.summary()]];
-    this.collectChildren(shape.asContainer()?.childList() ?? [], "", rows);
-    return this.align(rows);
+  /**
+   * `tree <id>` (V4): the shape's own line has no connector; a leaf gives one
+   * line. `document` is what the decorators see as the row's document.
+   */
+  renderSubtree(shape: ShapeView, document: DocumentView): string[] {
+    const lines: ShapeLine[] = [[shape.treeLabel(), shape.summary(), shape]];
+    this.collectChildren(shape.childViews(), "", lines);
+    return this.alignAndDecorate(lines, document);
   }
 
-  /** Appends `[prefix + label, summary]` for every shape below, in document order. */
-  private collectChildren(children: readonly Shape[], indent: string, rows: Array<[string, string]>): void {
+  /** Appends `[prefix + label, summary, shape]` for every shape below, in document order. */
+  private collectChildren(children: readonly ShapeView[], indent: string, lines: ShapeLine[]): void {
     children.forEach((child, i) => {
       const last = i === children.length - 1;
       const branch = last ? TreeRenderer.LAST_BRANCH : TreeRenderer.BRANCH;
-      rows.push([`${indent}${branch}${child.treeLabel()}`, child.summary()]);
+      lines.push([`${indent}${branch}${child.treeLabel()}`, child.summary(), child]);
       const continuation = last ? TreeRenderer.LAST_CONTINUATION : TreeRenderer.CONTINUATION;
-      this.collectChildren(child.asContainer()?.childList() ?? [], `${indent}${continuation}`, rows);
+      this.collectChildren(child.childViews(), `${indent}${continuation}`, lines);
     });
   }
 
-  private align(rows: ReadonlyArray<readonly [string, string]>): string[] {
-    const column = Math.max(0, ...rows.map(([head]) => head.length)) + TreeRenderer.GAP;
-    return rows.map(([head, summary]) => (summary.length === 0 ? head : `${head.padEnd(column)}${summary}`));
+  /** V1 first (the column ignores tags), then the tags of each line. */
+  private alignAndDecorate(lines: readonly ShapeLine[], document: DocumentView): string[] {
+    const column = Math.max(0, ...lines.map(([head]) => head.length)) + TreeRenderer.GAP;
+    return lines.map(([head, summary, shape]) => {
+      const aligned = summary.length === 0 ? head : `${head.padEnd(column)}${summary}`;
+      return this.decorate(aligned, new TreeRow(document, shape));
+    });
+  }
+
+  /** `line` followed by ` <tag>` for each decorator, in order, whose tag is not empty. */
+  private decorate(line: string, row: TreeRow): string {
+    let result = line;
+    for (const decorator of this.decorators) {
+      const tag = this.tagOf(decorator, row);
+      if (tag.length > 0) {
+        result += `${TreeRenderer.TAG_SEPARATOR}${tag}`;
+      }
+    }
+    return result;
+  }
+
+  /** The decorator's tag, `""` for none; a breach of the `tagFor` contract → `tree decorator failed`. */
+  private tagOf(decorator: TreeDecorator, row: TreeRow): string {
+    let tag: unknown;
+    try {
+      tag = decorator.tagFor(row);
+    } catch (error) {
+      throw TreeRenderer.breach(decorator, FailureReason.of(error));
+    }
+    if (tag === null || tag === "") {
+      return "";
+    }
+    if (typeof tag !== "string") {
+      throw TreeRenderer.breach(decorator, "tag must be a string or null");
+    }
+    if (/[\r\n]/.test(tag)) {
+      throw TreeRenderer.breach(decorator, "tag must be a single line");
+    }
+    if (tag.trim() !== tag) {
+      throw TreeRenderer.breach(decorator, "tag must not start or end with white space");
+    }
+    return tag;
+  }
+
+  private static breach(decorator: TreeDecorator, reason: string): EditorError {
+    return new EditorError(`tree decorator failed: ${decorator.name} (${reason})`);
   }
 }

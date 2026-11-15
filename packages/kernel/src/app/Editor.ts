@@ -29,19 +29,29 @@ export class Editor {
    * `EditorError` becomes the single line `error: <message>` and the command
    * is not recorded. Any other exception is a programming error and is not
    * caught here.
+   *
+   * Document events (design §3.4) raised while the line runs are delivered
+   * only after `execute` and `recordIn` both returned normally; after any
+   * exception, `EditorError` or not, they are dropped, so nothing leaks into
+   * the next line. Delivery happens outside the `EditorError` handler: a
+   * throwing listener is a programming error even if it throws `EditorError`.
    */
   executeLine(line: string): string[] {
     if (Editor.isIgnored(line)) {
       return [];
     }
+    let result: CommandResult;
     try {
-      return this.run(line).lines();
+      result = this.run(line);
     } catch (error) {
+      this.session.discardEvents();
       if (error instanceof EditorError) {
         return [`${Editor.ERROR_PREFIX}${error.message}`];
       }
       throw error;
     }
+    this.session.flushEvents();
+    return result.lines();
   }
 
   private run(line: string): CommandResult {

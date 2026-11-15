@@ -129,6 +129,7 @@ README 已经用了 R/F/E/U/V/K/B/C/W/Q/A/M/P/D，VSCode 扩展用了 VA。本�
 | `SvgDocument.childViews()`、`allViews()`、`findView()` | `SvgDocument`（实现 `DocumentView`） | S7 | 只读视图方法（3.6.1） |
 | `ShapeCatalog.providers()` | 接口 `ShapeCatalog` | S6 | 读回分派与测试用（2.1.2） |
 | `ShapeContainer.canRelease(child)` | 接口 `ShapeContainer` | S7 | 保护钩子（3.7） |
+| `ShapeContainer.containerId()` | 接口 `ShapeContainer`（`ContainerShape`、`SvgDocument` 实现） | S7 | 直接子节点的 `parentId()` 答什么：图形容器答自己的 id，文档根答 `null`（3.6.1）（S7 修订） |
 | `EditCommand.checkReleasable(shape)` | `EditCommand` | S7 | 调保护钩子的模板方法 |
 | `CommandContext.markSaved(path)` | `CommandContext` | S7 | 取代 `setFilePath(path)`，并触发 `documentSaved` |
 | `CommandContext.commands()`、`shapes()`、`attributeEdits()`、`treeDecorators()` | `CommandContext` | S6/S7 | 取代 `registry()`、`shapeFactory()`（3.2） |
@@ -606,6 +607,8 @@ export interface CommandContext {
 }
 ```
 
+`EditorSession`（`app`）实现 `treeDecorators()` 时**不写返回类型注解**：类型由 `ExtensionRegistry.treeDecorators()` 推断，再由 `implements CommandContext` 检查。这样 `app` 不必 import `view/TreeDecorator`，依赖规则 D6（`app` 不依赖 `view`）保持不变（S7 修订）。
+
 | 插件命令**能**看到 | 插件命令**不能**看到 |
 |---|---|
 | 当前文档（可编辑，编辑类命令需要）、默认路径、文件系统端口 | 任何注册表的 `register`、`PluginInstaller`、`ExtensionRegistry` |
@@ -657,10 +660,12 @@ export interface TreeRowView {
 | 行 | 来源（现有） | `TreeRowView` |
 |---|---|---|
 | 文档根行 `svg (800x600)` | `TreeRenderer.renderDocument`（`view/TreeRenderer.ts:22-27`） | `isDocumentRoot() = true`，`shape() = null` |
-| `tree <id>` 的第一行（无连接线，如 `g#n1 (box)`） | `TreeRenderer.renderSubtree`（第 30–34 行） | 普通图形行：`shape()` 为该图形 |
+| `tree <id>` 的第一行（无连接线，如 `g#n1 (box)`） | `TreeRenderer.renderSubtree(shape, document)`（第 30–34 行；S7 增加 `document` 参数，见下） | 普通图形行：`shape()` 为该图形，`document()` 为传入的文档 |
 | 普通图形行 | `TreeRenderer.collectChildren`（第 37–45 行） | 同上 |
 
 **`tree <id>` 没有根行**（V4），所以 `modified-star` 在 `tree n1` 里只能给图形行加 `*`。
+
+**`renderSubtree` 的签名**（S7 修订）：`renderSubtree(shape: ShapeView, document: DocumentView): string[]`。`tree <id>` 的每一行同样要回答 `TreeRowView.document()`，而原来的 `renderSubtree(shape)` 手里没有文档；唯一的生产调用者 `TreeCommand` 传入 `context.document()`。`renderDocument(document)` 不变。
 
 #### 2.3.3 拼接位置与分隔符
 
@@ -714,7 +719,8 @@ export interface AttributeHandler {
   /**
    * 是否负责“这个图形的这个属性”。
    * 前置：无。后置：不改任何状态（纯查询）；只能读 target。
-   * 违约（抛错）：调用时 → `error: attribute handler failed: <name> (<reason>)`，什么都没改。
+   * 违约（抛出非 EditorError，或返回非布尔值）：调用时 → `error: attribute handler failed: <name> (<reason>)`，什么都没改；
+   * 抛出 EditorError 时原样传出（3.9）。（S7 修订）
    */
   handles(target: ShapeView, attribute: string): boolean;
   /**
@@ -722,8 +728,9 @@ export interface AttributeHandler {
    * 前置：handles(target.view(), attribute) 为 true，且本处理器在裁决中胜出。
    * 后置：返回 AttributeChange；修改都落在 target 子树内。
    * 失败：值非法时抛 EditorError（例如 `invalid value for fill: ""`）→ 内核回滚，原样报出这条错误。
-   * 违约（抛出非 EditorError）：内核回滚，报 `error: attribute handler failed: <name> (<reason>)`。
+   * 违约（抛出非 EditorError，或返回值不是 AttributeChange）：内核回滚，报 `error: attribute handler failed: <name> (<reason>)`。
    * 两种情况都不会回退到白名单（规格 §3.2）。
+   * 违约（绕过接口改了子树结构）：程序错误，内核不回滚、不包装（2.4.3 第 6 步）。（S7 修订）
    */
   apply(target: AttributeTarget, attribute: string, value: string): AttributeChange;
 }
@@ -786,13 +793,33 @@ AttributeDispatcher.plan(target, attribute, value):
   2. candidates 为空 → 返回 null（交回白名单路径）
   3. 取 priority 最大者；最大值上并列 → EditorError `ambiguous attribute handlers for <attribute> on <id>: <a>, <b>`（名字按注册顺序），什么都不改
   4. before = target.snapshot()；ids = 子树 id 序列
-  5. try { change = winner.apply(new EditableSubtree(target), attribute, value) }
-     catch (e) { target.restore(before); e 是 EditorError ? 原样抛出 : 抛 EditorError `attribute handler failed: <name> (<reason>)` }
-  6. 断言子树 id 序列未变（接口保证结构不变，这里是防御性检查；不成立 → 程序错误）
-  7. applied = change.appliedMessage(); undone = change.undoneMessage()；after = target.snapshot()
+  try {                                             // 第 5–7 步处于同一个回滚保护之下（S7 修订）
+    5. change = winner.apply(new EditableSubtree(target), attribute, value)；change 不是 AttributeChange → 违约
+    7. applied = change.appliedMessage(); undone = change.undoneMessage()；两条都须是非空单行，否则违约
+    6. 子树 id 序列 ≠ ids → 抛普通 Error（程序错误）
+       after = target.snapshot()
+  } catch (e) {
+    6'. 子树 id 序列 ≠ ids → 抛普通 Error `attribute handler <name> changed the structure of <label>`：
+        不调用 restore、不包装，不论 e 是什么（包括 EditorError）（S7 修订）
+    target.restore(before)
+    e 是 EditorError ? 原样抛出 : 抛 EditorError `attribute handler failed: <name> (<reason>)`
+  }
   8. target.restore(before)                         // prepare 结束时文档不变（EditCommand 的两阶段约定）
   9. 返回 AttributeEdit(target, before, after, applied, undone)
 ```
+
+第 6 步的检查放在第 7 步的两条文案之后，所以文案方法里改结构同样会被检出。结构一旦被改，快照的还原不再可信（`ShapeMemento` 只记属性、不记子节点列表，结构本来就还原不回去；子节点数不同时 `restore` 直接抛错，只调换顺序时 `restore` 会在中途因“memento does not belong”抛错，留下半还原的子树），按 3.9 的总原则“回滚不完整时按程序错误处理”（S7 修订）。
+
+违约判据（`<reason>` 一律取异常消息的第一行，非 `Error` 取 `String(e)`；S7 修订）：
+
+| 违约 | `<reason>` |
+|---|---|
+| `handles` 返回非布尔值 | `handles must return a boolean` |
+| `apply` 的返回值不是带 `appliedMessage`、`undoneMessage` 两个函数成员的对象 | `apply must return an AttributeChange (appliedMessage and undoneMessage)` |
+| 某条文案不是不含 `\r`、`\n` 的非空字符串 | `appliedMessage must return a non-empty single line`（或 `undoneMessage …`） |
+| `part(id)` 的 `id` 不在目标子树中（含目标自身） | `<id> is not in the subtree of <label>` |
+| `handles`、`apply` 或文案方法抛出非 `EditorError` | 该异常消息的第一行 |
+| 子树结构被改（增删或调换子节点） | 不是 `attribute handler failed`：普通 `Error` `attribute handler <name> changed the structure of <label>`，程序错误 |
 
 `AttributeEdit`（`PlannedAttributeEdit` 的实现）：`redo()` = `target.restore(after)`，`undo()` = `target.restore(before)`；两条文案在 `plan` 时就算好并保存，撤销与重做时不再调用插件代码，redo 的回显与首次执行相同（U6）。
 
@@ -967,7 +994,9 @@ export interface DocumentListener {
 | `documentSaved` | `EditorSession.markSaved`（新，取代 `setFilePath`；`SaveCommand` 在写文件成功后调用，与现在调 `setFilePath` 的位置相同，`SaveCommand.ts:42-43`） | `save` 成功（无参数或另存为） | `save` 失败（`cannot write file`、`no file path`）：写文件抛错在先，`markSaved` 不会被调用 |
 | `documentEdited` | `History` 在 `record`、`undo`、`redo` 成功后回调 `EditorSession`（`History` 构造时传入回调） | 编辑命令成功；`undo` / `redo` 成功 | `undo` / `redo` 失败（`nothing to undo`、io 锁）：`History.top` 先抛错（`History.ts:59-68`），没有回调；`canvas` 改尺寸是文档类命令，不算编辑 |
 
-**只在命令成功之后派发**：上面三个触发点都只把事件放进 `DocumentEvents`（新，内核 `app/`）的缓冲区。`Editor.run`（`Editor.ts:53-62`）在 `execute` 和 `recordIn` 都正常返回之后调 `session.flushEvents()`，按产生顺序、按订阅顺序依次调用监听器；`executeLine` 捕获到 `EditorError` 时调 `session.discardEvents()`。所以任何失败的命令都不会派发事件，即使它在失败之前已经调过 `replaceDocument`。
+**只在命令成功之后派发**：上面三个触发点都只把事件放进 `DocumentEvents`（新，内核 `app/`）的缓冲区。`Editor.executeLine` 把 `run`（解析 → `execute` → `recordIn`）放在 `try` 中；`catch` 对**任何**异常先调 `session.discardEvents()`，再把 `EditorError` 变成一行 `error:`、其他异常原样抛出；`try/catch` **之后**才调 `session.flushEvents()`。`flushEvents` 先取出并清空缓冲区，再按产生顺序、按订阅顺序依次调用监听器。所以任何失败的命令都不会派发事件，即使它在失败之前已经调过 `replaceDocument`；也没有事件遗留到下一行（S7 修订）。
+
+不放在 `run` 里的原因（S7 修订）：`run` 处于 `EditorError` 的捕获范围内，监听器抛出的 `EditorError` 会被变成一行 `error:`，而此时命令其实已经记入历史，这与下一段和 3.9 的“监听器抛错按程序错误处理”矛盾。放在 `try/catch` 之后，监听器抛出的任何异常（包括 `EditorError`）都从 `executeLine` 传出。
 
 **监听器抛错**：命令已经成功、无法回滚，按程序错误处理（异常从 `executeLine` 传出，`Repl` 写 stderr、退出码 1）。契约要求监听器不抛错。
 
@@ -1077,7 +1106,16 @@ export interface DocumentView {
 }
 ```
 
-`Shape`、`SvgDocument` 现有的同名方法（`getId`、`tagName`、`summary`、`svgAttributes`、`textContent`、`canvasSize`、`elementCount`）直接满足接口；新增的 `parentId`、`isContainer`、`childViews`、`allViews`、`findView` 都是对现有字段的只读包装。`SvgSerializer.serialize` 的参数改为 `DocumentView`，内部只用视图方法遍历（`childViews` 取代 `asContainer()?.childList()`），输出不变（序列化测试与基线验证）。
+`Shape`、`SvgDocument` 现有的同名方法（`getId`、`tagName`、`summary`、`svgAttributes`、`textContent`、`canvasSize`、`elementCount`）直接满足接口；新增的 `isContainer`、`childViews`、`allViews`、`findView` 是对现有字段的只读包装。`parentId` 不是（S7 修订）：`Shape` 只持有 `ShapeContainer` 类型的父容器，分不出“父亲是图形”与“父亲是文档根”，所以接口 `ShapeContainer` 新增一个多态查询：
+
+```ts
+// 接口 ShapeContainer 新增（S7 修订）
+/** 直接子节点的 ShapeView.parentId() 答什么：容器是图形时为自己的 id，文档根为 null。纯查询。 */
+containerId(): string | null;
+// ContainerShape 返回 this.getId()；SvgDocument 返回 null
+```
+
+`Shape.parentId()` 委托给它：游离时（没有父容器）为 `null`，否则为 `parent.containerId()`。不用 `instanceof`，不与 `containerLabel()` 或 `"svg"` 比较，也不解析 `label()`。`SvgSerializer.serialize` 的参数改为 `DocumentView`，内部只用视图方法遍历（`childViews` 取代 `asContainer()?.childList()`），输出不变（序列化测试与基线验证）。
 
 ### 3.7 必要子部件的保护钩子
 
@@ -1099,10 +1137,12 @@ protected checkReleasable(shape: Shape): void;
 | `delete <id>` | 总是（目标会离开父容器） | 在 `no such shape` 之后 | `delete n1-rect` → `error: cannot detach required part of composite shape: n1-rect`；`delete n1` 正常（box 整体删除，一个 undo 单元） |
 | `addto <gid> <id>` | 只在目标的当前父容器**不是** `gid` 时 | 在现有的容器、图形、成环三项检查之后 | `addto other n1-label` → 拒绝；`addto n1 n1-rect`（同一个 box 内移到末尾）允许 |
 | `group <gid> <id…>` | 对每个成员（按参数顺序） | 在现有的新 id、成员存在与重复、祖先关系三项检查之后 | `group x n1-rect` → 拒绝；`group cluster n1 n2` 正常 |
-| `ungroup` | 不需要：被解散的容器总是 `g`（box 的 `canUngroup` 为 false），子节点移到 `g` 的父容器，`g` 允许 | — | 解散 box 内部的一个 `g` 时，它的子节点进入 box，box 的部件不受影响 |
+| `ungroup <gid>` | 对被解散的容器 `<gid>`：它会离开父容器（S7 修订）。上移的子节点不检查：它们离开的正是被解散的容器，`canUngroup()` 已经允许 | 在现有的存在、是容器、`canUngroup`（`cannot ungroup composite shape`）、非顶层四项检查之后；顶层容器的父亲是文档根，本来就总是允许 | 某个组合图形 `card#c1` 把它的 `g` 子部件 `c1-h` 声明为必要部件：`ungroup c1-h` → `error: cannot detach required part of composite shape: c1-h`；同一组合图形里非必要的 `g` 可以解散，它的子节点进入组合图形 |
 | `front` / `back` | 不需要 | — | 在 box 内部调整部件的绘制顺序**不算**破坏不变量：部件仍在 box 内；读回按 id 识别部件，不按位置（ADR-2） |
 | `create … in <boxId>`、`addto <boxId> <id>` | 不需要 | — | **允许**往 box 里放其他图形，包括另一个 box（规格允许 box 嵌套 box；P1 规格 §4.4 `create box n3 … in n1`） |
 | `move` / `scale` / `set` 部件 | 不需要 | — | 改几何或样式，不改结构 |
+
+`ungroup` 也要检查的理由（S7 修订）：`ungroup <gid>` 和 `delete` 一样把 `<gid>` 从父容器中拿走；哪些子节点是必要的，只有父容器知道。内核不能以“box 的部件恰好是 rect 和 text”为由省掉检查，那是插件的知识；将来某个组合图形的部件可以是 `g`。`canUngroup()` 问的是被解散的容器自己，管不到父容器的不变量。
 
 检查都放在 Phase 1 已有检查**之后**：内置容器的 `canRelease` 总是 true，所以 Phase 1 的报错优先级与输出不变。文案（决策 X5）的格式与 §4.2 一致：`<描述>: <id>`；“detach”覆盖删除与移走两种情况。拒绝发生在 `prepare` 中，所以“状态完全不变”由 `EditCommand` 的两阶段约定保证（S7 的契约测试逐一验证）。
 
@@ -1126,7 +1166,8 @@ protected checkReleasable(shape: Shape): void;
 | 清单与注册不符 | 安装时（第 3 步） | `error: plugin manifest mismatch: …` | 同上 |
 | `matchScore` / `read` 抛错或返回非法值 | 调用时（读回） | `error: cannot parse file: <path> (shape provider <type> failed: <reason>)` | 读入失败，原文档不变 |
 | `claimedIds` / `create` 抛出非 `EditorError`，或后置条件不成立 | 调用时（`create` 的 `prepare`） | `error: shape provider failed: <type> (<reason>)` | `prepare` 尚未改文档 |
-| `handles` / `apply` 抛出非 `EditorError` | 调用时（`set` 的 `prepare`） | `error: attribute handler failed: <name> (<reason>)` | 已回滚，历史不变 |
+| `handles` / `apply` 抛出非 `EditorError`（或返回值违约，2.4.3） | 调用时（`set` 的 `prepare`） | `error: attribute handler failed: <name> (<reason>)` | 已回滚，历史不变 |
+| `apply`（或文案方法）绕过接口改了子树结构 | 调用时（`set` 的 `prepare`，2.4.3 第 6 步） | 程序错误：普通 `Error` `attribute handler <name> changed the structure of <label>`，不包装（S7 修订） | 回滚不可信，所以不还原、停止 |
 | `tagFor` 抛错或返回非法值 | 调用时（`tree`） | `error: tree decorator failed: <name> (<reason>)` | `tree` 只读，不影响状态 |
 | 命令 `execute` 抛出非 `EditorError` | 调用时 | 程序错误：stderr `internal error: …`，退出码 1（现有 `Repl` 行为） | 文档可能已改一半，所以停止 |
 | 事件监听器抛错 | 派发时 | 同上 | 命令已成功，无法回滚 |
@@ -1147,7 +1188,7 @@ protected checkReleasable(shape: Shape): void;
 | `@svgframe/kernel`（`api.ts`） | 插件、装配处、根测试 | **model**：`Shape`、`LeafShape`、`ContainerShape`、`ShapeContainer`(type)、`SvgDocument`、`CanvasSize`、`ShapeMemento`(type)、`TreePosition`、`ParamSpec`、`ShapeType`(type)、`ShapeProvider`(type)、`StaticShapeProvider`、`ShapeKit`(type)、`ShapeCatalog`(type)、`ShapeReader`(type)、`ElementView`(type)、`ShapeView`(type)、`DocumentView`(type)、`AttributeHandler`(type)、`AttributeTarget`(type)、`AttributeChange`(type)、`AttributePlanner`(type)、`PlannedAttributeEdit`(type)、`EditorError`、`NumberFormat`、`IdSyntax`、`GeometryAttribute`、`CoordinateRole`(type)、`XCoordinate`、`YCoordinate`、`Extent`；**io**：`FileSystem`(type)、`SvgImporter`、`SvgSerializer`；**view**：`TreeRenderer`、`ShapeDetailRenderer`、`TreeDecorator`(type)、`TreeRowView`(type)；**commands**：`Command`、`EditCommand`、`QueryCommand`、`DocumentCommand`、`HistoryCommand`、`CommandType`(type)、`CommandCategory`、`CommandContext`(type)、`CommandResult`、`ArgList`、`History`(type)、`UndoStack`(type)、`CommandCatalog`(type)；**extension**：`Plugin`(type)、`PluginClass`(type)、`PluginContext`(type)、`PluginOptions`、`DocumentListener`(type) |
 | `@svgframe/kernel/host`（`host-api.ts`） | **只有**装配处（L2 禁止插件 import 它） | `Editor`、`EditorSession`、`ExtensionRegistry`、`PluginInstaller`、`PluginCandidate`、`PluginManifest`、`InstallOutcome` |
 
-不导出（内核内部实现）：`ChildList`、`StyleAttributes`、`StyleProperty`、`ColorProperty`、`StrokeWidthProperty`、`ExtraAttributes`、`ShapeRegistry`、`CommandRegistry`、`CommandParser`、`CommandLine`、`Token`、`Tokenizer`、`XmlDomAdapter`、`XmlElement`、`IdAllocator`、`ImportResult`、`AttributeDispatcher`、`AttributeEdit`（二者经 `AttributePlanner`、`PlannedAttributeEdit` 两个接口暴露给命令）、`EditableSubtree`、`TreeRow`、`StagingContext`、`ContributionCategory`、`DocumentEvents`。根测试（`tests/`）不是插件，可以用相对路径 import 内部类（它们本来就这样做）。
+不导出（内核内部实现）：`ChildList`、`StyleAttributes`、`StyleProperty`、`ColorProperty`、`StrokeWidthProperty`、`ExtraAttributes`、`ShapeRegistry`、`CommandRegistry`、`CommandParser`、`CommandLine`、`Token`、`Tokenizer`、`XmlDomAdapter`、`XmlElement`、`IdAllocator`、`ImportResult`、`AttributeDispatcher`、`AttributeEdit`（二者经 `AttributePlanner`、`PlannedAttributeEdit` 两个接口暴露给命令）、`EditableSubtree`、`TreeRow`、`StagingContext`、`ContributionCategory`、`DocumentEvents`、`FailureReason`（`<reason>` 的取法，`PluginInstaller`、`TreeRenderer`、`AttributeDispatcher` 共用；S7 修订）。根测试（`tests/`）不是插件，可以用相对路径 import 内部类（它们本来就这样做）。
 
 ### 3.11 图
 
@@ -2345,7 +2386,10 @@ export class BoxProvider implements ShapeProvider {            // ShapeProvider 
   claimedIds(id: string): readonly string[] { return [id, `${id}-rect`, `${id}-label`]; }          // §2.1.6
 
   create(id: string, values: ReadonlyMap<string, string>, kit: ShapeKit): Shape {                // ShapeKit §2.1.2
-    const [x, y, w, h] = ["x", "y", "width", "height"].map((k) => NumberFormat.parse(values.get(k) ?? ""));
+    const x = NumberFormat.parse(values.get("x") ?? "");        // 不用数组解构：noUncheckedIndexedAccess 下元素是 number | undefined（S7 修订）
+    const y = NumberFormat.parse(values.get("y") ?? "");
+    const w = NumberFormat.parse(values.get("width") ?? "");
+    const h = NumberFormat.parse(values.get("height") ?? "");
     const box = new BoxShape(id);
     const frame = kit.build(BoxProvider.FRAME_TYPE, box.frameId(), new Map([
       ["x", values.get("x")!], ["y", values.get("y")!], ["width", values.get("width")!], ["height", values.get("height")!],
@@ -2411,6 +2455,34 @@ export class BoxAttributeHandler implements AttributeHandler {  // AttributeHand
     text.setAttribute("text", value);
     return new BoxLabelChange(label, value, old);              // label updated: "v" / label restored: "old"
   }
+}
+
+// src/BoxFillChange.ts（S7 修订：补上正文，文案见 §2.4.6）
+/** Echoes of `set <box> fill`: `box#n2 fill propagated to n2-rect` / `box#n2 fill restored on n2-rect`. */
+export class BoxFillChange implements AttributeChange {        // AttributeChange §2.4.2
+  private readonly boxLabel: string;
+  private readonly frameId: string;
+  constructor(boxLabel: string, frameId: string) {
+    this.boxLabel = boxLabel;
+    this.frameId = frameId;
+  }
+  appliedMessage(): string { return `${this.boxLabel} fill propagated to ${this.frameId}`; }
+  undoneMessage(): string { return `${this.boxLabel} fill restored on ${this.frameId}`; }
+}
+
+// src/BoxLabelChange.ts（S7 修订：补上正文，文案见 §2.4.6）
+/** Echoes of `set <box> label`: `box#n2 label updated: "v2"` / `box#n2 label restored: "v1"`. */
+export class BoxLabelChange implements AttributeChange {       // AttributeChange §2.4.2
+  private readonly boxLabel: string;
+  private readonly text: string;
+  private readonly previous: string;
+  constructor(boxLabel: string, text: string, previous: string) {
+    this.boxLabel = boxLabel;
+    this.text = text;
+    this.previous = previous;
+  }
+  appliedMessage(): string { return `${this.boxLabel} label updated: "${this.text}"`; }
+  undoneMessage(): string { return `${this.boxLabel} label restored: "${this.previous}"`; }
 }
 
 // src/BoxTypeLabel.ts
@@ -2626,16 +2698,22 @@ export class ModifiedStar implements TreeDecorator, DocumentListener {     // Tr
 // src/SaveBaseline.ts
 /** Snapshot of a document at a save point: one fingerprint per shape plus the serialized text. */
 export class SaveBaseline {
+  private readonly fingerprints: ReadonlyMap<string, string>;            // id → 指纹（S7 修订：补上字段与构造函数）
+  private readonly documentText: string;                                  // 整份序列化
+  private constructor(fingerprints: ReadonlyMap<string, string>, documentText: string) {
+    this.fingerprints = fingerprints;
+    this.documentText = documentText;
+  }
   static capture(document: DocumentView): SaveBaseline {                  // DocumentView §2.3.5
-    const prints = new Map(document.allViews().map((v) => [v.getId(), SaveBaseline.fingerprint(v)]));
-    return new SaveBaseline(prints, new SvgSerializer().serialize(document));    // SvgSerializer(DocumentView) §2.3.5、§3.10
+    const fingerprints = new Map(document.allViews().map((v) => [v.getId(), SaveBaseline.fingerprint(v)]));
+    return new SaveBaseline(fingerprints, new SvgSerializer().serialize(document));    // SvgSerializer(DocumentView) §2.3.5、§3.10
   }
   /** Own attributes (id and data-kind included), text and parent; children and sibling order are not part of it. */
   private static fingerprint(v: ShapeView): string {                      // ShapeView §3.6
     return JSON.stringify([v.tagName(), v.svgAttributes(), v.textContent(), v.parentId()]);
   }
-  isShapeDirty(v: ShapeView): boolean { return this.prints.get(v.getId()) !== SaveBaseline.fingerprint(v); }   // 新节点：get 为 undefined → dirty
-  isDocumentDirty(d: DocumentView): boolean { return new SvgSerializer().serialize(d) !== this.text; }
+  isShapeDirty(v: ShapeView): boolean { return this.fingerprints.get(v.getId()) !== SaveBaseline.fingerprint(v); }   // 新节点：get 为 undefined → dirty
+  isDocumentDirty(d: DocumentView): boolean { return new SvgSerializer().serialize(d) !== this.documentText; }
 }
 ```
 
@@ -2727,6 +2805,11 @@ rg -n "import|require|switch" src/loader                                        
 | G14 | box + modified-star | §6.1B 需要“有 box、没有 star”的方式 A 运行 | `--only`（4.3）；双装配组的引入时机（4.7） |
 | G15 | 全部 | 插件测试要组装最小编辑器，又不能依赖其他插件；读回测试要只含替身图形的目录 | 插件测试可 import `@svgframe/kernel/host`（L2）；`ShapeCatalog.providers()`（2.1.2） |
 | G16 | 全部 | 插件可能保留上下文，在激活之后继续注册，绕过校验 | `StagingContext.seal()`（3.3.1） |
+| G17 | S7 实现（modified-star 的 `parentId`） | `Shape` 只持有 `ShapeContainer`，分不出父亲是图形还是文档根，`ShapeView.parentId()` 无从实现 | `ShapeContainer.containerId()`（3.6.1、0.4）；S7 补上（S7 修订） |
+| G18 | S7 实现（`tree <id>` 的标签） | `renderSubtree(shape)` 没有文档，`tree <id>` 各行答不出 `TreeRowView.document()` | `renderSubtree(shape, document)`（2.3.2）；S7 补上（S7 修订） |
+| G19 | S7 自查（照抄 8.3 草图） | `BoxProvider.create` 的数组解构在 `noUncheckedIndexedAccess` 下是 `number \| undefined`，不能通过编译 | 8.3 草图改为逐个取值；S7 补上（S7 修订） |
+| G20 | S7 自查（照抄 8.4 草图） | `SaveBaseline` 草图用到 `this.prints`、`this.text` 和构造函数，却没有声明 | 8.4 草图补上私有字段 `fingerprints`、`documentText` 与私有构造函数；S7 补上（S7 修订） |
+| G21 | S7 实现（必要部件保护） | `ungroup` 把被解散的容器移出它的父容器，原设计以“box 的部件不是 `g`”为由不检查，用的是插件知识 | `UngroupCommand` 对被解散的容器调用 `checkReleasable`（3.7）；S7 补上（S7 修订） |
 
 ---
 

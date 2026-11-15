@@ -57,7 +57,11 @@ export class GroupCommand extends EditCommand {
     return CommandResult.of(`${this.group.label()} removed, ${this.members.length} children restored`);
   }
 
-  /** Order: new id, then each member from left to right, then ancestry (R10, E18). */
+  /**
+   * Order: new id, then each member from left to right, then ancestry (R10,
+   * E18), then the required-part guard for each member in argument order
+   * (design §3.7), all before the new container is built.
+   */
   protected prepare(document: SvgDocument, context: CommandContext): void {
     this.checkNewId(document, this.groupId);
     const chosen: Shape[] = [];
@@ -72,6 +76,7 @@ export class GroupCommand extends EditCommand {
     if (ancestor !== undefined) {
       throw new EditorError(`cannot group a container into its own descendant: ${ancestor.getId()}`);
     }
+    chosen.forEach((shape) => this.checkReleasable(shape));
     const order = document.allShapes();
     this.members = [...chosen].sort((a, b) => order.indexOf(a) - order.indexOf(b));
     this.positions = this.members.map((member) => TreePosition.of(member));

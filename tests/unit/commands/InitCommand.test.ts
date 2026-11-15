@@ -52,7 +52,7 @@ describe("init [w] [h] (spec §3, F1–F5)", () => {
 
   it("a rejected init leaves the current document, path and history alone", () => {
     const runner = CommandRunner.with("create rect r1 0 0 1 1");
-    runner.context.setFilePath("a.svg");
+    runner.context.markSaved("a.svg");
     runner.expectRejected("init 0 0", "canvas size must be positive");
     runner.expectRejected("init 1", USAGE);
     expect(runner.undo()).toEqual(["rect#r1 removed"]);

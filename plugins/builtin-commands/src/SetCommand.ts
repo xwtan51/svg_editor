@@ -1,8 +1,14 @@
 import { CommandResult, EditCommand } from "@svgframe/kernel";
-import type { ArgList, Shape, ShapeMemento, SvgDocument } from "@svgframe/kernel";
+import type { ArgList, CommandContext, PlannedAttributeEdit, Shape, ShapeMemento, SvgDocument } from "@svgframe/kernel";
 
 /**
- * `set <id> <attr> <value>` (§4.1 whitelist, E6–E9).
+ * `set <id> <attr> <value>` (§4.1 whitelist, E6–E9; attribute handlers, design §2.4.3).
+ *
+ * `prepare` first asks the attribute-handler pipeline. When a handler takes
+ * the attribute, the pipeline has already tried it out and answers the
+ * snapshots and echoes (`PlannedAttributeEdit`): `apply`, `undo` and the
+ * echoes go through it, and the whitelist is never consulted. When no
+ * handler does, the Phase 1 whitelist path runs unchanged:
  *
  * The model validates a value only while assigning it, so `prepare` assigns it
  * as a trial, takes a snapshot of the result and puts the old state back from
@@ -28,6 +34,8 @@ export class SetCommand extends EditCommand {
   private readonly value: string;
 
   private target!: Shape;
+  /** The handler path's planned change; `null` on the whitelist path. */
+  private edit!: PlannedAttributeEdit | null;
   private before!: ShapeMemento;
   private after!: ShapeMemento;
   /** The attribute is the element content (`text`), not an attribute entry. */
@@ -41,13 +49,24 @@ export class SetCommand extends EditCommand {
   }
 
   undo(): CommandResult {
+    if (this.edit !== null) {
+      this.edit.undo();
+      return CommandResult.of(this.edit.undoneMessage());
+    }
     this.target.restore(this.before);
     return CommandResult.of(this.echo());
   }
 
-  /** Order: id, attribute name, value (R10); the last two are checked by the model. */
-  protected prepare(document: SvgDocument): void {
+  /**
+   * Order: id (R10), then the handlers; on the whitelist path the attribute
+   * name and value are checked by the model.
+   */
+  protected prepare(document: SvgDocument, context: CommandContext): void {
     this.target = this.findShape(document, this.id);
+    this.edit = context.attributeEdits().plan(this.target, this.attribute, this.value);
+    if (this.edit !== null) {
+      return;
+    }
     this.before = this.target.snapshot();
     this.target.setAttribute(this.attribute, this.value);
     this.after = this.target.snapshot();
@@ -56,11 +75,15 @@ export class SetCommand extends EditCommand {
   }
 
   protected apply(): void {
+    if (this.edit !== null) {
+      this.edit.redo();
+      return;
+    }
     this.target.restore(this.after);
   }
 
   protected describe(): string {
-    return this.echo();
+    return this.edit !== null ? this.edit.appliedMessage() : this.echo();
   }
 
   /** `rect#r1 updated: x=10`, `text#t1 updated: text="…"`, `rect#r1 updated: fill unset` (E8). */
