@@ -20,6 +20,8 @@ export type { ShapeKit } from "./model/ShapeKit.js";
 export type { ShapeCatalog } from "./model/ShapeCatalog.js";
 export type { ShapeReader } from "./model/ShapeReader.js";
 export type { ElementView } from "./model/ElementView.js";
+export type { ShapeView } from "./model/ShapeView.js";
+export type { DocumentView } from "./model/DocumentView.js";
 export { EditorError } from "./model/EditorError.js";
 export { NumberFormat } from "./model/NumberFormat.js";
 export { IdSyntax } from "./model/IdSyntax.js";

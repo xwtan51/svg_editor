@@ -3,6 +3,7 @@ import { EditorError } from "./EditorError.js";
 import { ExtraAttributes } from "./ExtraAttributes.js";
 import type { ShapeContainer } from "./ShapeContainer.js";
 import { ShapeMemento } from "./ShapeMemento.js";
+import type { ShapeView } from "./ShapeView.js";
 import { StyleAttributes } from "./StyleAttributes.js";
 
 /**
@@ -10,9 +11,11 @@ import { StyleAttributes } from "./StyleAttributes.js";
  * optional parent, style attributes and pass-through attributes, and supports
  * the same operations so that commands never ask which concrete class it is.
  *
+ * It is also the read-only `ShapeView` handed to plugins (design §3.6.1).
+ *
  * Only type-level imports of subclasses are allowed here (rule P4).
  */
-export abstract class Shape {
+export abstract class Shape implements ShapeView {
   private readonly id: string;
   private parent: ShapeContainer | null = null;
   private readonly style = new StyleAttributes();
@@ -51,6 +54,11 @@ export abstract class Shape {
   /** The container this shape is attached to, or `null` when detached. */
   parentContainer(): ShapeContainer | null {
     return this.parent;
+  }
+
+  /** `ShapeView`: the parent container's id as a shape; `null` under the document root or when detached. */
+  parentId(): string | null {
+    return this.parent === null ? null : this.parent.containerId();
   }
 
   /** Called only by `ChildList`, which keeps the parent pointer in sync. */
@@ -92,6 +100,16 @@ export abstract class Shape {
   /** Polymorphic "is it a container?": `null` for leaves, the shape itself for a container. */
   asContainer(): ContainerShape | null {
     return null;
+  }
+
+  /** `ShapeView`: whether this shape can hold children. */
+  isContainer(): boolean {
+    return this.asContainer() !== null;
+  }
+
+  /** `ShapeView`: the direct children as read-only views; empty for a leaf. */
+  childViews(): readonly ShapeView[] {
+    return this.asContainer()?.childList() ?? [];
   }
 
   /** Whether `other` is a strict descendant of this shape. */

@@ -103,4 +103,9 @@ export abstract class ContainerShape extends Shape implements ShapeContainer {
   containerLabel(): string {
     return this.label();
   }
+
+  /** A container shape is the parent shape of its children. */
+  containerId(): string {
+    return this.getId();
+  }
 }

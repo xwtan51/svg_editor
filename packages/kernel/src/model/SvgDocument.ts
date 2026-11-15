@@ -1,13 +1,16 @@
 import { CanvasSize } from "./CanvasSize.js";
 import { ChildList } from "./ChildList.js";
+import type { DocumentView } from "./DocumentView.js";
 import type { Shape } from "./Shape.js";
 import type { ShapeContainer } from "./ShapeContainer.js";
+import type { ShapeView } from "./ShapeView.js";
 
 /**
  * The document root `<svg>`: canvas size plus top-level shapes. It is a
  * container but not a `Shape` (no id; cannot be moved or deleted, E31).
+ * It is also the read-only `DocumentView` handed to plugins (design §3.6.1).
  */
-export class SvgDocument implements ShapeContainer {
+export class SvgDocument implements ShapeContainer, DocumentView {
   private size: CanvasSize;
   private readonly children: ChildList = new ChildList(this);
 
@@ -35,6 +38,21 @@ export class SvgDocument implements ShapeContainer {
     return result;
   }
 
+  /** `DocumentView`: `findById` as a read-only view. */
+  findView(id: string): ShapeView | null {
+    return this.findById(id);
+  }
+
+  /** `DocumentView`: `allShapes` as read-only views. */
+  allViews(): ShapeView[] {
+    return this.allShapes();
+  }
+
+  /** `DocumentView`: the top-level shapes as read-only views. */
+  childViews(): readonly ShapeView[] {
+    return this.children.items();
+  }
+
   /** Number of shape elements below the root, containers included (F17). */
   elementCount(): number {
     return this.allShapes().length;
@@ -58,6 +76,11 @@ export class SvgDocument implements ShapeContainer {
 
   containerLabel(): string {
     return "svg";
+  }
+
+  /** Top-level shapes have no parent shape. */
+  containerId(): null {
+    return null;
   }
 
   private static collect(shapes: readonly Shape[], into: Shape[]): void {

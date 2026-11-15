@@ -20,4 +20,10 @@ export interface ShapeContainer {
 
   /** How the container appears in echoes and `show`: `g#markers` or `svg`. */
   containerLabel(): string;
+
+  /**
+   * What `ShapeView.parentId()` answers for a direct child: the container's
+   * own id when it is a shape, `null` for the document root. Pure query.
+   */
+  containerId(): string | null;
 }
