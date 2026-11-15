@@ -872,8 +872,9 @@ function pluginEntryViolations(files: readonly SourceFile[], entries: readonly s
 
 /**
  * Design §3.10 "not exported": kernel-internal classes that neither entry file
- * may export (plus ImportSession, the read session added in S6). Names of later
- * steps are listed already so that the rule holds when they arrive.
+ * may export (plus ImportSession, the read session added in S6, and
+ * FailureReason, the breach-reason rule added in S7). Names of later steps are
+ * listed already so that the rule holds when they arrive.
  */
 const KERNEL_INTERNALS = [
   "ChildList",
@@ -900,6 +901,7 @@ const KERNEL_INTERNALS = [
   "StagingContext",
   "ContributionCategory",
   "DocumentEvents",
+  "FailureReason",
 ];
 
 /**
@@ -1000,6 +1002,25 @@ function viewMutationViolations(files: readonly SourceFile[]): string[] {
   return files
     .filter((file) => file.region === "kernel" && file.module === "view")
     .flatMap((file) => [...file.bare.matchAll(call)].map((m) => `${file.location} calls .${m[1]}(`));
+}
+
+// ---------------------------------------------------------------- P10: plugins do not cast views back
+
+/**
+ * Design §1.2.4 P10, §2.3.5: the read-only views (`ShapeView`, `DocumentView`)
+ * are guaranteed by their interface only, so in plugin source a cast to the
+ * mutable classes is a deliberate breach. Matched on whole words, so
+ * `as ShapeView` and `as ShapeKit` pass. NOT detected: angle-bracket casts
+ * (`<Shape>x`), casts to a local type alias of these classes, and casts in
+ * plugin tests (only plugins/<dir>/src is in scope, as design §1.2.4 says).
+ */
+const VIEW_CAST_TARGETS = ["Shape", "SvgDocument", "ContainerShape"];
+
+function viewCastViolations(files: readonly SourceFile[]): string[] {
+  const cast = new RegExp(String.raw`\bas\s+(${VIEW_CAST_TARGETS.join("|")})\b`, "g");
+  return inRegion(files, (r) => r.startsWith("plugin:")).flatMap((file) =>
+    [...file.bare.matchAll(cast)].map((m) => `${file.location} casts to ${m[1]} (P10)`),
+  );
 }
 
 // ---------------------------------------------------------------- the rules applied to the source
@@ -1200,6 +1221,10 @@ describe("paradigm rules per region (design §1.2.4, §1.3) applied to the sourc
 
   it("P9: the kernel's view calls no mutating model method", () => {
     expect(viewMutationViolations(sources)).toEqual([]);
+  });
+
+  it("P10: plugin source never casts to Shape, SvgDocument or ContainerShape", () => {
+    expect(viewCastViolations(sources)).toEqual([]);
   });
 });
 
@@ -1701,5 +1726,31 @@ describe("architecture rules detect synthetic violations", () => {
     ]);
     expect(viewMutationViolations([kernel("view/Ok.ts", "shape.summary(); // shape.moveBy(1, 2)")])).toEqual([]);
     expect(viewMutationViolations([kernel("commands/X.ts", "shape.moveBy(1, 2);"), plugin("p", "view/X.ts", "shape.moveBy(1, 2);")])).toEqual([]);
+  });
+
+  it("P10: casts to the three mutable classes in plugin source", () => {
+    expect(
+      viewCastViolations([
+        plugin("p", "A.ts", "const s = view as Shape;"),
+        plugin("p", "B.ts", "const d = row.document() as unknown as SvgDocument;"),
+        plugin("q", "C.ts", "(target.view() as ContainerShape).remove(x);\nconst list = views as Shape[];"),
+      ]),
+    ).toEqual([
+      "plugins/p/src/A.ts casts to Shape (P10)",
+      "plugins/p/src/B.ts casts to SvgDocument (P10)",
+      "plugins/q/src/C.ts casts to ContainerShape (P10)",
+      "plugins/q/src/C.ts casts to Shape (P10)",
+    ]);
+  });
+
+  it("P10: whole words only (as ShapeView, as ShapeKit, as ShapeContainer pass); comments, strings, kernel and host are not checked", () => {
+    expect(
+      viewCastViolations([
+        plugin("p", "A.ts", "const v = x as ShapeView; const k = y as ShapeKit; const c = z as ShapeContainer; const d = w as DocumentView;"),
+        plugin("p", "B.ts", '// x as Shape\nconst text = "cast it as Shape";'),
+        kernel("model/X.ts", "return this as Shape;"),
+        host("assembly/X.ts", "const d = doc as SvgDocument;"),
+      ]),
+    ).toEqual([]);
   });
 });
