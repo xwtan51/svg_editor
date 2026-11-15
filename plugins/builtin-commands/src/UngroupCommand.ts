@@ -38,7 +38,12 @@ export class UngroupCommand extends EditCommand {
     return CommandResult.of(`${this.group.label()} regrouped with ${this.children.length} children`);
   }
 
-  /** Order: exists, is a container, may be ungrouped (composite), not top-level (E20). */
+  /**
+   * Order: exists, is a container, may be ungrouped (composite), not top-level
+   * (E20); then the required-part guard (design §3.7): the dissolved container
+   * leaves its parent, which may refuse. The children moving up need no check:
+   * they leave the dissolved container, which allowed it by `canUngroup()`.
+   */
   protected prepare(document: SvgDocument): void {
     const shape = this.findShape(document, this.id);
     const group = shape.asContainer();
@@ -52,6 +57,7 @@ export class UngroupCommand extends EditCommand {
     if (position.container() === document) {
       throw new EditorError(`cannot ungroup top-level container: ${this.id}`);
     }
+    this.checkReleasable(group);
     this.group = group;
     this.position = position;
     this.children = group.childList();

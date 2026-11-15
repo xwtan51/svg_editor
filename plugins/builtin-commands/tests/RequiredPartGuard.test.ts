@@ -2,16 +2,19 @@ import { SvgSerializer } from "@svgframe/kernel";
 import type { ShapeKit } from "@svgframe/kernel";
 import { describe, expect, it } from "vitest";
 import { FakeDot } from "./doubles/FakeDot.js";
+import { FakeGroup } from "./doubles/FakeGroup.js";
 import { FakeLockedGroup } from "./doubles/FakeLockedGroup.js";
 import { FakePairProvider } from "./doubles/FakePairProvider.js";
 import { TestEditor } from "./doubles/TestEditor.js";
 import type { TestAssembly } from "./doubles/TestEditor.js";
 
 /**
- * The required-part guard in `delete`, `addto` and `group` (design §3.7):
- * `create locked n1 x y` builds a `<g>` echoed as `locked#n1` whose part
- * `n1-a` it refuses to release. A refusal leaves everything unchanged
- * (document, undo / redo depth, io lock); the Phase 1 checks come first.
+ * The required-part guard in `delete`, `addto`, `group` and `ungroup`
+ * (design §3.7): `create locked n1 x y` builds a `<g>` echoed as `locked#n1`
+ * whose part `n1-a` it refuses to release; `create card c1 x y` builds a
+ * `card#c1` with two `g` parts, of which it refuses to release `c1-h` (and
+ * its dot part `c1-a`). A refusal leaves everything unchanged (document,
+ * undo / redo depth, io lock); the Phase 1 checks come first.
  */
 function lockedProvider(): FakePairProvider {
   return new FakePairProvider(
@@ -23,6 +26,27 @@ function lockedProvider(): FakePairProvider {
       },
     },
     "locked",
+  );
+}
+
+/** `card#<id>`: `g` parts `<id>-h` (required) and `<id>-b`, each holding a dot, and a required dot `<id>-a`. */
+function cardProvider(): FakePairProvider {
+  return new FakePairProvider(
+    {
+      claimedIds: (id: string) => [id, `${id}-h`, `${id}-hd`, `${id}-b`, `${id}-bd`, `${id}-a`],
+      create: (id: string, values: ReadonlyMap<string, string>, kit: ShapeKit) => {
+        const card = new FakeLockedGroup(id, "card", [`${id}-h`, `${id}-a`]);
+        const header = new FakeGroup(`${id}-h`);
+        header.insertAt(kit.build(FakeDot.typeName, `${id}-hd`, values), 0);
+        const body = new FakeGroup(`${id}-b`);
+        body.insertAt(kit.build(FakeDot.typeName, `${id}-bd`, values), 0);
+        card.insertAt(header, 0);
+        card.insertAt(body, 1);
+        card.insertAt(kit.build(FakeDot.typeName, `${id}-a`, values), 2);
+        return card;
+      },
+    },
+    "card",
   );
 }
 
@@ -107,5 +131,38 @@ describe("required-part guard", () => {
     expect(run(assembly, "move n1-a 1 1")).toEqual(["dot#n1-a moved to (2,3)"]);
     expect(run(assembly, "set n1-a fill red")).toEqual(["dot#n1-a updated: fill=red"]);
     expect(run(assembly, "ungroup inner")).toEqual(["g#inner ungrouped (1 children promoted)"]);
+  });
+});
+
+describe("required-part guard in ungroup", () => {
+  function cardSetup(): TestAssembly {
+    const assembly = TestEditor.assemble([cardProvider()]);
+    run(assembly, "init", "create card c1 1 2");
+    return assembly;
+  }
+
+  it("ungroup of a required g part is refused; nothing changes", () => {
+    const assembly = cardSetup();
+    const before = state(assembly);
+    expect(run(assembly, "ungroup c1-h")).toEqual(["error: cannot detach required part of composite shape: c1-h"]);
+    expect(state(assembly)).toEqual(before);
+  });
+
+  it("ungroup of a g part that is not required works; its children move up into the composite", () => {
+    const assembly = cardSetup();
+    expect(run(assembly, "ungroup c1-b")).toEqual(["g#c1-b ungrouped (1 children promoted)"]);
+    expect(run(assembly, "tree c1")).toEqual([
+      "g#c1",
+      "├── g#c1-h",
+      "│   └── dot#c1-hd  x=1 y=2",
+      "├── dot#c1-bd      x=1 y=2",
+      "└── dot#c1-a       x=1 y=2",
+    ]);
+  });
+
+  it("the Phase 1 checks come first, also on a required part", () => {
+    const assembly = cardSetup();
+    expect(run(assembly, "ungroup c1-a")).toEqual(["error: not a container: c1-a"]);
+    expect(run(assembly, "ungroup nope")).toEqual(["error: no such shape: nope"]);
   });
 });
