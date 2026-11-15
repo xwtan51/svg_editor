@@ -1,4 +1,5 @@
 import type { FileSystem } from "../io/FileSystem.js";
+import type { AttributePlanner } from "../model/AttributePlanner.js";
 import type { ShapeCatalog } from "../model/ShapeCatalog.js";
 import type { SvgDocument } from "../model/SvgDocument.js";
 import type { TreeDecorator } from "../view/TreeDecorator.js";
@@ -49,6 +50,9 @@ export interface CommandContext {
 
   /** The committed shape types, read-only plus build by name (for `create`, `group`, `read`; design §2.2.5). */
   shapes(): ShapeCatalog;
+
+  /** The attribute-handler pipeline for `set`: only `plan()` (design §2.4.3), over the handlers committed at the time of the call. */
+  attributeEdits(): AttributePlanner;
 
   /** The committed tree decorators in registration order, read at each call (for `tree`; design §2.3). */
   treeDecorators(): readonly TreeDecorator[];

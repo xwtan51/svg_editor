@@ -1,5 +1,6 @@
 import type { CommandCatalog } from "../commands/CommandCatalog.js";
 import { CommandRegistry } from "../commands/CommandRegistry.js";
+import type { AttributeHandler } from "../model/AttributeHandler.js";
 import type { ShapeCatalog } from "../model/ShapeCatalog.js";
 import { ShapeRegistry } from "../model/ShapeRegistry.js";
 import type { TreeDecorator } from "../view/TreeDecorator.js";
@@ -9,8 +10,8 @@ import type { StagingContext } from "./StagingContext.js";
 
 /**
  * Every committed registration of one editor (design §3.3): the shape and
- * command registries, the tree decorators, the document listeners, and the
- * registration names per category in commit order. Each editor has its own instance, so nothing is shared between
+ * command registries, the tree decorators, the attribute handlers, the
+ * document listeners, and the registration names per category in commit order. Each editor has its own instance, so nothing is shared between
  * editors in one process. Commands and plugins see only the read-only
  * catalogs; the only way in is `commit`, called by `PluginInstaller`.
  */
@@ -18,6 +19,7 @@ export class ExtensionRegistry {
   private readonly shapeRegistry = new ShapeRegistry();
   private readonly commandRegistry = new CommandRegistry();
   private readonly decorators: TreeDecorator[] = [];
+  private readonly handlers: AttributeHandler[] = [];
   private readonly listeners: DocumentListener[] = [];
   private readonly committed = new Map<ContributionCategory, string[]>();
 
@@ -32,6 +34,11 @@ export class ExtensionRegistry {
   /** The committed tree decorators in registration order, read at each call (a copy). */
   treeDecorators(): readonly TreeDecorator[] {
     return [...this.decorators];
+  }
+
+  /** The committed attribute handlers in registration order, read at each call (a copy). */
+  attributeHandlers(): readonly AttributeHandler[] {
+    return [...this.handlers];
   }
 
   /** The committed document listeners in subscription order, read at each call (a copy). */
@@ -64,6 +71,7 @@ export class ExtensionRegistry {
       this.commandRegistry.register(type);
     }
     this.decorators.push(...staging.treeDecorators());
+    this.handlers.push(...staging.attributeHandlers());
     this.listeners.push(...staging.documentListeners());
     for (const category of ContributionCategory.all()) {
       this.committed.set(category, [...this.names(category), ...staging.names(category)]);

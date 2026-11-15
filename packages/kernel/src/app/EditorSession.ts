@@ -3,6 +3,8 @@ import type { CommandContext } from "../commands/CommandContext.js";
 import { History } from "../commands/History.js";
 import type { ExtensionRegistry } from "../extension/ExtensionRegistry.js";
 import type { FileSystem } from "../io/FileSystem.js";
+import { AttributeDispatcher } from "../model/AttributeDispatcher.js";
+import type { AttributePlanner } from "../model/AttributePlanner.js";
 import type { ShapeCatalog } from "../model/ShapeCatalog.js";
 import type { SvgDocument } from "../model/SvgDocument.js";
 import { DocumentEvents } from "./DocumentEvents.js";
@@ -84,6 +86,11 @@ export class EditorSession implements CommandContext {
 
   shapes(): ShapeCatalog {
     return this.extensions.shapes();
+  }
+
+  /** A pipeline over the attribute handlers committed now (read at each call). */
+  attributeEdits(): AttributePlanner {
+    return new AttributeDispatcher(this.extensions.attributeHandlers());
   }
 
   /**

@@ -1,5 +1,6 @@
 import { CommandCategory } from "../commands/CommandCategory.js";
 import type { CommandType } from "../commands/CommandType.js";
+import type { AttributeHandler } from "../model/AttributeHandler.js";
 import type { ShapeCatalog } from "../model/ShapeCatalog.js";
 import type { ShapeProvider } from "../model/ShapeProvider.js";
 import type { TreeDecorator } from "../view/TreeDecorator.js";
@@ -23,6 +24,7 @@ export class StagingContext implements PluginContext {
   private readonly shapes: ShapeProvider[] = [];
   private readonly commands: CommandType[] = [];
   private readonly decorators: TreeDecorator[] = [];
+  private readonly handlers: AttributeHandler[] = [];
   private readonly listeners: DocumentListener[] = [];
   private readonly staged = new Map<ContributionCategory, string[]>();
   private sealed = false;
@@ -50,6 +52,13 @@ export class StagingContext implements PluginContext {
     this.checkDecorator(decorator);
     this.decorators.push(decorator);
     this.stage(ContributionCategory.DECORATORS, decorator.name);
+  }
+
+  registerAttributeHandler(handler: AttributeHandler): void {
+    this.checkOpen();
+    this.checkHandler(handler);
+    this.handlers.push(handler);
+    this.stage(ContributionCategory.ATTRIBUTES, handler.name);
   }
 
   subscribe(listener: DocumentListener): void {
@@ -90,6 +99,11 @@ export class StagingContext implements PluginContext {
   /** Staged tree decorators, in registration order. */
   treeDecorators(): readonly TreeDecorator[] {
     return [...this.decorators];
+  }
+
+  /** Staged attribute handlers, in registration order. */
+  attributeHandlers(): readonly AttributeHandler[] {
+    return [...this.handlers];
   }
 
   /** Staged document listeners, in subscription order. */
@@ -160,6 +174,21 @@ export class StagingContext implements PluginContext {
     }
     if (typeof decorator.tagFor !== "function") {
       throw new Error(`invalid tree decorator ${decorator.name}: tagFor must be a function`);
+    }
+  }
+
+  private checkHandler(handler: AttributeHandler): void {
+    if (typeof handler !== "object" || handler === null) {
+      throw new Error("invalid attribute handler: not an object");
+    }
+    if (!StagingContext.isRegistrationName(handler.name)) {
+      throw new Error("invalid attribute handler: name must be a non-empty string without white space");
+    }
+    if (!Number.isInteger(handler.priority)) {
+      throw new Error(`invalid attribute handler ${handler.name}: priority must be an integer`);
+    }
+    if (typeof handler.handles !== "function" || typeof handler.apply !== "function") {
+      throw new Error(`invalid attribute handler ${handler.name}: handles and apply must be functions`);
     }
   }
 

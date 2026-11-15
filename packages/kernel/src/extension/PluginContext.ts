@@ -1,4 +1,5 @@
 import type { CommandType } from "../commands/CommandType.js";
+import type { AttributeHandler } from "../model/AttributeHandler.js";
 import type { ShapeCatalog } from "../model/ShapeCatalog.js";
 import type { ShapeProvider } from "../model/ShapeProvider.js";
 import type { TreeDecorator } from "../view/TreeDecorator.js";
@@ -19,6 +20,12 @@ export interface PluginContext {
 
   /** Registration name `decorator.name`, category `decorators`; `tagFor` must be a function. */
   registerTreeDecorator(decorator: TreeDecorator): void;
+
+  /**
+   * Registration name `handler.name`, category `attributes`; `priority` must
+   * be an integer, `handles` and `apply` functions.
+   */
+  registerAttributeHandler(handler: AttributeHandler): void;
 
   /**
    * Subscribes to document events (design §3.4). Not a `contributes`

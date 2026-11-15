@@ -3,6 +3,8 @@ import type { CommandCatalog } from "../../../packages/kernel/src/commands/Comma
 import type { CommandContext } from "../../../packages/kernel/src/commands/CommandContext.js";
 import { History } from "../../../packages/kernel/src/commands/History.js";
 import type { ExtensionRegistry } from "../../../packages/kernel/src/extension/ExtensionRegistry.js";
+import { AttributeDispatcher } from "../../../packages/kernel/src/model/AttributeDispatcher.js";
+import type { AttributePlanner } from "../../../packages/kernel/src/model/AttributePlanner.js";
 import type { ShapeCatalog } from "../../../packages/kernel/src/model/ShapeCatalog.js";
 import type { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
 import type { TreeDecorator } from "../../../packages/kernel/src/view/TreeDecorator.js";
@@ -69,6 +71,10 @@ export class TestContext implements CommandContext {
 
   shapes(): ShapeCatalog {
     return this.extensions.shapes();
+  }
+
+  attributeEdits(): AttributePlanner {
+    return new AttributeDispatcher(this.extensions.attributeHandlers());
   }
 
   treeDecorators(): readonly TreeDecorator[] {

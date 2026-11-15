@@ -7,6 +7,7 @@ import { DocumentCommand } from "../../src/commands/DocumentCommand.js";
 import type { DocumentListener } from "../../src/extension/DocumentListener.js";
 import { ExtensionRegistry } from "../../src/extension/ExtensionRegistry.js";
 import type { PluginContext } from "../../src/extension/PluginContext.js";
+import type { AttributeHandler } from "../../src/model/AttributeHandler.js";
 import type { TreeDecorator } from "../../src/view/TreeDecorator.js";
 import { PluginInstaller } from "../../src/extension/PluginInstaller.js";
 import { SvgDocument } from "../../src/model/SvgDocument.js";
@@ -16,6 +17,7 @@ import { FakeFileSystem } from "../doubles/FakeFileSystem.js";
 import { RecordingListener } from "../doubles/RecordingListener.js";
 import { ScriptedCommandType } from "../doubles/ScriptedCommandType.js";
 import { ScriptedDecorator } from "../doubles/ScriptedDecorator.js";
+import { ScriptedHandler } from "../doubles/ScriptedHandler.js";
 import { TestPlugin } from "../doubles/TestPlugin.js";
 import type { TestContributes } from "../doubles/TestPlugin.js";
 
@@ -188,5 +190,106 @@ describe("registerTreeDecorator: category decorators", () => {
       `plugin failed to activate: p (${reason})`,
     );
     expect(registry.treeDecorators()).toEqual([]);
+  });
+});
+
+describe("registerAttributeHandler: category attributes", () => {
+  const handler = (name: string, priority: number = 0) => new ScriptedHandler(name, priority, () => false);
+
+  it("commits in registration order within a plugin and in installation order across plugins", () => {
+    const { registry, installer } = fixture();
+    const [a, b, c] = [handler("a"), handler("b", 3), handler("c", -1)];
+    expect(install(installer, { attributes: ["a", "b"] }, (context) => {
+      context.registerAttributeHandler(a);
+      context.registerAttributeHandler(b);
+    })).toBe("ok");
+    expect(install(installer, { attributes: ["c"] }, (context) => context.registerAttributeHandler(c))).toBe("ok");
+    expect(registry.attributeHandlers()).toEqual([a, b, c]);
+  });
+
+  it("the session's pipeline uses the handlers committed when it is asked", () => {
+    const { registry, installer } = fixture();
+    const session = new EditorSession(new FakeFileSystem(), registry);
+    session.replaceDocument(new SvgDocument(), null);
+    const target = new AddLeafCommand("x");
+    target.execute(session);
+    const shape = session.document().findById("x");
+    if (shape === null) throw new Error("setup");
+    expect(session.attributeEdits().plan(shape, "glow", "on")).toBeNull();
+    const late = new ScriptedHandler("late", 0, () => {
+      throw new Error("asked");
+    });
+    install(installer, { attributes: ["late"] }, (context) => context.registerAttributeHandler(late));
+    expect(() => session.attributeEdits().plan(shape, "glow", "on")).toThrow("attribute handler failed: late (asked)");
+  });
+
+  it("duplicates: against a committed handler, and within one plugin", () => {
+    const { registry, installer } = fixture();
+    install(installer, { attributes: ["h"] }, (context) => context.registerAttributeHandler(handler("h")));
+    expect(install(installer, { attributes: ["h"] }, (context) => context.registerAttributeHandler(handler("h", 9)))).toBe(
+      "duplicate registration: attributes/h",
+    );
+    expect(install(installer, { attributes: ["twice"] }, (context) => {
+      context.registerAttributeHandler(handler("twice"));
+      context.registerAttributeHandler(handler("twice"));
+    })).toBe("duplicate registration: attributes/twice");
+    expect(registry.attributeHandlers().map((h) => h.name)).toEqual(["h"]);
+  });
+
+  it("duplicates are checked in category order: decorators before attributes", () => {
+    const { installer } = fixture();
+    install(installer, { decorators: ["d"], attributes: ["h"] }, (context) => {
+      context.registerAttributeHandler(handler("h"));
+      context.registerTreeDecorator(new ScriptedDecorator("d", () => null));
+    });
+    expect(install(installer, { decorators: ["d"], attributes: ["h"] }, (context) => {
+      context.registerAttributeHandler(handler("h"));
+      context.registerTreeDecorator(new ScriptedDecorator("d", () => null));
+    })).toBe("duplicate registration: decorators/d");
+  });
+
+  it("a manifest that does not match, listed in category order", () => {
+    const { registry, installer } = fixture();
+    expect(install(installer, { attributes: ["h"] }, (context) => {
+      context.registerAttributeHandler(handler("h"));
+      context.registerTreeDecorator(new ScriptedDecorator("d", () => null));
+    })).toBe("plugin manifest mismatch: p (declared: attributes/h, registered: decorators/d attributes/h)");
+    expect(registry.attributeHandlers()).toEqual([]);
+    expect(registry.treeDecorators()).toEqual([]);
+  });
+
+  it.each([
+    ["null", null, "invalid attribute handler: not an object"],
+    ["an empty name", { name: "", priority: 0, handles() {}, apply() {} }, "invalid attribute handler: name must be a non-empty string without white space"],
+    ["a name with white space", { name: "a\tb", priority: 0, handles() {}, apply() {} }, "invalid attribute handler: name must be a non-empty string without white space"],
+    ["a fractional priority", { name: "x", priority: 0.5, handles() {}, apply() {} }, "invalid attribute handler x: priority must be an integer"],
+    ["a priority that is not a number", { name: "x", priority: "1", handles() {}, apply() {} }, "invalid attribute handler x: priority must be an integer"],
+    ["a missing priority", { name: "x", handles() {}, apply() {} }, "invalid attribute handler x: priority must be an integer"],
+    ["NaN as priority", { name: "x", priority: Number.NaN, handles() {}, apply() {} }, "invalid attribute handler x: priority must be an integer"],
+    ["handles missing", { name: "x", priority: 0, apply() {} }, "invalid attribute handler x: handles and apply must be functions"],
+    ["apply not a function", { name: "x", priority: 0, handles() {}, apply: true }, "invalid attribute handler x: handles and apply must be functions"],
+  ])("shape check at registration: %s", (_name, candidate, reason) => {
+    const { registry, installer } = fixture();
+    expect(install(installer, { attributes: ["x"] }, (context) => context.registerAttributeHandler(candidate as unknown as AttributeHandler))).toBe(
+      `plugin failed to activate: p (${reason})`,
+    );
+    expect(registry.attributeHandlers()).toEqual([]);
+  });
+});
+
+describe("ExtensionRegistry.commit takes every staged kind", () => {
+  it("shapes, commands, decorators, handlers and listeners of one plugin arrive together", () => {
+    const { registry, installer } = fixture();
+    const decorator = new ScriptedDecorator("d", () => null);
+    const attribute = new ScriptedHandler("h", 0, () => false);
+    const listener = new RecordingListener("L", []);
+    expect(install(installer, { commands: ["extra"], decorators: ["d"], attributes: ["h"] }, (context) => {
+      context.registerCommand(new FakeCommandType("extra"));
+      context.registerTreeDecorator(decorator);
+      context.registerAttributeHandler(attribute);
+      context.subscribe(listener);
+    })).toBe("ok");
+    expect(registry.commands().lookup("extra").commandName).toBe("extra");
+    expect([registry.treeDecorators(), registry.attributeHandlers(), registry.documentListeners()]).toEqual([[decorator], [attribute], [listener]]);
   });
 });
