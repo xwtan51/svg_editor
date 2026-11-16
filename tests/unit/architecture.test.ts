@@ -1006,13 +1006,17 @@ function entryInternalViolations(
 
 // ---------------------------------------------------------------- P7: the `error:` prefix
 
-/** P7: string literals that start with `error:` appear only where the prefix is added (design §1.2.4). */
+/**
+ * P7: string literals that start with `error:` appear only where the prefix is
+ * added (design §1.2.4). A template literal counts through its static parts
+ * (`stringFragments`), so `` `error: ${x}` `` is caught as well.
+ */
 const ERROR_PREFIX_FILES = [`${KERNEL_SRC}app/Editor.ts`, "src/assembly/EditorAssembler.ts"];
 
 function errorPrefixViolations(files: readonly SourceFile[]): string[] {
   return files
     .filter((file) => !ERROR_PREFIX_FILES.includes(file.location))
-    .filter((file) => file.literals.some((literal) => literal.startsWith("error:")))
+    .filter((file) => stringFragments(file.code).some((fragment) => fragment.startsWith("error:")))
     .map((file) => `${file.location} writes the error: prefix itself (P7)`);
 }
 
@@ -1840,6 +1844,7 @@ describe("architecture rules detect synthetic violations", () => {
 
   it("P7: an error: prefix written outside Editor / EditorAssembler", () => {
     expect(errorPrefixViolations([plugin("p", "X.ts", 'return ["error: nope"];')])).toHaveLength(1);
+    expect(errorPrefixViolations([plugin("p", "X.ts", "return [`error: ${x}`];")])).toHaveLength(1);
     expect(errorPrefixViolations([kernel("app/Editor.ts", 'private static readonly ERROR_PREFIX = "error: ";')])).toEqual([]);
     expect(errorPrefixViolations([host("cli/Repl.ts", "write(`internal error: ${x}`);")])).toEqual([]);
   });
