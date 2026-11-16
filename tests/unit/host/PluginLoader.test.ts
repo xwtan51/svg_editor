@@ -64,6 +64,12 @@ describe("PluginLoader", () => {
       expect(messages).toEqual([`plugin has no default export: ${fixture("no-default")}`]);
     });
 
+    it("no default export: a default export that is undefined counts as none", async () => {
+      const { loaded, messages } = await run([{ module: fixture("default-undefined") }]);
+      expect(loaded[0]).toBeInstanceOf(LoadFailure);
+      expect(messages).toEqual([`plugin has no default export: ${fixture("default-undefined")}`]);
+    });
+
     it("manifest mismatch (reported by the installer, with the manifest's name)", async () => {
       const { loaded, messages, editor } = await run([{ module: fixture("manifest-mismatch") }]);
       expect(loaded[0]).toBeInstanceOf(LoadedCandidate);

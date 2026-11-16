@@ -203,6 +203,11 @@ describe("EditorAssembler: --config (way B)", () => {
       expect(result.startupMessages()).toEqual([`error: plugin has no default export: ${fixture("no-default")}`]);
     });
 
+    it("plugin has no default export: a default export that is undefined counts as none", async () => {
+      const result = await assemble(config([{ module: fixture("default-undefined") }]));
+      expect(result.startupMessages()).toEqual([`error: plugin has no default export: ${fixture("default-undefined")}`]);
+    });
+
     it("plugin manifest mismatch", async () => {
       const result = await assemble(config([{ module: fixture("manifest-mismatch") }]));
       expect(result.startupMessages()).toEqual([
