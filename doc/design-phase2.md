@@ -31,7 +31,7 @@ README 已经用了 R/F/E/U/V/K/B/C/W/Q/A/M/P/D，VSCode 扩展用了 VA。本�
 | **X1–X30** | 决策。**X1–X18 与分析 §7 的 D1–D18 一一对应**（X*n* = 分析 D*n*），X19 起是本文新增 | 分析的“D3”在本文一律写作“决策 X3（分析 D3）”；README §3.1 的依赖规则 D1–D8 在本文一律写作“依赖规则 D1”等，两者不会撞车 |
 | **L1–L10** | 新增的分层依赖规则（内核 / 装配处 / 插件之间） | 与 README 的依赖规则 D1–D8、范式规则 P1–P9 并列；S15 并入 README §3 |
 | **P5a、P5b、P10** | 对范式规则的例外与新增 | P5a/P5b 是 P5 的两条受控例外，P10 是新规则 |
-| **N1–N16** | 约定补充（对规格的解释） | 规则 6 要求登记的“解释” |
+| **N1–N17** | 约定补充（对规格的解释）；N17 是 S8 修订 | 规则 6 要求登记的“解释” |
 | **T1–T4** | 已知偏差（对规格的偏离） | 规则 6 要求登记的“偏离”；README 的 K1–K6 去向见 5.4 |
 | **ADR-1–ADR-6** | 架构决策记录草稿 | S15 整理进 README |
 | **G1–G16** | 接入演练发现、已回填进第 2、3 部分的缺口 | 见 8.5 |
@@ -91,14 +91,22 @@ README 已经用了 R/F/E/U/V/K/B/C/W/Q/A/M/P/D，VSCode 扩展用了 VA。本�
 | `svg-editor` | 根包（已有名字） | `package.json` | — | 装配处所在的根包（已有，不改名） |
 | `CliArguments` | 类 | `src/cli/` | S8 | 解析 `--bare` / `--only` / `--config` |
 | `CompositionRoot` | 类 | `src/assembly/` | S6 | 方式 A 的组合根：内置插件表 + 可选插件表 |
-| `AssemblyProfile` | 类 | 同上 | S8 | 装配配置：bare / full / only / config |
+| `AssemblyProfile` | 抽象类（S8 修订） | 同上 | S8 | 装配配置：bare / full / only / config，每种一个子类；`optionalPlugins(root, loader)` 给出要装的可选插件（S8 修订） |
+| `BareProfile` | 类 | 同上 | S8 | `--bare`：不装可选插件（S8 修订） |
+| `FullProfile` | 类 | 同上 | S8 | 不带参数：`optional()` 全部（S8 修订） |
+| `OnlyProfile` | 类 | 同上 | S8 | `--only <包名>…`：`optional()` 中点到名的，按 `optional()` 顺序；有未知包名时拒绝启动（S8 修订） |
+| `ConfigProfile` | 类 | 同上 | S8 | `--config <file>`：配置里的插件，经 `PluginLoader.load`（S8 修订） |
 | `EditorAssembler` | 类 | 同上 | S6 | 按装配配置安装插件、造出 `Editor` |
 | `AssemblyResult` | 类 | 同上 | S8 | 装配结果：`Editor` + 启动消息 |
+| `StartupRefusal` | 类（`Error` 的子类） | 同上 | S8 | 拒绝启动：用法错误或 `--only` 未知包名；`main.ts` 原样写 stderr、退出码 2（4.3）（S8 修订） |
 | `PluginLoader` | 类 | `src/loader/` | S8 | 方式 B：配置项 → `PluginCandidate` |
 | `PluginConfig` | 类 | 同上 | S8 | 解析并严格校验 `plugins.config.json` |
 | `PluginConfigEntry` | 类 | 同上 | S8 | 配置中的一项 |
 | `ModuleLocator` | 类 | 同上 | S8 | 先解析：模块名 → 包目录、`package.json`、入口文件 |
 | `LocatedModule` | 类 | 同上 | S8 | 解析结果 |
+| `LoadedPlugin` | 接口 | 同上 | S8 | 待安装的一项：`install(installer): InstallOutcome`；每个 enabled 配置项、每个方式 A 的候选各一个（4.1）（S8 修订） |
+| `LoadedCandidate` | 类 | 同上 | S8 | `LoadedPlugin` 的实现：找到并导入成功的 `PluginCandidate`，交给 `PluginInstaller.install`（S8 修订） |
+| `LoadFailure` | 类 | 同上 | S8 | `LoadedPlugin` 的实现：安装之前已失败（4.5 第 1–3、8、9 行），不调安装器，直接返回失败的 `InstallOutcome`（S8 修订） |
 | `plugins.config.json` | 配置文件 | 仓库根 | S8 | 方式 B 的配置（规格 §6 指定的文件名） |
 | `vitest.config.ts` | 配置文件 | 仓库根 | S5 | 测试范围 glob |
 | `@svgframe/plugin-builtin-shapes` | 包名 | `plugins/builtin-shapes/` | S5 | 内置六种图形 |
@@ -134,6 +142,7 @@ README 已经用了 R/F/E/U/V/K/B/C/W/Q/A/M/P/D，VSCode 扩展用了 VA。本�
 | `CommandContext.markSaved(path)` | `CommandContext` | S7 | 取代 `setFilePath(path)`，并触发 `documentSaved` |
 | `CommandContext.commands()`、`shapes()`、`attributeEdits()`、`treeDecorators()` | `CommandContext` | S6/S7 | 取代 `registry()`、`shapeFactory()`（3.2） |
 | `Repl` 的 `startupMessages` 构造参数 | `Repl` | S8 | banner 之后打印的启动消息 |
+| `EditorAssembler.assemble(profile): Promise<AssemblyResult>` | `EditorAssembler` | S8 | 取代 `bare()`、`full()` 与有状态的 `startupMessages()`：装配配置作参数，`Editor` 与启动消息一起放在 `AssemblyResult` 里返回（S8 修订） |
 
 ---
 
@@ -162,8 +171,8 @@ README 已经用了 R/F/E/U/V/K/B/C/W/Q/A/M/P/D，VSCode 扩展用了 VA。本�
 │       └── tests/            内核自己的契约测试（S6 起新增；用测试替身，不依赖任何插件）
 ├── src/                      ◇ 装配处（根包 svg-editor）
 │   ├── cli/                  main.ts（进程入口）、Repl、CliArguments
-│   ├── assembly/             （新）CompositionRoot（方式 A 唯一需要改的文件）、EditorAssembler、AssemblyProfile
-│   ├── loader/               （新）方式 B 的加载器，独占一个目录（规格 §6 的 rg 检查对象）
+│   ├── assembly/             （新）CompositionRoot（方式 A 唯一需要改的文件）、EditorAssembler、AssemblyProfile、BareProfile、FullProfile、OnlyProfile、ConfigProfile、AssemblyResult、StartupRefusal（S8 修订）
+│   ├── loader/               （新）方式 B 的加载器，独占一个目录（规格 §6 的 rg 检查对象）：PluginConfig、PluginConfigEntry、ModuleLocator、LocatedModule、PluginLoader、LoadedPlugin、LoadedCandidate、LoadFailure（S8 修订）
 │   └── adapters/             （新）NodeFileSystem 等平台适配器
 ├── plugins/                  ○ 插件（每个子目录一个 workspace 包）
 │   ├── builtin-shapes/       内置插件：rect circle ellipse line text g（S5 搬入，S6 插件化）
@@ -251,7 +260,7 @@ S5 起 architecture test 同时扫描内核、装配处、插件三个区域（1
 | P4 不在运行时 import 自己的子类；具体图形类不 import 图形注册表 | 适用（`ShapeFactory` 改名后为 `ShapeRegistry`） | 适用 | 适用：插件中的 `Shape` 子类（如 `BoxShape`、内置图形）不得 import `ShapeRegistry`（它本来也不在 `api.ts` 里）；插件内部的类层次同样不得在运行时 import 自己的子类 | 防 ESM 循环导入，与区域无关 |
 | P5 一类一文件、文件名 = 类名、只用具名导出 | 适用；例外 P5a（`api.ts`、`host-api.ts`） | 适用；例外 `src/cli/main.ts`（进程入口） | 适用；例外 P5b（每个插件的入口文件用 `export default class`） | 1.3 |
 | P6 字段私有、不导出自由函数 | 适用 | 适用 | 适用 | P5 的扫描已覆盖“不导出自由函数”；字段私有由代码审查保证（与 Phase 1 相同） |
-| P7 用户错误一律 `EditorError`；`error:` 前缀只在一处加 | 适用 | 适用：前缀只由 `EditorAssembler`（启动）添加，命令时由内核的 `Editor` 添加 | 适用：插件只抛 `EditorError`，不自己拼 `error:` | 4.5 |
+| P7 用户错误一律 `EditorError`；`error:` 前缀只在一处加 | 适用 | 适用：前缀只由 `EditorAssembler`（启动）添加，命令时由内核的 `Editor` 添加 | 适用：插件只抛 `EditorError`，不自己拼 `error:` | 4.5。architecture test 的检查范围：字符串字面量，以及模板字符串的静态部分（`${…}` 之间的文字），以 `error:` 开头即违规（S8 修订） |
 | P8 只有 `ChildList` 调 `attachTo` / `detach` | 适用 | 适用 | 适用：插件组装子树用 `ContainerShape.insertAt`（8.3 `BoxProvider.create`），不直接动父指针 | 父指针与子节点列表必须同处修改 |
 | P9 `view/` 不调用模型的变更方法 | 适用于 `packages/kernel/src/view/**` | 不涉及 | 不按目录适用；树标签与处理器的 `handles` 只拿到只读视图（2.3.5、2.4.2），由 P10 防止强制转换 | P9 是按内核目录定义的规则 |
 | P10 插件中不得出现 `as Shape`、`as SvgDocument`、`as ContainerShape` | 不涉及 | 不涉及 | 适用 | 2.3.5：只读视图只能靠接口形状保证，强制转换是故意违约 |
@@ -1457,6 +1466,7 @@ participant EditorAssembler
 participant CompositionRoot
 participant PluginLoader
 participant ModuleLocator
+participant "LoadedPlugin" as Loaded
 participant PluginInstaller
 participant StagingContext
 participant ExtensionRegistry
@@ -1469,34 +1479,44 @@ loop 内置插件（先图形后命令）
   EditorAssembler -> PluginInstaller : install(candidate)
   note right : 失败 = 程序错误
 end
-alt 方式 A（无参数 / --only）
+alt 方式 A（--bare / 无参数 / --only）
   EditorAssembler -> CompositionRoot : optional()
   CompositionRoot --> EditorAssembler : PluginCandidate[]（静态 import 的类 + JSON 清单）
+  note right : 按装配配置挑选，每个候选包成 LoadedCandidate（S8 修订）
 else 方式 B（--config <file>）
-  EditorAssembler -> PluginLoader : candidates(configFile)
-  PluginLoader -> PluginLoader : PluginConfig.parse（非法 → invalid plugin config，返回空）
+  EditorAssembler -> PluginLoader : load(configFile)（S8 修订）
+  PluginLoader -> PluginLoader : PluginConfig.read（读不到 / 非法 → 只返回一个 LoadFailure）
   loop 每个 enabled 项（数组顺序）
-    PluginLoader -> ModuleLocator : locate(module, configDir)
-    note right : 失败 → plugin not found
+    PluginLoader -> ModuleLocator : locate(module)
+    note right : 失败 → LoadFailure(plugin not found)
     PluginLoader -> PluginLoader : import(entry URL)
-    note right : 抛错 → plugin failed to load\n无 default → plugin has no default export
+    note right : 抛错 → LoadFailure(plugin failed to load)\n无 default → LoadFailure(plugin has no default export)\n成功 → LoadedCandidate
   end
-  PluginLoader --> EditorAssembler : PluginCandidate[] + 失败消息
+  PluginLoader --> EditorAssembler : LoadedPlugin[]（每个 enabled 项一个，按数组顺序）（S8 修订）
 end
-loop 每个候选（同一条路径）
-  EditorAssembler -> PluginInstaller : install(candidate)
-  PluginInstaller -> StagingContext : new StagingContext；new Plugin(options)；activate(staging)
-  PluginInstaller -> PluginInstaller : 查重 → 清单比对
-  alt 全部通过
-    PluginInstaller -> ExtensionRegistry : commit(staging)
-  else 任一步失败
-    PluginInstaller -> StagingContext : 丢弃（回滚）
-    PluginInstaller --> EditorAssembler : InstallOutcome.failure(一行)
+loop 每个 LoadedPlugin（按顺序，同一条路径；S8 修订）
+  EditorAssembler -> Loaded : install(installer)
+  alt LoadFailure
+    Loaded --> EditorAssembler : InstallOutcome.failed(加载阶段的一行)
+  else LoadedCandidate
+    Loaded -> PluginInstaller : install(candidate)
+    PluginInstaller -> StagingContext : new StagingContext；new Plugin(options)；activate(staging)
+    PluginInstaller -> PluginInstaller : 查重 → 清单比对
+    alt 全部通过
+      PluginInstaller -> ExtensionRegistry : commit(staging)
+    else 任一步失败
+      PluginInstaller -> StagingContext : 丢弃（回滚）
+      PluginInstaller --> Loaded : InstallOutcome.failed(一行)
+    end
   end
 end
 EditorAssembler --> Main : AssemblyResult(Editor, 启动消息)
 @enduml
 ```
+
+**加载与安装逐项交错**（S8 修订）：`PluginLoader.load(configFile): Promise<LoadedPlugin[]>` 对每个 enabled 项返回一个结果，按数组顺序：找到并导入成功的是 `LoadedCandidate`（包着 `PluginCandidate`），加载阶段就失败的（4.5 第 1–3 行）是 `LoadFailure`；配置读不到或不合法时（4.5 第 8、9 行）只返回一个 `LoadFailure`。方式 A 的装配配置把 `optional()` 中选中的候选各包成一个 `LoadedCandidate`。之后 `EditorAssembler` 对每个 `LoadedPlugin` 依次调 `install(installer)`：`LoadedCandidate` 交给 `PluginInstaller.install`，`LoadFailure` 不调安装器，直接返回失败的 `InstallOutcome`。原因：如果先收集全部加载失败、再收集安装失败（原图是“加载器先返回全部候选与失败消息，再逐个安装”），配置 `[找不到的 A, 激活失败的 B, 找不到的 C]` 会输出成 A、C、B，违反 4.5 的“按配置数组顺序”（缺口 G22）。
+
+**`LoadedPlugin` 放在 `src/loader/`**（S8 修订）：加载器只 import 内核、`node:*` 和 `src/loader/` 内部（第 8 节开头的 `rg` 输出就是它的全部依赖），它返回的类型只能定义在加载器里；`src/assembly` → `src/loader` 这个方向本来就是允许的。所以方式 A 也用 `src/loader/` 的 `LoadedCandidate`：各装配配置共用同一段安装代码，正是本节“一条路径”的要求。
 
 ### 4.2 组合根（方式 A）
 
@@ -1541,6 +1561,9 @@ export class CompositionRoot {
 - **不带参数启动 = full**（规格 §6 判据的写法）。
 - 三个选项互斥；出现多个、出现未知参数、`--config` / `--only` 缺少值时：stderr 输出 `usage: svg-editor [--bare | --only <plugin>… | --config <file>]`，退出码 2，不打印 banner（这是用户敲错了命令行，不是插件加载失败）。`--only` 给了 `optional()` 里没有的包名：stderr `error: --only: no such plugin in the code assembly: <name>`，退出码 2。
 - **配置非法时“以默认内置能力启动”，指 bare**：打印 `error: invalid plugin config` 之后，不装配置里的任何插件，也不退回 full（`--config` 的含义里本来就没有组合根的可选插件）。
+- **命令行的边界情况**（S8 修订）：`--bare --bare`、`--config a --config b` → 用法错误；`--only x --only x` 允许（`x` 只装一次）；选项的值缺失、为空串或以 `--` 开头（如 `--config --bare`）→ 用法错误；以单个 `-` 开头的值照常接受；`--config=x`、`--`、位置参数、`-b`、`--BARE` → 用法错误。
+- **两种退出码为 2 的情况都抛 `StartupRefusal`**（新，`src/assembly/`；S8 修订）：`CliArguments.parse` 以用法行抛出；`OnlyProfile` 抛 `EditorError("--only: no such plugin in the code assembly: <name>")`，由 `EditorAssembler` 加上 `error: ` 前缀后包成 `StartupRefusal` 重新抛出。`main.ts` 捕获 `StartupRefusal`：原样写到 stderr，退出码 2，不打印 banner；其他异常写 `internal error: …`，退出码 1。`--only` 有多个未知包名时只报命令行上的第一个。`EditorAssembler` 先装内置插件、再问装配配置要哪些可选插件，所以内置插件出错（退出码 1）优先于 `--only` 出错。
+- **`main.ts` 设置 `process.exitCode`，不调用 `process.exit`**（S8 修订）：stderr 是异步管道时（例如 macOS 上接管道），`process.exit` 可能在消息写完之前就结束进程。
 
 ### 4.4 配置文件格式
 
@@ -1555,16 +1578,16 @@ export class CompositionRoot {
 }
 ```
 
-`PluginConfig.parse`（新）的规则（严格校验，决策 X29）：
+`PluginConfig`（新）的规则（严格校验，决策 X29）。入口是 `PluginConfig.read(given)`：以 `path.resolve(given)` 读文件，再交给 `PluginConfig.parse(text, configFile)`（S8 修订）：
 
 | 项 | 规则 | 违反时 |
 |---|---|---|
-| 文件 | 能读取 | `error: cannot read plugin config: <path>`（`<path>` 为命令行原样给出的字符串），以 bare 启动 |
+| 文件 | 能读取（`--config` 指向目录也算读不到；S8 修订） | `error: cannot read plugin config: <path>`（`<path>` 为命令行原样给出的字符串），以 bare 启动 |
 | 语法 | 合法 JSON | `error: invalid plugin config`，以 bare 启动 |
 | 顶层 | 对象，**只有** `plugins` 一个键，值是数组 | 同上 |
-| 每一项 | 对象，键只能是 `module`、`enabled`、`options`；`module` 是非空字符串；`enabled` 若有必须是布尔；`options` 若有必须是对象（不是数组、不是 null） | 同上：**任何一项不合法，整个配置都不用**（不做“部分加载”，否则同一份坏配置在不同位置坏掉会得到难以预料的插件集合） |
+| 每一项 | 对象，键只能是 `module`、`enabled`、`options`；`module` 是非空字符串；`enabled` 若有必须是布尔；`options` 若有必须是对象（不是数组、不是 null）；`enabled`、`options` 显式写 `null` 都不合法（S8 修订） | 同上：**任何一项不合法，整个配置都不用**（不做“部分加载”，否则同一份坏配置在不同位置坏掉会得到难以预料的插件集合） |
 | 顺序 | 按数组顺序加载与安装 | — |
-| `enabled: false` | 完全跳过：不解析、不导入、不输出任何内容 | — |
+| `enabled: false` | 完全跳过：不解析、不导入、不输出任何内容。但这一项同样要通过上一行的校验，坏掉的禁用项也会让整个配置作废（约定补充 N17，S8 修订） | — |
 | 重复的 `module` | 不在配置层检查；第二次安装时由查重报 `duplicate registration`（与内置能力冲突同理） | — |
 
 options 的传递：`options` 对象（缺省为 `{}`）深拷贝并冻结后包成 `PluginOptions`，作为插件类构造函数的唯一参数（3.1）。方式 A 在组合根里用 `PluginOptions.of({...})` 构造同一种对象，所以两种方式下插件收到的 options 完全相同。
@@ -1577,7 +1600,7 @@ options 的传递：`options` 对象（缺省为 `{}`）深拷贝并冻结后包
 |---|---|---|---|---|
 | 1 | 模块找不到（解析阶段失败） | `error: plugin not found: <module>` | `PluginLoader` | 规格给出 |
 | 2 | 没有默认导出（`default` 不存在或为 `undefined`） | `error: plugin has no default export: <module>` | `PluginLoader` | 规格给出 |
-| 3 | 模块存在，但导入时求值失败（含插件自身的依赖缺失），或默认导出不是函数 | `error: plugin failed to load: <module> (<reason>)` | `PluginLoader` | **规格未给格式**，本文决定（决策 X14） |
+| 3 | 模块存在，但导入时求值失败（含插件自身的依赖缺失），或默认导出不是函数 | `error: plugin failed to load: <module> (<reason>)`；默认导出不是函数时 `<reason>` 为 `default export must be a class, got <kind>`（`<kind>` 是 `typeof` 的结果，`null` 写 `null`；S8 修订） | `PluginLoader` | **规格未给格式**，本文决定（决策 X14） |
 | 4 | 清单不合法 | `error: invalid plugin manifest: <module> (<reason>)` | `PluginInstaller` 第 0 步 | 本文决定 |
 | 5 | 构造或 `activate` 抛错 | `error: plugin failed to activate: <name> (<reason>)` | 第 1 步 | 规格给出 |
 | 6 | 重复注册 | `error: duplicate registration: <category>/<name>` | 第 2 步 | 规格给出 |
@@ -1586,6 +1609,10 @@ options 的传递：`options` 对象（缺省为 `{}`）深拷贝并冻结后包
 | 9 | `--config` 指向的文件不存在或不可读 | `error: cannot read plugin config: <path>` | `PluginConfig` | 本文决定（与 §4.2 的 `cannot read file:` 同一风格） |
 | — | 命令行用法错误 | stderr `usage: …`，退出码 2，无 banner | `CliArguments` | 本文决定 |
 | — | 内置插件安装失败 | stderr `internal error: …`，退出码 1 | `EditorAssembler` 抛 `Error` | 程序错误 |
+
+箭头函数也是函数，能通过加载器；安装器 `new` 它时抛 `TypeError`，报第 5 行 `plugin failed to activate`，`<reason>` 是引擎给出的消息（如 `… is not a constructor`），属于偏差 T4（S8 修订）。
+
+`<reason>` 的取法（`Error.message` 的第一行，非 `Error` 取 `String(e)`）在 `PluginLoader` 里另实现了一份（私有静态方法 `reasonOf`）：S8 不改内核，规则只有两行。内核的 `FailureReason` 仍不导出，3.10 的不导出清单不变（S8 修订）。
 
 示例（配置里依次是一个找不到的包、一个正常的 box）：
 
@@ -1601,7 +1628,7 @@ canvas 800x600 created
 
 | 阶段 | 做什么 | 这一阶段的任何失败报 |
 |---|---|---|
-| 1 解析（`ModuleLocator.locate`） | 相对路径（以 `./`、`../` 开头）或绝对路径：以**配置文件所在目录**为基准解析成目录，要求它是目录且含 `package.json`。包名：`createRequire(<配置文件路径>).resolve("<包名>/package.json")`，即按 Node 规则从配置文件所在目录向上找 `node_modules`（workspace 包在那里是软链接）。然后读 `package.json`，取 `exports["."]`（必须是字符串），拼出入口文件的绝对路径并确认存在 | `plugin not found: <module>` |
+| 1 解析（`ModuleLocator.locate`） | 相对路径（`.`、`..`，或以 `./`、`../` 开头；S8 修订）或绝对路径：以**配置文件所在目录**为基准解析成目录，要求它是目录且含 `package.json`。包名：`createRequire(<配置文件路径>).resolve("<包名>/package.json")`，即按 Node 规则从配置文件所在目录向上找 `node_modules`（workspace 包在那里是软链接）。配置文件路径是 `path.resolve(命令行给出的路径)`，即逻辑路径，不取 realpath（S8 修订）。然后读 `package.json`，要求 `exports` 是对象、其中 `"."` 是字符串，拼出入口文件的绝对路径并确认它是文件（S8 修订：`exports` 是字符串、`"."` 不是字符串或指向目录，以及 `package.json` 读不出来或不是合法 JSON，都报这一行） | `plugin not found: <module>` |
 | 2 导入 | `import(pathToFileURL(入口).href)` | `plugin failed to load: <module> (<reason>)` |
 | 3 检查默认导出 | `"default"` 不在命名空间里或为 `undefined` → 文案 2；不是函数 → 文案 3 | 见 4.5 |
 
@@ -1619,7 +1646,7 @@ canvas 800x600 created
 
 CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文件 URL)` 同样生效（实验 2 的 `@svgframe/plugin-command-stats` 用例）。
 
-动态 `import()` 返回 `Promise`，所以 `PluginLoader.candidates` 与 `EditorAssembler.assemble` 是异步的；`src/cli/main.ts` 已经用顶层 `await`（`process.exitCode = await repl.run()`），在启动 REPL 之前 `await` 装配即可。**只有启动是异步的**，命令接口仍然同步（决策 X19）：装配完成之后才读第一行输入。
+动态 `import()` 返回 `Promise`，所以 `PluginLoader.load`（S8 修订）与 `EditorAssembler.assemble` 是异步的；`src/cli/main.ts` 已经用顶层 `await`（`process.exitCode = await repl.run()`），在启动 REPL 之前 `await` 装配即可。**只有启动是异步的**，命令接口仍然同步（决策 X19）：装配完成之后才读第一行输入。
 
 ### 4.7 会话与装配配置的对照矩阵
 
@@ -1746,7 +1773,7 @@ CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文�
 | K5 | `warning:` 前缀在两个类里加 | **保留**：box 的读回警告走 `ImportResult`，不新增第三处 | — |
 | K6 | `create` 的检查顺序 | **保留**：顺序变为“类型 → 个数 → 全部 `claimedIds` 的 id 检查 → 容器 → 取值”，K6 描述的现象不变 | S6 |
 
-### 5.5 约定补充 N1–N16（对规格的解释）
+### 5.5 约定补充 N1–N17（对规格的解释；N17 为 S8 修订）
 
 | # | 规格的不清之处 | 约定 | 理由 |
 |---|---|---|---|
@@ -1766,6 +1793,7 @@ CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文�
 | N14 | “禁用任何插件框架仍能启动”“禁用可选扩展时的行为” | 内置能力本身也经注册机制装配，任何装配配置都先装内置；`--bare` = 禁用全部可选扩展 | 规格 §1“内置实现可通过注册机制装配” |
 | N15 | `modified-star` 的新建节点与 `init` | 新建节点立即标 `*`；`init` 之后以空画布为保存点（`tree` 立即执行时没有 `*`） | ADR-3 |
 | N16 | `stats` 的类型名用哪个名字；空文档的格式 | 叶子按 `kindName()` 计数（内置叶子与 `tagName()` 相同）；空文档输出恰为 `(total 0, containers 0)`，前面没有空格 | 规格示例 |
+| N17 | 规格 §6“`enabled: false` 完全跳过”是否也跳过格式校验 | 不跳过：禁用项同样要通过 4.4 的逐项校验，一项不合法则整个配置作废（`error: invalid plugin config`）；“完全跳过”指不解析、不导入、不输出（S8 修订） | 配置是否合法不应取决于哪些项碰巧被禁用；决策 X29 的严格校验与“不做部分加载” |
 
 ### 5.6 已知偏差 T1–T4（对规格的偏离）
 
@@ -2040,21 +2068,47 @@ S15 把这些草稿整理进 README。
 
 每一节按同样的四步：① 插件包的文件清单；② 代码草图（只 import `@svgframe/kernel`，每个用到的内核接口后面用 `// §x.y` 标出定义它的章节）；③ 接入提交的预测 `git diff --name-status`、三条判据命令与推演的输出；④ 逐项论证内核零改动。演练中发现、已回填进第 2–4 部分的缺口统一列在 8.5。
 
-三条判据命令里的 `rg -n "import|require|switch" src/loader`，在 S10–S13 的每一次接入中输出都相同（加载器在 S8 写成之后不再改动，`git diff C^ C -- src/loader` 为空）。按 4.6 的设计，预计输出只有这几类行，没有任何插件名、映射表或 `switch`：
+三条判据命令里的 `rg -n "import|require|switch" src/loader`，在 S10–S13 的每一次接入中输出都相同（加载器在 S8 写成之后不再改动，`git diff C^ C -- src/loader` 为空）。下面是 S8 实现后的实际完整输出，行号是真实行号（S8 修订：原来这里是按 4.6 推演的预测）。只有这几类行，没有任何插件名、映射表或 `switch`：
 
 ```text
+src/loader/LoadFailure.ts:1:import { InstallOutcome } from "@svgframe/kernel/host";
+src/loader/LoadFailure.ts:2:import type { PluginInstaller } from "@svgframe/kernel/host";
+src/loader/LoadFailure.ts:3:import type { LoadedPlugin } from "./LoadedPlugin.js";
+src/loader/LoadedCandidate.ts:1:import type { InstallOutcome, PluginCandidate, PluginInstaller } from "@svgframe/kernel/host";
+src/loader/LoadedCandidate.ts:2:import type { LoadedPlugin } from "./LoadedPlugin.js";
+src/loader/LoadedCandidate.ts:4:/** A plugin that was found and imported: it goes through the one installation path (design §4.1). */
+src/loader/LoadedPlugin.ts:1:import type { InstallOutcome, PluginInstaller } from "@svgframe/kernel/host";
+src/loader/LocatedModule.ts:5: * imported yet.
 src/loader/ModuleLocator.ts:1:import { createRequire } from "node:module";
-src/loader/ModuleLocator.ts:…:import { existsSync, readFileSync, statSync } from "node:fs";
-src/loader/ModuleLocator.ts:…:import path from "node:path";
-src/loader/ModuleLocator.ts:…:    const packageJson = createRequire(this.configFile).resolve(`${moduleName}/package.json`);
-src/loader/PluginConfig.ts:…:import { readFileSync } from "node:fs";
-src/loader/PluginConfigEntry.ts:…:import { PluginOptions } from "@svgframe/kernel";
-src/loader/PluginLoader.ts:…:import { pathToFileURL } from "node:url";
-src/loader/PluginLoader.ts:…:import { PluginCandidate } from "@svgframe/kernel/host";
-src/loader/PluginLoader.ts:…:      namespace = await import(pathToFileURL(located.entryFile()).href);
+src/loader/ModuleLocator.ts:2:import { readFileSync, statSync, type Stats } from "node:fs";
+src/loader/ModuleLocator.ts:3:import path from "node:path";
+src/loader/ModuleLocator.ts:4:import { LocatedModule } from "./LocatedModule.js";
+src/loader/ModuleLocator.ts:8: * configuration into a `LocatedModule` without importing anything, so that
+src/loader/PluginConfig.ts:1:import { readFileSync } from "node:fs";
+src/loader/PluginConfig.ts:2:import path from "node:path";
+src/loader/PluginConfig.ts:3:import { EditorError } from "@svgframe/kernel";
+src/loader/PluginConfig.ts:4:import { PluginConfigEntry } from "./PluginConfigEntry.js";
+src/loader/PluginConfigEntry.ts:1:import { PluginOptions } from "@svgframe/kernel";
+src/loader/PluginLoader.ts:1:import { pathToFileURL } from "node:url";
+src/loader/PluginLoader.ts:2:import { EditorError } from "@svgframe/kernel";
+src/loader/PluginLoader.ts:3:import type { PluginClass } from "@svgframe/kernel";
+src/loader/PluginLoader.ts:4:import { PluginCandidate } from "@svgframe/kernel/host";
+src/loader/PluginLoader.ts:5:import { LoadedCandidate } from "./LoadedCandidate.js";
+src/loader/PluginLoader.ts:6:import type { LoadedPlugin } from "./LoadedPlugin.js";
+src/loader/PluginLoader.ts:7:import { LoadFailure } from "./LoadFailure.js";
+src/loader/PluginLoader.ts:8:import { ModuleLocator } from "./ModuleLocator.js";
+src/loader/PluginLoader.ts:9:import { PluginConfig } from "./PluginConfig.js";
+src/loader/PluginLoader.ts:10:import type { PluginConfigEntry } from "./PluginConfigEntry.js";
+src/loader/PluginLoader.ts:19: * 2. `import()` the entry file — it throws (evaluation fails, or a dependency
+src/loader/PluginLoader.ts:60:      namespace = (await import(pathToFileURL(located.entryFile()).href)) as Record<string, unknown>;
 ```
 
-（行号在 S8 实现后才确定；L5 的 architecture test 机械地保证其中不出现任何插件包名与注册名。）
+上面的文件按路径排序（`rg --sort path` 的顺序）。`rg` 默认按目录遍历顺序输出文件，不同机器、不同检出之间文件的先后可能不同，但每个文件内的行与上面逐字相同；要逐字比对整个输出，加 `--sort path`（S8 修订）。L5 的 architecture test 机械地保证其中不出现任何插件包名与注册名。
+
+与 S4 预测的不同（S8 修订）：
+
+- **少了的**：预测的 `createRequire(this.configFile).resolve(…)` 一行。它只含大写的 `Require`，不含小写的 `import`、`require` 或 `switch`，而 `rg` 区分大小写，所以这一行不可能匹配到（缺口 G23）。另外 `node:fs` 一行不再有 `existsSync`：放在 `try` 里的一次 `statSync` 同时覆盖“不存在”“路径中间不是目录”和权限错误。
+- **多出的**：`src/loader/` 内部的相对 import（`LoadedPlugin`、`LoadedCandidate`、`LoadFailure` 三个新类型，以及各类之间的协作，4.1）；`@svgframe/kernel` 的 `EditorError`（`PluginConfig`、`PluginLoader`：用户错误一律是 `EditorError`，P7）与 `type PluginClass`（`PluginLoader`）；`@svgframe/kernel/host` 的 `InstallOutcome`、`PluginInstaller`（`LoadedPlugin` 一族）；`PluginConfig` 的 `node:path`（解析命令行给出的配置路径，4.4）；以及含 “import(ed/ing)” 一词的注释行（`LoadedCandidate.ts:4`、`LocatedModule.ts:5`、`ModuleLocator.ts:8`、`PluginLoader.ts:19`）。
 
 ### 8.1 `stats`（S10）
 
@@ -2810,6 +2864,10 @@ rg -n "import|require|switch" src/loader                                        
 | G19 | S7 自查（照抄 8.3 草图） | `BoxProvider.create` 的数组解构在 `noUncheckedIndexedAccess` 下是 `number \| undefined`，不能通过编译 | 8.3 草图改为逐个取值；S7 补上（S7 修订） |
 | G20 | S7 自查（照抄 8.4 草图） | `SaveBaseline` 草图用到 `this.prints`、`this.text` 和构造函数，却没有声明 | 8.4 草图补上私有字段 `fingerprints`、`documentText` 与私有构造函数；S7 补上（S7 修订） |
 | G21 | S7 实现（必要部件保护） | `ungroup` 把被解散的容器移出它的父容器，原设计以“box 的部件不是 `g`”为由不检查，用的是插件知识 | `UngroupCommand` 对被解散的容器调用 `checkReleasable`（3.7）；S7 补上（S7 修订） |
+| G22 | S8 实现（启动消息的顺序） | 4.1 时序图让加载器先返回全部候选与失败消息、再逐个安装，`[找不到的 A, 激活失败的 B, 找不到的 C]` 会输出成 A、C、B，打乱 4.5 的配置顺序 | `PluginLoader.load` 返回 `LoadedPlugin[]`（每个 enabled 项一个），装配器逐项 `install(installer)`（4.1、0.4）；S8 补上（S8 修订） |
+| G23 | S8 自查（第 8 节开头的预测） | 预测的 `rg` 输出里 `createRequire(this.configFile).resolve(…)` 一行只含大写的 `Require`，`rg` 区分大小写，不可能匹配到 | 第 8 节开头换成实际完整输出，并逐类说明与预测的不同；S8 补上（S8 修订） |
+| G24 | S8 自查（P7 的检查范围） | architecture test 的 P7 只看不含 `${` 的字面量，`` `error: plugin not found: ${m}` `` 这样的模板字符串查不出来 | P7 改为检查字符串字面量与模板字符串的静态部分（1.2.4）；S8 补上（S8 修订） |
+| G25 | S8 实现（拒绝启动） | 4.3 规定了用法错误与 `--only` 未知包名都是 stderr + 退出码 2，却没有规定它们怎样从 `CliArguments`、装配器交回 `main.ts` | `StartupRefusal`（4.3、0.4）；S8 补上（S8 修订） |
 
 ---
 
@@ -2822,8 +2880,8 @@ rg -n "import|require|switch" src/loader                                        
 | Phase 1 的 889 个测试 | 根 `tests/`（不搬，附录 A.1） | 内核 + 内置插件（相对路径） | 行为回归；测试数在 S5 保持 889，S6/S7 只在接口改名处改调用方式 |
 | 内核契约测试 | `packages/kernel/tests/` | 只用内核与**测试替身**（替身插件、替身提供者、替身处理器、替身标签、替身监听器、替身容器） | 四个扩展点与支撑设施的契约；不依赖任何真实插件 |
 | 插件测试 | `plugins/<目录>/tests/` | 内核（`@svgframe/kernel`、`@svgframe/kernel/host`）+ 本插件 + 本插件测试目录里的替身 | 每个插件独立可测（规格 §4、§7）；最小编辑器 = `ExtensionRegistry` + `PluginInstaller` 安装本插件与替身插件 + `EditorSession` + `Editor` |
-| 装配处测试 | 根 `tests/unit/host/` | 全部 | `CliArguments`、`EditorAssembler`、`PluginConfig`、`ModuleLocator`、`PluginLoader` |
-| 加载器夹具 | 根 `tests/fixtures/plugins/<用例>/` | 内核 | 每条失败路径一个假插件包（不在 `plugins/` 下，不是 workspace） |
+| 装配处测试 | 根 `tests/unit/host/` | 全部 | `CliArguments`、`EditorAssembler`、`PluginConfig`、`ModuleLocator`、`PluginLoader`。其中 `PluginConfig`、`ModuleLocator`、`PluginLoader`、`EditorAssembler` 的测试用 `process.chdir`，依赖 vitest 默认的 `forks` 池（`threads` 池里不能 `chdir`）（S8 修订） |
+| 加载器夹具 | 根 `tests/fixtures/plugins/<用例>/` | 内核 | 每条失败路径一个假插件包（不在 `plugins/` 下，不是 workspace）。S8 的夹具：`ok`、`no-default`、`default-undefined`、`default-not-class`、`arrow-default`、`eval-throws`、`missing-dep`、`activate-throws`、`manifest-mismatch`、`duplicate-builtin`、`invalid-manifest`、`options`、`stateful`，以及 `relative.config.json`；需要 `node_modules` 或特殊路径的情形在运行时于临时目录中生成（S8 修订） |
 | architecture test | 根 `tests/unit/architecture.test.ts` | 读源码与 `package.json` | L1–L10；P1–P10 按 1.2.4 的区域范围 |
 | 系统测试 | 根 `tests/system/` | 全部 | 双装配、基线兼容、装配契约 |
 | 基线会话 | `doc/transcript/` + `npm run baseline` | 真实 CLI 进程 | 与 `final` 逐字节一致；双装配逐字节一致 |
