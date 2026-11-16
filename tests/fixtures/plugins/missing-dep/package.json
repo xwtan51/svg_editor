@@ -1,0 +1,11 @@
+{
+  "name": "@fixture/missing-dep",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/MissingDepPlugin.ts",
+    "./package.json": "./package.json"
+  },
+  "contributes": {}
+}

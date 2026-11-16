@@ -1,0 +1,11 @@
+{
+  "name": "@fixture/arrow-default",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/ArrowPlugin.ts",
+    "./package.json": "./package.json"
+  },
+  "contributes": {}
+}

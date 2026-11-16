@@ -2,7 +2,7 @@
  * Architecture rules, checked by scanning the source of the three regions of
  * design §1.1: the kernel (packages/kernel/src), the host (src) and every
  * plugin (plugins/<directory>/src). Which rule applies where follows design
- * §1.2.1 (layer rules L1–L4, L6–L8, L10; L9 without the loader part),
+ * §1.2.1 (layer rules L1–L10),
  * §1.2.2 (dependency rules D1–D8 inside the kernel), §1.2.4 (README's P rules
  * per region) and §1.3 (P5a, P5b).
  *
@@ -55,6 +55,8 @@ const PLUGIN_PACKAGE_PREFIX = "@svgframe/plugin-";
 const ENTRY_SCRIPT = "src/cli/main.ts";
 /** L4: the only file that may import plugin packages. */
 const COMPOSITION_ROOT = "src/assembly/CompositionRoot.ts";
+/** Way B's loader (design §1.1): L5, and the loader part of L9. */
+const LOADER_SRC = "src/loader/";
 
 interface SourceFile {
   /** Repository-relative location, POSIX separators, e.g. "packages/kernel/src/model/Shape.ts". */
@@ -644,7 +646,10 @@ function cliDependencyViolations(files: readonly SourceFile[]): string[] {
 const RESTRICTED_IMPORTS: ReadonlyArray<{ what: RegExp; allowedIn: (file: SourceFile) => boolean }> = [
   {
     what: /^(node:)?(fs(\/promises)?|module)$/,
-    allowedIn: (file) => file.location.startsWith("src/adapters/") || (isPlugin(file.region) && baseName(file.location).startsWith("Node")),
+    allowedIn: (file) =>
+      file.location.startsWith("src/adapters/") ||
+      file.location.startsWith(LOADER_SRC) ||
+      (isPlugin(file.region) && baseName(file.location).startsWith("Node")),
   },
   { what: /^@xmldom\/xmldom(\/.*)?$/, allowedIn: (file) => file.location === `${KERNEL_SRC}io/XmlDomAdapter.ts` },
   { what: /^(node:)?readline(\/promises)?$/, allowedIn: (file) => file.location.startsWith("src/cli/") },
@@ -1055,6 +1060,14 @@ describe("scanning (design §1.2.3)", () => {
     for (const module of Object.keys(KERNEL_DEPENDENCIES)) {
       expect(sources.some((file) => file.region === "kernel" && file.module === module), module).toBe(true);
     }
+  });
+
+  it("the loader's files are scanned as host files (design §1.1, rules L5 and L9)", () => {
+    const loader = sources.filter((file) => file.location.startsWith(LOADER_SRC));
+    expect(loader.map((file) => file.location)).toEqual(
+      expect.arrayContaining([`${LOADER_SRC}PluginLoader.ts`, `${LOADER_SRC}ModuleLocator.ts`, `${LOADER_SRC}PluginConfig.ts`]),
+    );
+    expect(new Set(loader.map((file) => `${file.region}/${file.module}`))).toEqual(new Set(["host/loader"]));
   });
 
   it("the plugin list comes from plugins/*/package.json, and every directory under plugins/ is a plugin", () => {
@@ -1535,6 +1548,9 @@ describe("architecture rules detect synthetic violations", () => {
     ["@xmldom/xmldom outside XmlDomAdapter", kernel("io/X.ts", 'import { DOMParser } from "@xmldom/xmldom";')],
     ["@xmldom/xmldom in a plugin", plugin("p", "X.ts", 'import { DOMParser } from "@xmldom/xmldom";')],
     ["node:readline outside src/cli", host("assembly/X.ts", 'import { createInterface } from "node:readline";')],
+    ["node:module in src/assembly", host("assembly/X.ts", 'import { createRequire } from "node:module";')],
+    ["node:fs in src/cli", host("cli/X.ts", 'import { readFileSync } from "node:fs";')],
+    ["node:fs in a directory merely named like the loader", host("assembly/loader/X.ts", 'import { readFileSync } from "node:fs";')],
     ["console in a plugin", plugin("p", "X.ts", "console.log(1);")],
     ["process.stdout in the kernel", kernel("app/X.ts", "process.stdout.write('x');")],
   ])("P1 / L9: %s", (_case, f) => {
@@ -1550,6 +1566,17 @@ describe("architecture rules detect synthetic violations", () => {
         host("cli/Repl.ts", 'import * as readline from "node:readline";\nconsole.log(process.stdin);'),
       ]),
     ).toEqual([]);
+  });
+
+  it("P1 / L9: node:fs and node:module are allowed in the loader (design §1.2.1 L9, S8)", () => {
+    expect(
+      ioIsolationViolations([
+        host("loader/ModuleLocator.ts", 'import { createRequire } from "node:module";\nimport { readFileSync } from "node:fs";'),
+        host("loader/PluginConfig.ts", 'import { readFileSync } from "fs";'),
+      ]),
+    ).toEqual([]);
+    expect(ioIsolationViolations([host("loader/X.ts", 'import { createInterface } from "node:readline";')])).toHaveLength(1);
+    expect(ioIsolationViolations([host("loader/X.ts", "console.log(1);")])).toHaveLength(1);
   });
 
   it("P2: type registries", () => {

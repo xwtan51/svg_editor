@@ -1,0 +1,11 @@
+{
+  "name": "@fixture/invalid-manifest",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/InvalidManifestPlugin.ts",
+    "./package.json": "./package.json"
+  },
+  "contributes": { "command": ["fixture-typo"] }
+}

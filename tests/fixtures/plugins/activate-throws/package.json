@@ -1,0 +1,11 @@
+{
+  "name": "@fixture/activate-throws",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/ActivateThrowsPlugin.ts",
+    "./package.json": "./package.json"
+  },
+  "contributes": { "commands": ["fixture-never"] }
+}
