@@ -6,20 +6,33 @@
  * it only wires up and starts the application. Every other file under src/ must
  * follow the rule.
  *
- * Without command-line arguments the editor is assembled as `full` (design §4.3).
- * A built-in plugin that cannot be installed is a programming error: it is
- * reported on stderr and the process exits with code 1, before the banner.
+ * The command line chooses the assembly profile (design §4.3; no argument is
+ * `full`). The editor is assembled before the REPL starts, so the startup
+ * messages come after the banner and before the first command's output.
+ * - A refused start (usage error, unknown `--only` name): the message on
+ *   stderr, exit code 2, no banner.
+ * - A built-in plugin that cannot be installed is a programming error:
+ *   `internal error: …` on stderr, exit code 1, no banner.
  */
-import type { Editor } from "@svgframe/kernel/host";
+import type { AssemblyResult } from "../assembly/AssemblyResult.js";
 import { EditorAssembler } from "../assembly/EditorAssembler.js";
+import { StartupRefusal } from "../assembly/StartupRefusal.js";
+import { CliArguments } from "./CliArguments.js";
 import { Repl } from "./Repl.js";
 
-let editor: Editor;
+let assembly: AssemblyResult | null = null;
 try {
-  editor = new EditorAssembler().full();
+  assembly = await new EditorAssembler().assemble(CliArguments.parse(process.argv.slice(2)));
 } catch (error) {
-  process.stderr.write(`internal error: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`);
-  process.exit(1);
+  if (error instanceof StartupRefusal) {
+    process.stderr.write(`${error.message}\n`);
+    process.exitCode = 2;
+  } else {
+    process.stderr.write(`internal error: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}\n`);
+    process.exitCode = 1;
+  }
 }
-const repl = new Repl(editor, process.stdin, process.stdout, process.stderr, process.stdin.isTTY === true);
-process.exitCode = await repl.run();
+if (assembly !== null) {
+  const repl = new Repl(assembly.editor(), process.stdin, process.stdout, process.stderr, process.stdin.isTTY === true, assembly.startupMessages());
+  process.exitCode = await repl.run();
+}

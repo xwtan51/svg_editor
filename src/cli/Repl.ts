@@ -7,6 +7,9 @@ import type { Editor } from "@svgframe/kernel/host";
  * input line unchanged to the `Editor` and writes the lines it returns. It
  * does no parsing of its own; comments and blank lines are the Editor's job (R2, R3).
  *
+ * - The startup messages of the assembly (`error: …` lines of optional plugins
+ *   that failed, design §4.5) come right after the banner, before the first
+ *   input line is read.
  * - The `svg> ` prompt is printed only for an interactive (TTY) input (R1).
  * - Errors and warnings are ordinary output lines on stdout (R12); after an
  *   error the loop goes on with the next line (R14).
@@ -24,18 +27,28 @@ export class Repl {
   private readonly output: Writable;
   private readonly errors: Writable;
   private readonly interactive: boolean;
+  private readonly startupMessages: readonly string[];
 
-  constructor(editor: Editor, input: Readable, output: Writable, errors: Writable, interactive: boolean) {
+  constructor(
+    editor: Editor,
+    input: Readable,
+    output: Writable,
+    errors: Writable,
+    interactive: boolean,
+    startupMessages: readonly string[] = [],
+  ) {
     this.editor = editor;
     this.input = input;
     this.output = output;
     this.errors = errors;
     this.interactive = interactive;
+    this.startupMessages = [...startupMessages];
   }
 
   /** Runs until EOF, Ctrl-C or a programming error; resolves to the process exit code. */
   run(): Promise<number> {
     this.print(Repl.BANNER);
+    this.startupMessages.forEach((message) => this.print(message));
     const reader = this.interactive
       ? createInterface({ input: this.input, output: this.output, prompt: Repl.PROMPT, crlfDelay: Infinity })
       : createInterface({ input: this.input, terminal: false, crlfDelay: Infinity });

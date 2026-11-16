@@ -6,6 +6,7 @@ import { CommandResult } from "../../../packages/kernel/src/commands/CommandResu
 import { QueryCommand } from "../../../packages/kernel/src/commands/QueryCommand.js";
 import { SvgSerializer } from "../../../packages/kernel/src/io/SvgSerializer.js";
 import { SvgDocument } from "../../../packages/kernel/src/model/SvgDocument.js";
+import { BareProfile } from "../../../src/assembly/BareProfile.js";
 import { EditorAssembler } from "../../../src/assembly/EditorAssembler.js";
 import { BuiltinExtensions } from "../../support/BuiltinExtensions.js";
 import { MemoryFileSystem } from "../io/MemoryFileSystem.js";
@@ -233,8 +234,8 @@ describe("Editor.executeLine: output", () => {
 });
 
 describe("EditorAssembler.bare (formerly Editor.createDefault)", () => {
-  it("starts without a document and with only the built-in commands", () => {
-    const editor = new EditorAssembler(new MemoryFileSystem()).bare();
+  it("starts without a document and with only the built-in commands", async () => {
+    const editor = (await new EditorAssembler(new MemoryFileSystem()).assemble(new BareProfile())).editor();
     expect(editor.executeLine("create rect r 0 0 1 1")).toEqual(["error: no document. use 'init' or 'read' first"]);
     expect(editor.executeLine("ping")).toEqual(["error: unknown command: ping"]);
   });
