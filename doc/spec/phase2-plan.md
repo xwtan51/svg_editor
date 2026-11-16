@@ -13,7 +13,9 @@
 >
 > **修订记录（2026-11-14）**：S4 已完成，设计文档 `doc/design-phase2.md` 经 PR #18 合并（`main` = `22217c6`）。按设计文档 §9.3 的“步骤划分的确认与修订”，S5–S15 各节已同步修改（每节中标 **〔S4 修订〕** 的段落）；决策编号在设计文档里叫 X1–X30（X1–X18 对应分析的 D1–D18）。两者如有出入，以设计文档为准。
 >
-> **进度**：S0–S4 已合并；里程碑 ① 完成（`dcd5f37`）。
+> **修订记录（2026-11-15）**：S7 经 PR #21 合并（`main` = `1762627`），评审后修订了设计文档（ungroup 的保护、结构违约的处理、事件派发位置、`containerId`、`renderSubtree` 签名、§8.3/§8.4 草图、G17–G21）。受影响的 S7、S12、S13 各节加了 **〔S7 修订〕** 段落。
+>
+> **进度**：S0–S7 已合并；里程碑 ① 完成（`dcd5f37`）。
 
 ---
 
@@ -252,6 +254,8 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 
 **分支**：`feat/p2-extension-points`。
 
+**〔S7 修订〕已完成**（PR #21，合并提交 `1762627`，1289 个测试）。与原设计不同、已写回设计文档的决定：`ungroup <gid>` 也对被解散的容器调用 `checkReleasable`（§3.7）；`set` 的第 5–7 步处于同一个回滚保护之下，处理器绕过接口改了子树结构时直接报程序错误，不还原、不包装（§2.4.3、§3.9）；`handles` 抛出的 `EditorError` 原样传出（§2.4.2）；`flushEvents()` 放在 `Editor.executeLine` 的 `try/catch` 之后，抛出任何异常都清空缓冲区，监听器抛错（包括 `EditorError`）按程序错误处理（§3.4）；`ShapeContainer.containerId()` 补上 `parentId`（§3.6.1，G17）；`TreeRenderer.renderSubtree(shape, document)`（§2.3.2，G18）；`EditorSession.treeDecorators()` 的返回类型靠推断，D6 不变（§2.2.5）。实际修改的内置插件文件比原定多了 `UngroupCommand.ts`。
+
 ---
 
 ### S8　框架 d：插件加载器与配置装配
@@ -385,6 +389,8 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 
 **〔S4 修订〕**：主线在 C_A 之后的提交 C_A2 = `plugins.config.json` 加 box + `cli-1-1b.txt`、`cli-1-1b.runs.json`（两次运行：方式 A 用 `--only @svgframe/plugin-shape-box`，方式 B 用 `--config doc/transcript/configs/box.json`，都**不带** `modified-star`）、`configs/box.json`、期望输出、`doc/transcript/README.md` 加注。期望输出用 `--update cli-1-1b` 生成（需事先同意），**必须逐行手工对照 P1 规格 §6.1B**（设计 §8.3 第 4 小节的表就是对照表）；树的对齐按 V1 为 3/2/8 个空格，规格原文为 2/1/7（偏差 T3）。根 `tests/system/` 加一条“未装插件时降级为 `g`、原样写回 `data-kind`”的测试。关键决定：box 不完整时警告并降级（X6）；涉及 box 的重复 id 拒绝整个读入（T1，`requireUnique`）；标题位于 $\left(x + \tfrac{w}{8},\ y + \tfrac{h}{2} + 5\right)$（X3）；`fill` 的 undo 回显为 `box#n2 fill restored on n2-rect`（X10）。设计见 §8.3。**允许修改**：同 S10（换成 `plugins/shape-box/`），另加 `doc/transcript/`（`cli-1-1b`）和 `tests/system/`（降级测试）。
 
+**〔S7 修订〕**：S7 已经照抄 §8.3 草图在临时 worktree 里跑通了整段 §6.1B 会话，内核接口齐全，没有发现内核缺口，所以 box 相关提交仍然要求内核零改动。设计 §8.3 草图已经修正，`BoxProvider.create` 改为逐个取值（G19），`BoxFillChange`、`BoxLabelChange` 补上了正文；但 `BoxProvider.read` 的完整实现和 `structureProblem` 的正文仍需在 S12 写出，草图中的 import 也都省略了。保护钩子现在也覆盖 `ungroup`（§3.7，G21）：box 的必要部件是 rect 和 text，不是 `g`，所以对 box 没有影响；box 内部普通 `g` 的 `ungroup` 照常允许。`BoxAttributeHandler` 只能经 `AttributeTarget` 修改属性，如果绕过接口改结构，会以程序错误终止，而不是报一行 `error:`。
+
 **验收**：两次差异检查都通过；§6.1B 会话通过；基线会话（禁用新增插件时）仍与 `final` 逐字节一致。最后一个提交为 `milestone(4/6): box 接入`。
 
 **评审点（重）**：合并前发给我。我会核对两个演示提交的 `git diff --name-status` 和三条判据的原始输出。
@@ -406,6 +412,8 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 5. 把设计文档中 dirty 语义、祖先传播、拼接顺序这三处取舍整理成 ADR。
 
 **〔S4 修订〕**：语义已在设计 ADR-3 定下：dirty = 内容与最近一次 `init`、`read` 或 `save` 成功时不一致（`init` 之后没有 `*`，新建节点立即标 `*`）；不向祖先传播，删除和 z-order 变化只体现在根行；多个标签按注册顺序拼接（`g#n1 (box) *`）。状态机测试按设计 §8.4 的表逐行一条。**允许修改**：同 S10（换成 `plugins/tree-star/`）。
+
+**〔S7 修订〕**：S7 已在临时 worktree 里照抄 §8.4 草图跑通了状态机第 2–7 行。`SaveBaseline` 草图已经补上私有字段 `fingerprints`、`documentText` 和私有构造函数（G20），照抄即可编译；`TreeStarPlugin` 没有草图，要按 §8.4 的文件清单来写。事件只在命令成功之后、`Editor.executeLine` 的 `try/catch` 之后派发；监听器抛错（包括 `EditorError`）按程序错误处理，所以 `ModifiedStar` 的三个回调都不能抛错。
 
 **验收**：差异检查脚本通过（内核和渲染器差异为 0）；禁用全部新增插件时，`tree` 输出与 `final` 逐字节一致。最后一个提交为 `milestone(5/6): 标签完成`。
 
