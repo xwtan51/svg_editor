@@ -263,6 +263,7 @@ const PACKAGE_TARGETS = packageTargets(PLUGINS);
 const NAMES = registrationNames(PLUGINS);
 const ALL_NAMES = [...new Set([...NAMES.values()].flat())];
 const PLUGIN_SHAPE_NAMES = NAMES.get(ContributionCategory.SHAPES) ?? [];
+const PACKAGE_NAMES = PLUGINS.map(packageName).filter((name) => name.length > 0);
 const KERNEL_ENTRY_FILES = Object.values(exportsOf(readJson(`${KERNEL_DIR}/package.json`)))
   .map((target) => exportTarget(KERNEL_DIR, target))
   .filter((location): location is string => location !== null);
@@ -441,6 +442,53 @@ function hostImportViolations(files: readonly SourceFile[]): string[] {
       return !(pluginPackage && ref.from.location === COMPOSITION_ROOT);
     })
     .map((ref) => `${describeImport(ref)} (L4)`);
+}
+
+// ---------------------------------------------------------------- L5: the loader knows no plugin
+
+/**
+ * The contents of every string literal in `code` (comments already removed);
+ * a template literal contributes its static parts, the text between its
+ * `${…}` expressions (an expression containing `}` is not split correctly).
+ */
+function stringFragments(code: string): string[] {
+  const fragments: string[] = [];
+  for (const match of code.matchAll(/(["'`])((?:\\[\s\S]|(?!\1)[^\\])*)\1/g)) {
+    const content = match[2] ?? "";
+    fragments.push(...(match[1] === "`" ? content.split(/\$\{[^}]*\}/) : [content]));
+  }
+  return fragments;
+}
+
+/**
+ * L5 (design §1.2.1; spec §6 "loader independence"): the loader (src/loader)
+ * imports no plugin, by package name or by path; no string literal (template
+ * static parts included) contains a plugin's package name or the
+ * `@svgframe/plugin-` prefix; no literal equals a registration name; no
+ * `switch`. Comments do not count. Both name lists come from
+ * plugins/<directory>/package.json, so a new plugin is covered unchanged.
+ */
+function loaderViolations(
+  files: readonly SourceFile[],
+  packageNames: readonly string[] = PACKAGE_NAMES,
+  names: readonly string[] = ALL_NAMES,
+): string[] {
+  const loader = files.filter((file) => file.location.startsWith(LOADER_SRC));
+  const imports = allImports(loader)
+    .filter((ref) => ref.specifier.startsWith(PLUGIN_PACKAGE_PREFIX) || (ref.target !== null && isPlugin(regionOf(ref.target))))
+    .map((ref) => `${describeImport(ref)} (L5: the loader imports no plugin)`);
+  const literals = loader.flatMap((file) => {
+    const fragments = stringFragments(file.code);
+    const packages = fragments
+      .filter((fragment) => [PLUGIN_PACKAGE_PREFIX, ...packageNames].some((name) => fragment.includes(name)))
+      .map((fragment) => `${file.location} names a plugin package in "${fragment}" (L5)`);
+    const registrations = fragments
+      .filter((fragment) => names.includes(fragment))
+      .map((fragment) => `${file.location} contains the registration name "${fragment}" (L5)`);
+    return [...packages, ...registrations];
+  });
+  const switches = switchViolations(loader).map((violation) => `${violation} (L5)`);
+  return [...imports, ...literals, ...switches];
 }
 
 // ---------------------------------------------------------------- L6: no registration names in the kernel
@@ -1081,6 +1129,11 @@ describe("scanning (design §1.2.3)", () => {
     for (const entry of PLUGIN_ENTRY_FILES) expect(locations).toContain(entry);
   });
 
+  it("the plugin package names are collected from every package.json (L5)", () => {
+    expect(PACKAGE_NAMES).toHaveLength(PLUGINS.length);
+    expect(PACKAGE_NAMES).toEqual(expect.arrayContaining(["@svgframe/plugin-builtin-shapes", "@svgframe/plugin-builtin-commands"]));
+  });
+
   it("the registration names are collected from every contributes", () => {
     expect(PLUGIN_SHAPE_NAMES).toEqual(expect.arrayContaining(BUILT_IN_TYPE_NAMES));
     expect(NAMES.get(ContributionCategory.COMMANDS)).toEqual(expect.arrayContaining(["create", "help", "canvas", "redo"]));
@@ -1120,6 +1173,10 @@ describe("layer rules (design §1.2.1) applied to the source", () => {
 
   it("L4: the host imports the kernel's two entries; only the composition root imports plugins", () => {
     expect(hostImportViolations(sources)).toEqual([]);
+  });
+
+  it("L5: the loader imports no plugin and names no plugin package, no registration name, and has no switch", () => {
+    expect(loaderViolations(sources)).toEqual([]);
   });
 
   it("L6: no registration name appears as a string literal in the kernel", () => {
@@ -1389,6 +1446,54 @@ describe("architecture rules detect synthetic violations", () => {
       'import { PluginCandidate } from "@svgframe/kernel/host";',
     ].join("\n");
     expect(hostImportViolations([file(COMPOSITION_ROOT, text)])).toEqual([]);
+  });
+
+  const loaderFile = (path: string, text: string) => host(`loader/${path}`, text);
+  const L5_PACKAGES = ["@svgframe/plugin-shape-box", "@acme/tree-star"];
+  const L5_NAMES = ["box", "tree", "box-type-label"];
+  const l5 = (f: SourceFile) => loaderViolations([f], L5_PACKAGES, L5_NAMES);
+
+  it("L5: the loader importing a plugin package, by name, by its package.json, or by a path into plugins/", () => {
+    expect(l5(loaderFile("X.ts", 'import Box from "@svgframe/plugin-shape-box";'))).not.toEqual([]);
+    expect(l5(loaderFile("X.ts", 'import m from "@svgframe/plugin-other/package.json" with { type: "json" };'))).not.toEqual([]);
+    expect(l5(loaderFile("X.ts", 'import { BuiltinShapesPlugin } from "../../plugins/builtin-shapes/src/BuiltinShapesPlugin.js";'))).not.toEqual([]);
+    expect(l5(loaderFile("X.ts", 'const m = await import("@svgframe/plugin-shape-box");'))).not.toEqual([]);
+  });
+
+  it.each([
+    ["a package name in a string", 'const box = "@svgframe/plugin-shape-box";'],
+    ["a package name inside a longer string", "const hint = 'try @acme/tree-star first';"],
+    ["a package name in a template's static part", "const p = `${dir}/node_modules/@acme/tree-star/package.json`;"],
+    ["the prefix in a string", 'const isOurs = name.startsWith("@svgframe/plugin-");'],
+    ["the prefix in a template", "const full = `@svgframe/plugin-${shortName}`;"],
+  ])("L5: %s", (_case, text) => {
+    expect(l5(loaderFile("PluginLoader.ts", text))).toHaveLength(1);
+  });
+
+  it("L5: a literal equal to a registration name (string or template), but not one merely containing it", () => {
+    expect(l5(loaderFile("X.ts", 'if (name === "tree") {}'))).toHaveLength(1);
+    expect(l5(loaderFile("X.ts", "const t = `box-type-label`;"))).toHaveLength(1);
+    expect(l5(loaderFile("X.ts", "const t = `${a}box${b}`;"))).toHaveLength(1);
+    expect(l5(loaderFile("X.ts", 'const m = "tree decorator"; const n = `${a} box`;'))).toEqual([]);
+  });
+
+  it("L5: switch in the loader", () => {
+    expect(l5(loaderFile("X.ts", "switch (moduleName) { default: break; }"))).toHaveLength(1);
+  });
+
+  it("L5: comments may mention plugin packages, names and switch; other host files are not checked by L5", () => {
+    const commented = [
+      "// Loads e.g. @svgframe/plugin-shape-box without importing it; no switch (x) here.",
+      '/* { "module": "@acme/tree-star" } registers "tree" */',
+      'import { PluginCandidate } from "@svgframe/kernel/host";',
+      'const json = "package.json";',
+    ].join("\n");
+    expect(l5(loaderFile("ModuleLocator.ts", commented))).toEqual([]);
+    expect(l5(host("assembly/CompositionRoot.ts", 'import Box from "@svgframe/plugin-shape-box";\nconst t = "tree";'))).toEqual([]);
+  });
+
+  it("L5: string fragments, templates split at their expressions", () => {
+    expect(stringFragments("const a = \"x\\\"y\"; const b = 'p'; const c = `q${r}s${t}`;")).toEqual(['x\\"y', "p", "q", "s", ""]);
   });
 
   it("L6: a registration name as a whole literal in the kernel; contained in a message, or outside the kernel, it is fine", () => {
