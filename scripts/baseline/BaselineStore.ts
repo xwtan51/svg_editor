@@ -1,10 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
+import { BaselinePaths } from "./BaselinePaths.js";
 import { SessionOutcome } from "./SessionOutcome.js";
-import type { TranscriptSession } from "./TranscriptSession.js";
 
 /**
- * Reads and writes the baseline of a session under `doc/transcript/expected/<name>/`:
+ * Reads and writes the baselines under `doc/transcript/expected/<name>/`; a
+ * run group names the baseline it is compared with (design §4.8):
  *
  * - `stdout.txt`    — stdout byte for byte (banner included);
  * - `exit-code.txt` — the exit code followed by a newline;
@@ -18,12 +19,20 @@ export class BaselineStore {
   static readonly EXIT_CODE = "exit-code.txt";
   static readonly FILES = "files";
 
-  exists(session: TranscriptSession): boolean {
-    return fs.existsSync(session.expectedDir);
+  /** `expectedRoot` is the absolute `doc/transcript/expected/`. */
+  constructor(private readonly expectedRoot: string = BaselinePaths.EXPECTED_DIR) {}
+
+  /** Absolute directory of the baseline `name`. */
+  dirOf(name: string): string {
+    return path.join(this.expectedRoot, name);
   }
 
-  read(session: TranscriptSession): SessionOutcome {
-    const dir = session.expectedDir;
+  exists(name: string): boolean {
+    return fs.existsSync(this.dirOf(name));
+  }
+
+  read(name: string): SessionOutcome {
+    const dir = this.dirOf(name);
     const exitText = fs.readFileSync(path.join(dir, BaselineStore.EXIT_CODE), "utf8").trim();
     const exitCode = Number(exitText);
     if (!/^\d+$/.test(exitText)) {
@@ -42,22 +51,17 @@ export class BaselineStore {
     return new SessionOutcome(fs.readFileSync(path.join(dir, BaselineStore.STDOUT)), Buffer.alloc(0), exitCode, files);
   }
 
-  /** Replaces the whole baseline directory of the session with `outcome`. */
-  write(session: TranscriptSession, outcome: SessionOutcome): void {
-    const dir = session.expectedDir;
+  /** Replaces the whole baseline directory `name` with `outcome`. */
+  write(name: string, outcome: SessionOutcome): void {
+    const dir = this.dirOf(name);
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, BaselineStore.STDOUT), outcome.stdout);
     fs.writeFileSync(path.join(dir, BaselineStore.EXIT_CODE), `${outcome.exitCode}\n`);
-    for (const name of outcome.sortedFileNames()) {
-      const target = path.join(dir, BaselineStore.FILES, ...name.split("/"));
+    for (const file of outcome.sortedFileNames()) {
+      const target = path.join(dir, BaselineStore.FILES, ...file.split("/"));
       fs.mkdirSync(path.dirname(target), { recursive: true });
-      fs.writeFileSync(target, outcome.files.get(name) ?? Buffer.alloc(0));
+      fs.writeFileSync(target, outcome.files.get(file) ?? Buffer.alloc(0));
     }
-  }
-
-  /** Path of a stored baseline file, for diff output. */
-  pathOf(session: TranscriptSession, ...parts: string[]): string {
-    return path.join(session.expectedDir, ...parts);
   }
 }

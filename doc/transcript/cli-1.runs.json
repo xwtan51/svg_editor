@@ -1,0 +1,11 @@
+{
+  "groups": [
+    {
+      "expected": "cli-1",
+      "runs": [
+        ["--bare"],
+        ["--config", "{transcript}/configs/empty.json"]
+      ]
+    }
+  ]
+}

@@ -15,16 +15,31 @@ export class BaselinePaths {
   /** The repository's own tsx launcher (not `npm run cli`: npm adds lines to stdout and resets the cwd). */
   static readonly TSX = path.join(BaselinePaths.REPO_ROOT, "node_modules", ".bin", "tsx");
 
+  /** Subdirectories of the transcript directory. */
+  static readonly FIXTURES = "fixtures";
+  static readonly EXPECTED = "expected";
+
   static readonly TRANSCRIPT_DIR = path.join(BaselinePaths.REPO_ROOT, "doc", "transcript");
-  static readonly FIXTURES_DIR = path.join(BaselinePaths.TRANSCRIPT_DIR, "fixtures");
-  static readonly EXPECTED_DIR = path.join(BaselinePaths.TRANSCRIPT_DIR, "expected");
+  static readonly FIXTURES_DIR = path.join(BaselinePaths.TRANSCRIPT_DIR, BaselinePaths.FIXTURES);
+  static readonly EXPECTED_DIR = path.join(BaselinePaths.TRANSCRIPT_DIR, BaselinePaths.EXPECTED);
+
+  /** Placeholders a `.runs.json` argument may contain (design §4.8); each becomes an absolute path. */
+  static readonly REPO_PLACEHOLDER = "{repo}";
+  static readonly TRANSCRIPT_PLACEHOLDER = "{transcript}";
 
   static entryAbsolute(): string {
     return path.join(BaselinePaths.REPO_ROOT, BaselinePaths.CLI_ENTRY);
   }
 
-  /** Repository-relative form of an absolute path, with `/` separators, for messages. */
-  static display(absolute: string): string {
-    return path.relative(BaselinePaths.REPO_ROOT, absolute).split(path.sep).join("/");
+  /**
+   * `argument` with `{repo}` and `{transcript}` replaced by absolute paths: the
+   * CLI runs in a temporary directory, so a relative path would not resolve.
+   */
+  static expand(argument: string, repoRoot: string, transcriptDir: string): string {
+    return argument
+      .split(BaselinePaths.REPO_PLACEHOLDER)
+      .join(path.resolve(repoRoot))
+      .split(BaselinePaths.TRANSCRIPT_PLACEHOLDER)
+      .join(path.resolve(transcriptDir));
   }
 }
