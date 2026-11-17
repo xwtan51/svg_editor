@@ -10,6 +10,8 @@
 doc/transcript/
 ├── README.md
 ├── <会话>.txt                  输入：每行一条命令或 # 注释；UTF-8、LF、以换行结尾、无空行
+├── <会话>.runs.json            可选（S9）：这个会话的运行组，见“运行组”
+├── configs/…                   运行组用到的插件配置（S9：empty.json）
 ├── fixtures/<会话>/…           可选：运行前复制进临时工作目录的文件
 └── expected/<会话>/            基线（只能由 --update 生成，见“更新规则”）
     ├── stdout.txt              stdout 原样（含 banner）
@@ -34,7 +36,7 @@ doc/transcript/
 | 输入 | 加入步骤 | 内容 |
 |---|---|---|
 | `cli-1-1b.txt` | S12 | Phase 1 §6.1 版本 B（`box`）。`final` 不支持 `box`，它的期望输出不来自 `final`，单独说明 |
-| `cli-2.txt` | S14 | 含 `stats`、`dir` 的新增命令会话；`dir` 用内容固定的夹具目录 |
+| `cli-2.txt` | S11 | 含 `stats`、`dir` 的新增命令会话；`dir` 用内容固定的夹具目录。S11 的配置提交只加双装配组（`expected: null`，只比较两次运行），期望输出在 S14 补（设计 §4.7） |
 
 新会话加入时，用 `--update <会话名>` 只生成该会话的基线（需要事先得到明确同意），不得顺带重写已有会话。
 
@@ -48,12 +50,54 @@ npm run baseline -- --update  # 生成模式：重写全部基线 —— 未经�
 脚本在 `scripts/baseline/`（TypeScript，经 tsx 运行；类型检查用 `npm run typecheck:scripts`）。两种模式共用 `SessionRunner`，运行方式完全相同：
 
 1. 在系统临时目录下新建空目录，把 `fixtures/<会话>/` 复制进去；
-2. 以该目录为 cwd，直接运行仓库内的 `node_modules/.bin/tsx <CLI 入口的绝对路径>`，stdin 重定向自输入文件（非 TTY：打印 banner，不打印提示符）。不用 `npm run cli`：npm 会往 stdout 多打 `> svg-editor@0.1.0 cli` 等行，并把 cwd 改回仓库根；
+2. 以该目录为 cwd，直接运行仓库内的 `node_modules/.bin/tsx <CLI 入口的绝对路径> <这次运行的参数…>`，stdin 重定向自输入文件（非 TTY：打印 banner，不打印提示符）。不用 `npm run cli`：npm 会往 stdout 多打 `> svg-editor@0.1.0 cli` 等行，并把 cwd 改回仓库根；
 3. 收集 stdout、stderr、退出码，以及目录里剩下的每个文件，然后删除临时目录。
 
 CLI 入口路径只在 `scripts/baseline/BaselinePaths.ts` 的 `CLI_ENTRY` 定义一次（现为 `src/cli/main.ts`）；S5 搬目录时只改这一处。
 
-比对模式逐字节比较 stdout、stderr、退出码和产出文件；不一致时打印 `FAIL <会话>: stdout differs at line N`（或 `file <名字> differs at line N`、`missing file`、`unexpected file`、`exit code differs`），后附 `diff -u`。有输入没基线、有基线没输入，也都算差异。
+比对模式逐字节比较 stdout、stderr、退出码和产出文件，规则见下面的“运行组”。最后一行的格式固定为 `baseline: <N> sessions, <M> difference(s) (entry <CLI 入口>; <K> runs)`，退出码 0 当且仅当 M = 0。
+
+## 运行组（`<会话>.runs.json`，S9）
+
+一个会话可以用不同的命令行参数运行多次（设计 §4.7、§4.8）。`doc/transcript/<会话>.runs.json` 声明这些运行：
+
+```json
+{
+  "groups": [
+    {
+      "expected": "cli-1",
+      "runs": [
+        ["--bare"],
+        ["--config", "{transcript}/configs/empty.json"]
+      ]
+    }
+  ]
+}
+```
+
+- `groups`：非空数组，按顺序执行。每组恰好两个键：
+  - `expected`：`expected/` 下的目录名（字母或数字开头，只含字母、数字、`.`、`_`、`-`），或 `null`（这组没有期望输出，只比较组内各次运行）；
+  - `runs`：非空数组，每一项是一次运行的参数（字符串数组，可以为空数组 `[]`，即不带参数）。
+- 参数中的 `{repo}`（仓库根）与 `{transcript}`（本目录）替换成**绝对路径**再交给 CLI：CLI 的 cwd 是临时目录，相对路径会失效。其他 `{…}` 一律视为错误。
+- **严格校验**：不是合法 JSON、未知的键、缺少键、`groups` 或 `runs` 为空、参数不是字符串、`expected` 既不是目录名也不是 `null`、未知的占位符，都报 `FAIL <会话>: invalid doc/transcript/<会话>.runs.json: <原因>` 并算作差异；`--update` 时一个文件都不写。
+- **缺省**：没有 `.runs.json` 的会话等价于 `{ "groups": [ { "expected": "<会话名>", "runs": [[]] } ] }`，即不带参数运行一次、与 `expected/<会话名>/` 比较。
+
+比对规则（`RunGroup`）：
+
+| 比较 | 何时 | 差异报告 |
+|---|---|---|
+| 每一次运行 vs `expected/<名字>/` | `expected` 不为 `null` | `FAIL <会话> <参数> vs expected/<名字>: stdout differs at line N`（或 `stderr differs …`、`exit code differs: …`、`file <名字> differs at line N`、`file <名字> only in …`），后附 `diff -u` |
+| 组内各次运行两两比较（第 1 与第 2、第 1 与第 3、……） | 总是 | `FAIL <会话> <参数 1> vs <参数 2>: …` |
+| `expected/<名字>/` 不存在 | `expected` 不为 `null` | `FAIL <会话>: no baseline expected/<名字> …` |
+
+`<参数>` 是 `.runs.json` 里写的原文（JSON 数组形式，占位符不替换），例如 `["--config","{transcript}/configs/empty.json"]`，所以同一份报告在任何机器上都相同。一组没有差异时打印 `ok   <会话> vs expected/<名字> (<K> runs)`（`expected` 为 `null` 时是 `ok   <会话>: runs agree (<K> runs, no expected output)`）。
+
+另外两类差异：
+
+- **孤儿基线**：`expected/` 下的目录没有被任何会话引用（引用 = 各会话的 `.runs.json` 中出现的 `expected`，没有 `.runs.json` 的会话引用自己的名字）。
+- **孤儿运行组**：有 `<名字>.runs.json` 却没有 `<名字>.txt`。
+
+三个已有会话的 `.runs.json` 都是一组、两次运行：`["--bare"]` 与 `["--config", "{transcript}/configs/empty.json"]`（`configs/empty.json` 的内容为 `{ "plugins": [] }`），都与 `final` 的输出比较（设计 §4.7 #1：基础兼容性比较时禁用全部可选插件）。从此不带参数的 full 装配怎样增长都不影响这三个会话。
 
 ## 基线生成记录
 
@@ -83,7 +127,7 @@ done
 ## 更新规则
 
 - **以后任何一步都不允许用 `--update` 覆盖基线，除非得到明确同意。** 基线的意义是“与 `final` 一致”；输出变了，先当作回归处理。
-- 生成模式要求每个会话退出码为 0、stderr 为空，否则一个文件都不写。
+- 生成模式只运行 `expected` 不为 `null` 的组，要求：每次运行退出码为 0、stderr 为空；每个 `.runs.json` 合法；写进同一个 `expected/<名字>/` 的各次运行（组内的，以及引用同一名字的其他组的）结果逐字节相同。任何一条不满足，一个文件都不写。
 
 ## 回归补充会话 `regression.txt`
 

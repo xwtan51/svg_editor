@@ -241,6 +241,26 @@ describe("AttributeDispatcher: the transaction rolls back every failure of steps
     };
     expect(programmingError(() => new AttributeDispatcher([cheat(swapTwo, then)]).plan(n1, "fill", "red"))).toBe(structure);
   });
+
+  /** A handler whose change only touches the structure when one of its echoes is asked for. */
+  function cheatInEcho(echoes: (container: ContainerShape) => ScriptedChange): ScriptedHandler {
+    return new ScriptedHandler("cheat", 0, onComposite("fill"), (target, _attribute, value) => {
+      target.part("n1-a").setAttribute("fill", value);
+      return echoes(target.view() as unknown as ContainerShape);
+    });
+  }
+
+  it("changing the structure inside appliedMessage is a programming error too", () => {
+    const { n1 } = fixture();
+    const handler = cheatInEcho((container) => new ScriptedChange(() => (removeFirst(container), "a"), "u"));
+    expect(programmingError(() => new AttributeDispatcher([handler]).plan(n1, "fill", "red"))).toBe(structure);
+  });
+
+  it("changing the structure inside undoneMessage is a programming error too", () => {
+    const { n1 } = fixture();
+    const handler = cheatInEcho((container) => new ScriptedChange("a", () => (swapTwo(container), "u")));
+    expect(programmingError(() => new AttributeDispatcher([handler]).plan(n1, "fill", "red"))).toBe(structure);
+  });
 });
 
 describe("AttributeDispatcher: the planned edit", () => {

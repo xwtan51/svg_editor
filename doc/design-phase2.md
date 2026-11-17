@@ -125,6 +125,9 @@ README 已经用了 R/F/E/U/V/K/B/C/W/Q/A/M/P/D，VSCode 扩展用了 VA。本�
 | `<会话>.runs.json` | 数据文件 | `doc/transcript/` | S9 | 会话的运行组声明 |
 | `MetricsTool`、`ComplexityCounter`、`SourceSnapshot`、`MetricsReport` | 类 | `scripts/metrics/` | S9 | metrics 脚本（5.3 X18） |
 | `PluginDiffCheck` | 类 | `scripts/plugin-diff/` | S9 | 规格 §6 三条判据的检查脚本 |
+| `FunctionComplexity`、`CodeLineCounter`、`ClassComment`、`FileMeasure`、`FinalMapping` | 类 | `scripts/metrics/` | S9 | 一个函数的 $M_f$；物理行与代码行；类注释及其第一句（architecture test 也用它）；一个文件的度量；`final` 的文件到 `R` 的映射（5.3）（S9 修订） |
+| `GitRepository` | 类 | `scripts/shared/`（新目录：metrics 与 plugin-diff 共用） | S9 | 工具脚本需要的 git 命令，只读 git 对象；环境变量可注入，测试用隔离的 git 配置（9.1）（S9 修订） |
+| 根测试里的工具测试替身：`TranscriptLayout`、`ScriptedRunner`、`TextSink`、`TempGitRepo` | 测试类 | `tests/unit/scripts/` | S9 | 临时的 `doc/transcript/`、不启动 CLI 的 `SessionRunner`、收集输出、隔离配置的临时 git 仓库（S9 修订） |
 | 插件包内的测试文件与测试替身：`FakeLeaf`、`FakeContainer`、`FakeCommandContext`、`FakeDirectoryLister`、`FakeWorkingDirectory`、`FakeShapesPlugin`、`FakeRect`、`FakeText`、`FakeGroup`；测试文件 `ShapeTally`、`StatsCommand`、`StatsPlugin`、`DirCommand`、`DirInEditor`、`NodeDirectoryLister`、`BoxProvider`、`BoxReadBack`、`BoxAttributeHandler`、`BoxInEditor`、`BoxTypeLabel`、`ModifiedStar`、`StarInEditor`（均为 `*.test.ts`） | 测试类 / 测试文件 | `plugins/*/tests/` | S10–S13 | 见第 8 节各演练 |
 
 现有方法上新增或改变的成员（不是新类，但也是新名字）：
@@ -333,6 +336,17 @@ rg -n "import|require|switch" src/loader
 ```
 
 共同判据比规格多包含了 `src/loader`：规格方式 A 的判据要求“不得修改加载器”，并入同一条命令。S10–S13 每次接入的完整命令与预测输出见第 8 节各演练的第 3 小节。
+
+**判定规则与退出码**（S9 修订：上面只列了命令，没有写怎样判定，缺口 G28）。`PluginDiffCheck` 按下列规则判定，所有内容都从 git 对象（`C`、`C^`）读取，不看工作区：
+
+1. 用法：`C` 必须恰好有一个父提交（合并提交、根提交都是用法错误）；`plugins/<新目录>` 必须是 `plugins/` 的直接子目录。用法错误退出码 2。
+2. 路径存在性：`packages/kernel`、`src/loader`、`plugins`、`src/assembly/CompositionRoot.ts`、`plugins.config.json` 在 `C^` 与 `C` 中都存在；新插件目录在 `C` 中存在、在 `C^` 中不存在。不满足的每一条都点名路径与提交，判失败。
+3. 文件清单：`git diff --name-status --no-renames C^ C`（`--no-renames` 让重命名显示为一删一增，两端路径都参与判定，也不受本机 `diff.renames` 配置影响）；`packages/`、`src/`、`plugins/` 以外的文件（锁文件、`package.json`、文档、根 `tests/` 等）另列为“需要在 PR 中逐项说明”，不判失败（约定补充 N18）。
+4. 共同判据：`git diff C^ C -- packages/kernel src/loader plugins ':(exclude)plugins/<新目录>'` 为空，否则失败并列出文件。
+5. 方式 A：排除新插件目录后，`packages src plugins` 下的改动恰好是 `M src/assembly/CompositionRoot.ts` 一行，且 `plugins.config.json` 没有改动（决策 X24：接入提交 C 不碰配置）。方式 B：排除新插件目录后，`packages src plugins` 下没有任何改动，且 `plugins.config.json` 有改动。
+6. 加载器独立性：只打印、不参与判定。脚本执行的是 `git grep -n -E "import|require|switch" C -- src/loader`，并去掉每行开头的 `C:`。理由：`rg` 读的是工作区，而判据针对的是提交 `C`，工作区可能在别的分支或有未提交的改动；`git grep` 读提交里的内容，也不依赖机器上是否装了 `rg`。它的输出与在 `C` 的检出上运行 `rg -n "import|require|switch" src/loader --sort path` 逐字节相同（在 `d4cfd64` 上核对过，即第 8 节开头那 30 行）。
+
+输出分节（0. 路径、1. 文件清单、2. 共同判据、2A / 2B、3. 加载器），最后一行是 `plugin-diff: PASS`（退出码 0）或 `plugin-diff: FAIL (<原因>; …)`（退出码 1）；用法错误或 git 命令失败退出码 2。
 
 ### 1.6 接入提交的形状（预测，详见第 8 节）
 
@@ -1479,7 +1493,8 @@ loop 内置插件（先图形后命令）
   EditorAssembler -> PluginInstaller : install(candidate)
   note right : 失败 = 程序错误
 end
-alt 方式 A（--bare / 无参数 / --only）
+' （S9 修订）两个 -- 前加 ~ 转义：PlantUML 把两个 -- 之间的文字渲染成删除线
+alt 方式 A（~--bare / 无参数 / ~--only）
   EditorAssembler -> CompositionRoot : optional()
   CompositionRoot --> EditorAssembler : PluginCandidate[]（静态 import 的类 + JSON 清单）
   note right : 按装配配置挑选，每个候选包成 LoadedCandidate（S8 修订）
@@ -1676,6 +1691,15 @@ CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文�
 | 孤儿检查 | `TranscriptSession.baselineNames()` 的“已知”集合改为所有 `.runs.json` 引用到的 `expected` 名 |
 | 双装配运行器 | 就是上面的组：S9 不再写别的脚本 |
 
+**S9 实现时补充的规则**（S9 修订）：
+
+- **严格校验**：`.runs.json` 不是合法 JSON、顶层或组里有未知的键或缺少键、`groups` 或 `runs` 为空、一次运行不是字符串数组、`expected` 既不是 `expected/` 下的目录名（字母或数字开头，只含字母、数字、`.`、`_`、`-`）也不是 `null`、参数中有 `{repo}`、`{transcript}` 以外的 `{…}`：都报 `FAIL <会话>: invalid doc/transcript/<会话>.runs.json: <原因>`，算作差异（退出码 1），`--update` 时一个文件都不写。不静默忽略。
+- **差异报告用参数原文标识运行**：`FAIL <会话> <参数> vs expected/<名字>: …` 与 `FAIL <会话> <参数 1> vs <参数 2>: …`，`<参数>` 是 `.runs.json` 里写的参数的 JSON 数组形式，占位符不替换（例如 `["--config","{transcript}/configs/empty.json"]`），所以同一份报告在任何机器上都相同。组内两两比较的顺序是第 1 与第 2、第 1 与第 3、……、第 2 与第 3、……。
+- **`.runs.json` 没有对应的 `.txt`**：算作差异（`FAIL <名字>: doc/transcript/<名字>.runs.json exists but doc/transcript/<名字>.txt does not`）。不合法的 `.runs.json` 在孤儿检查里按缺省引用（会话自己的名字），以免同一个问题再报一次孤儿基线。
+- **`--update` 的一致性**：写进同一个 `expected/<名字>/` 的所有运行（组内的，以及别的组引用同一名字的）结果必须逐字节相同，否则一个文件都不写；`expected: null` 的组不运行。
+- **输出**：每组没有差异时一行 `ok   <会话> vs expected/<名字> (<K> runs)`（无期望输出的组：`ok   <会话>: runs agree (<K> runs, no expected output)`）；最后一行格式不变，运行次数加在括号里：`baseline: <N> sessions, <M> differences (entry src/cli/main.ts; <K> runs)`。
+- 为了测试，`BaselineTool` 的运行器与 `doc/transcript/` 目录可以注入（缺省是真实的 `SessionRunner` 与仓库目录）。
+
 **这部分在 S9 实现**。理由：S8 的“允许修改”不含 `scripts/`；而在 S10 之前，不带参数启动等于 bare（`optional()` 为空），现有基线不受影响。S9 给三个已有会话加上 4.7 #1 的 `.runs.json`（`--bare` 与空配置），从此不带参数的 full 怎样增长都不影响基线。S8 的验收“空配置和不用配置两种方式启动，基线会话都与 `final` 逐字节一致”在 S8 用一次性命令手工验证，S9 把它固定成 `.runs.json`。S4（本节）、S8、S9（9.2）三处说法一致。
 
 ### 4.9 两种装配的一致性保证
@@ -1762,6 +1786,22 @@ CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文�
 | 行数 | 每个文件的物理行数与代码行数（去掉空行与只含注释的行）；三类加测试、脚本分别汇总 |
 | 输出 | `docs/metrics/` 下的 Markdown 表与一份 JSON；排序按路径的码元顺序，保证同一输入逐字节相同 |
 
+**S9 实现时补充的规则**（S9 修订）：
+
+| 项 | 规则 |
+|---|---|
+| 命令行 | `npm run metrics -- [<rev>]`，缺省 `HEAD`；`final` 取 `refs/tags/final`，没有这个 tag（例如浅克隆）时退出码 2，不写文件 |
+| 自检 | 内置样本（`Tokenizer.readQuoted` 的副本）$M \ne 8$ 时退出码 1，不写任何文件 |
+| 输出文件 | `docs/metrics/metrics.md` 与 `docs/metrics/metrics.json`（注意是 `docs/`，规格 §7 指定）；开头记下 `R` 与 `final` 的完整提交号和 `R` 的提交标题 |
+| 可复现 | 输出只取决于 `R` 与 `final` 两个提交：不写时间、耗时、临时路径、机器名，排序一律按 UTF-16 码元（不用 `localeCompare`）。复现方法：`npm run metrics -- <记录的 R>` 之后 `git diff --exit-code docs/metrics` 为空 |
+| 临时目录与路径 | `git archive` 解包到 `os.tmpdir()` 下新建的目录，生成的 `tsconfig.json`（只列要解析的文件，`noResolve`）与每一次 `getSourceFile` 查找都用创建时的同一个路径前缀：经符号链接创建的目录（macOS 的 `/var/folders/…`）换成 `realpath` 后 API 取不到文件 |
+| 读哪些文件 | `R` 中 git 跟踪的 `.ts` 文件（不含 `.d.ts`）：运行代码、测试（`tests/`、`packages/*/tests/`、`plugins/*/tests/`，含 `tests/fixtures/` 下的假插件包）、`scripts/`、`vscode-svg/src/` 与 `vscode-svg/tests/`；依赖与构建产物不被 git 跟踪，自然排除（约定补充 N19） |
+| 内置 / 可选 | 插件目录名以 `builtin-` 开头的是内置插件（1.1 的命名），其余是可选插件 |
+| 函数之外的判定点 | 不属于任何函数（例如类的静态属性初始化里的 `?:`）：不计入任何 $M_f$，因此不计入文件的 $M$。S9 时运行代码中没有这种情况 |
+| 代码行 | 有至少一个非注释记号的行。注释由 TypeScript 自带的扫描器（`typescript/unstable/ast/scanner`）识别，字符串、模板、正则表达式里的 `//` 不算注释；扫描器分不清正则与除号、续接模板的 `}` 与块结束的 `}`，由解析树给出这些位置再重扫。多行字符串或模板中的每一行都是代码行 |
+| `final` 的映射（取代上表“`final` 怎样归类”一行） | ① `git diff --find-renames --name-status final R` **不带路径限定**：只给 `final` 的文件做路径限定时，重命名的目标路径被排除，git 一个重命名都认不出来（在 `d4cfd64` 上是 80 个 `D`、2 个 `M`，缺口 G26）；② 路径不变的映射到自己，重命名的映射到新路径；③ 仍为 `D` 的文件按文件名补认（一类一文件，文件名 = 类名）：`R` 的运行代码里恰好有一个同名文件、它没有被别的文件映射或当作重命名目标、`final` 中没有别的同名 `D` 文件，就映射到它（改动太大、相似度低于 50% 的重命名，缺口 G27）；④ 其余，以及目标不是 `R` 的运行代码的，归入“已删除”。在 `d4cfd64` 上：73 个重命名、2 个路径不变、6 个按文件名补认（`app/EditorSession`、`commands/CommandContext`、`commands/CommandRegistry`、`io/SvgImporter`、`view/TreeRenderer`、`commands/CreateCommand`），只有 `src/model/ShapeFactory.ts` 是“已删除”。把相似度阈值降到 30% 不可行：`CommandRegistry` 会被错配到 `BuiltinCommandsPlugin.ts`，`TreeRenderer` 仍是 `D` |
+| “职责”一栏 | 类注释（`ClassComment`）：第一个 export 声明正上方紧挨着的 `/** … */`（注释与声明之间不能有空行或别的注释）；没有 export 声明的文件（`api.ts`、`host-api.ts`、`src/cli/main.ts`）取文件开头的 `/** … */`。取它的**第一句**：去掉每行开头的 `*` 后，句子结束于空行、`@` 标记行、Markdown 列表的第一项（`- `、`* `、`1. ` 开头的行，与空行一样开始新的块），或者后面跟空白或注释结束的句号；反引号里的句号（`` `api.ts` ``、`` `Editor.run` ``）和 `e.g.`、`i.e.`、`cf.`、`vs.` 的句号不算。architecture test 用同一个 `ClassComment` 检查三个区域的每个文件都有类注释（1.4） |
+
 ### 5.4 Phase 1 已知偏差 K1–K6 的去向
 
 | # | 内容（README §5） | Phase 2 中 | 步骤 |
@@ -1773,7 +1813,7 @@ CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文�
 | K5 | `warning:` 前缀在两个类里加 | **保留**：box 的读回警告走 `ImportResult`，不新增第三处 | — |
 | K6 | `create` 的检查顺序 | **保留**：顺序变为“类型 → 个数 → 全部 `claimedIds` 的 id 检查 → 容器 → 取值”，K6 描述的现象不变 | S6 |
 
-### 5.5 约定补充 N1–N17（对规格的解释；N17 为 S8 修订）
+### 5.5 约定补充 N1–N19（对规格的解释；N17 为 S8 修订，N18、N19 为 S9 修订）
 
 | # | 规格的不清之处 | 约定 | 理由 |
 |---|---|---|---|
@@ -1794,6 +1834,8 @@ CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文�
 | N15 | `modified-star` 的新建节点与 `init` | 新建节点立即标 `*`；`init` 之后以空画布为保存点（`tree` 立即执行时没有 `*`） | ADR-3 |
 | N16 | `stats` 的类型名用哪个名字；空文档的格式 | 叶子按 `kindName()` 计数（内置叶子与 `tagName()` 相同）；空文档输出恰为 `(total 0, containers 0)`，前面没有空格 | 规格示例 |
 | N17 | 规格 §6“`enabled: false` 完全跳过”是否也跳过格式校验 | 不跳过：禁用项同样要通过 4.4 的逐项校验，一项不合法则整个配置作废（`error: invalid plugin config`）；“完全跳过”指不解析、不导入、不输出（S8 修订） | 配置是否合法不应取决于哪些项碰巧被禁用；决策 X29 的严格校验与“不做部分加载” |
+| N18 | 规格 §6 判据：“两种方式都允许必要的测试、文档、package.json 和锁文件变化，但须逐项说明” | `plugin-diff` 把 `packages/`、`src/`、`plugins/` 以外的改动单独列为“需要在 PR 中逐项说明”，不判失败；“逐项说明”由 PR 描述完成（1.5）（S9 修订） | 脚本无法判断说明是否充分；判失败会挡住锁文件这类必要改动 |
+| N19 | 规格 §7“依赖包与构建产物排除” | metrics 只读 git 跟踪的 `.ts` 文件（不含 `.d.ts`），`node_modules/`、`dist/` 等不被跟踪，自然排除；`tests/fixtures/` 下的假插件包计入“测试”（5.3）（S9 修订） | 数字只来自 git 历史，与工作区里装了什么、构建过什么无关 |
 
 ### 5.6 已知偏差 T1–T4（对规格的偏离）
 
@@ -2868,6 +2910,14 @@ rg -n "import|require|switch" src/loader                                        
 | G23 | S8 自查（第 8 节开头的预测） | 预测的 `rg` 输出里 `createRequire(this.configFile).resolve(…)` 一行只含大写的 `Require`，`rg` 区分大小写，不可能匹配到 | 第 8 节开头换成实际完整输出，并逐类说明与预测的不同；S8 补上（S8 修订） |
 | G24 | S8 自查（P7 的检查范围） | architecture test 的 P7 只看不含 `${` 的字面量，`` `error: plugin not found: ${m}` `` 这样的模板字符串查不出来 | P7 改为检查字符串字面量与模板字符串的静态部分（1.2.4）；S8 补上（S8 修订） |
 | G25 | S8 实现（拒绝启动） | 4.3 规定了用法错误与 `--only` 未知包名都是 stderr + 退出码 2，却没有规定它们怎样从 `CliArguments`、装配器交回 `main.ts` | `StartupRefusal`（4.3、0.4）；S8 补上（S8 修订） |
+| G26 | S9 实现（metrics 的 `final` 映射） | 5.3 写的 `git diff --find-renames --name-status final R` 如果只给 `final` 的文件做路径限定，重命名的目标路径被排除，git 认不出任何重命名（`d4cfd64` 上 80 个 `D`、2 个 `M`） | 5.3：不带路径限定再过滤；S9 补上（S9 修订） |
+| G27 | S9 实现（同上） | 改动太大、相似度低于默认 50% 的重命名被报成删除：82 个文件中有 7 个 `D`，其中 6 个其实还在；降低阈值会错配 | 5.3：按文件名补认的规则；S9 补上（S9 修订） |
+| G28 | S9 实现（`plugin-diff`） | 1.5 只列了 `plugin-diff` 展开成的命令，没有写怎样判定 PASS / FAIL、退出码，以及方式 A / B 各自的条件 | 1.5 的“判定规则与退出码”；S9 补上（S9 修订） |
+| G29 | S9 实现（通用装配契约测试） | S10 之前 `CompositionRoot.optional()` 为空，只写 `it.each(optional())` 时 vitest 报 “No test found in suite”，而且这套断言从未在有插件时运行过 | 契约测试分两组共用一个断言函数：真实组合根一组（另有一条断言 `optional()` 是候选数组的用例），替身组合根放进带命令的假候选一组，另加两个“违反契约就报错”的用例；S9 补上（S9 修订） |
+| G30 | S9 实现（`plugin-diff` 第 3 部分） | 1.5 的 `rg -n … src/loader` 读的是工作区，不是提交 `C`，还依赖机器上装了 `rg` | 改为 `git grep -n -E … C -- src/loader` 去掉 `C:` 前缀，输出与 `rg --sort path` 逐字节相同（1.5）；S9 补上（S9 修订） |
+| G31 | S9 实现（metrics 自查） | 附录 B.4 的 `final` 合计 $M = 669$ 与 5.3 的口径不一致：B.4 的实验没数 `&&=`、`\|\|=`、`??=` | 按 5.3 为 671（`SvgImporter.ts:78-79` 的两个 `??=`），在 B.4 旁注明；S9 补上（S9 修订） |
+| G32 | S9 实现（“职责”一栏） | “第一个句号或空行”切不好以列表开头的类注释：`ShapeDetailRenderer` 的第一句会被切成 “… (V6): 1.”，`Tokenizer` 的第一句会吞下整个列表 | 5.3：Markdown 列表的第一项与空行一样开始新的块，`e.g.` 等缩写与反引号内的句号不算句子结束；S9 补上（S9 修订） |
+| G33 | S9 实现（工具脚本的测试） | CI 是深度为 1 的浅克隆、没有 tag、没有 git 身份，读本仓库历史的测试在 CI 上必然失败 | 9.1：测试一律在临时仓库里进行并隔离 git 配置；S9 补上（S9 修订） |
 
 ---
 
@@ -2885,6 +2935,9 @@ rg -n "import|require|switch" src/loader                                        
 | architecture test | 根 `tests/unit/architecture.test.ts` | 读源码与 `package.json` | L1–L10；P1–P10 按 1.2.4 的区域范围 |
 | 系统测试 | 根 `tests/system/` | 全部 | 双装配、基线兼容、装配契约 |
 | 基线会话 | `doc/transcript/` + `npm run baseline` | 真实 CLI 进程 | 与 `final` 逐字节一致；双装配逐字节一致 |
+| 工具脚本测试（S9 修订） | 根 `tests/unit/scripts/` | `scripts/` + 临时目录 + 临时 git 仓库 | `SessionPlan`、`RunGroup`、`BaselineTool`（临时 `doc/transcript/` 与替身运行器）；`ComplexityCounter`、`CodeLineCounter`、`ClassComment`、`FinalMapping`、`MetricsTool`；`PluginDiffCheck` |
+
+**读 git 历史或做提交的测试一律在测试运行时自建的临时仓库里进行，并隔离 git 配置**（S9 修订）。原因：CI 的 `actions/checkout@v4` 默认是深度为 1 的浅克隆，没有 `final` tag，也没有 `HEAD^`；runner 上没有配置 git 用户名和邮箱；本机的全局配置（例如 `commit.gpgsign`、`diff.renames`）也不能影响结果。做法（`TempGitRepo`）：去掉继承来的 `GIT_*` 环境变量，设 `GIT_CONFIG_GLOBAL=/dev/null`、`GIT_CONFIG_NOSYSTEM=1` 与作者、提交者的姓名和邮箱，提交时间固定，`git init -b main`；被测的脚本经可注入环境的 `GitRepository` 用同一套环境。测试从不读本仓库的历史（缺口 G33）。
 
 ### 9.2 每一步新增的测试
 
@@ -3150,6 +3203,8 @@ src/commands/Tokenizer.ts    readPlain   M=3     ← while + &&
 src/model/IdSyntax.ts        validate    M=2
 82 files, total M=669        （0.26 s）
 ```
+
+  （S9 修订）按 5.3 的口径，`final` 的 82 个文件是 $M = 671$：差的 2 是 `src/io/SvgImporter.ts:78-79` 的两个 `??=`，本实验只数了 `&&`、`||`、`??`，没数三个赋值运算符。S9 的 metrics 以 5.3 为准（缺口 G31）。
 
   `cc.ts` 以仓库的 `tsconfig.json` 为基础做类型检查，`tsc --noEmit` 通过（`typescript/unstable/sync` 带类型声明）。
 - **结论**：采纳 `typescript/unstable/sync`，不新增依赖；口径见 5.3。

@@ -1,0 +1,3216 @@
+{
+  "generator": "npm run metrics (scripts/metrics, design §5.3)",
+  "revisions": {
+    "R": {
+      "commit": "c52893a3c7af67d5e947631d93e2cdfcc0c133b9",
+      "subject": "docs(design): record the S9 decisions"
+    },
+    "final": {
+      "commit": "73117232dc8f66457518bf61f388e2a4b82f2267"
+    }
+  },
+  "categories": [
+    {
+      "category": "kernel",
+      "files": 90,
+      "lines": 4773,
+      "codeLines": 2961,
+      "functions": 480,
+      "complexity": 792,
+      "finalFiles": 51,
+      "finalComplexity": 470,
+      "delta": 322
+    },
+    {
+      "category": "host",
+      "files": 21,
+      "lines": 861,
+      "codeLines": 572,
+      "functions": 77,
+      "complexity": 147,
+      "finalFiles": 3,
+      "finalComplexity": 20,
+      "delta": 127
+    },
+    {
+      "category": "plugins: built-in",
+      "files": 30,
+      "lines": 1488,
+      "codeLines": 1054,
+      "functions": 160,
+      "complexity": 222,
+      "finalFiles": 27,
+      "finalComplexity": 175,
+      "delta": 47
+    },
+    {
+      "category": "plugins: optional",
+      "files": 0,
+      "lines": 0,
+      "codeLines": 0,
+      "functions": 0,
+      "complexity": 0,
+      "finalFiles": 0,
+      "finalComplexity": 0,
+      "delta": 0
+    },
+    {
+      "category": "deleted since final",
+      "files": 0,
+      "lines": 0,
+      "codeLines": 0,
+      "functions": 0,
+      "complexity": 0,
+      "finalFiles": 1,
+      "finalComplexity": 6,
+      "delta": -6
+    },
+    {
+      "category": "total",
+      "files": 141,
+      "lines": 7122,
+      "codeLines": 4587,
+      "functions": 717,
+      "complexity": 1161,
+      "finalFiles": 82,
+      "finalComplexity": 671,
+      "delta": 490
+    }
+  ],
+  "areas": [
+    {
+      "area": "kernel `packages/kernel/src/`",
+      "files": 90,
+      "lines": 4773,
+      "codeLines": 2961,
+      "functions": 480,
+      "complexity": 792
+    },
+    {
+      "area": "host `src/`",
+      "files": 21,
+      "lines": 861,
+      "codeLines": 572,
+      "functions": 77,
+      "complexity": 147
+    },
+    {
+      "area": "plugin `plugins/builtin-commands/src/`",
+      "files": 23,
+      "lines": 1217,
+      "codeLines": 852,
+      "functions": 127,
+      "complexity": 186
+    },
+    {
+      "area": "plugin `plugins/builtin-shapes/src/`",
+      "files": 7,
+      "lines": 271,
+      "codeLines": 202,
+      "functions": 33,
+      "complexity": 36
+    },
+    {
+      "area": "plugins: built-in: subtotal",
+      "files": 30,
+      "lines": 1488,
+      "codeLines": 1054,
+      "functions": 160,
+      "complexity": 222
+    },
+    {
+      "area": "plugins: optional: subtotal",
+      "files": 0,
+      "lines": 0,
+      "codeLines": 0,
+      "functions": 0,
+      "complexity": 0
+    },
+    {
+      "area": "**run code: total**",
+      "files": 141,
+      "lines": 7122,
+      "codeLines": 4587,
+      "functions": 717,
+      "complexity": 1161
+    },
+    {
+      "area": "tests `packages/kernel/tests/`",
+      "files": 34,
+      "lines": 3134,
+      "codeLines": 2673,
+      "functions": null,
+      "complexity": null
+    },
+    {
+      "area": "tests `plugins/builtin-commands/tests/`",
+      "files": 13,
+      "lines": 931,
+      "codeLines": 742,
+      "functions": null,
+      "complexity": null
+    },
+    {
+      "area": "tests `plugins/builtin-shapes/tests/`",
+      "files": 1,
+      "lines": 44,
+      "codeLines": 37,
+      "functions": null,
+      "complexity": null
+    },
+    {
+      "area": "tests `tests/`",
+      "files": 98,
+      "lines": 11137,
+      "codeLines": 9332,
+      "functions": null,
+      "complexity": null
+    },
+    {
+      "area": "tests: subtotal",
+      "files": 146,
+      "lines": 15246,
+      "codeLines": 12784,
+      "functions": null,
+      "complexity": null
+    },
+    {
+      "area": "scripts `scripts/`",
+      "files": 25,
+      "lines": 2151,
+      "codeLines": 1619,
+      "functions": null,
+      "complexity": null
+    },
+    {
+      "area": "**CLI total** (run code, tests, scripts)",
+      "files": 312,
+      "lines": 24519,
+      "codeLines": 18990,
+      "functions": null,
+      "complexity": null
+    }
+  ],
+  "files": [
+    {
+      "path": "packages/kernel/src/api.ts",
+      "responsibility": "Public entry of the kernel, `@svgframe/kernel` (design §3.10, P5a): the domain abstractions and extension-point interfaces that plugins may use.",
+      "lines": 62,
+      "codeLines": 56,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/app/DocumentEvents.ts",
+      "responsibility": "The event buffer of one session (design §3.4).",
+      "lines": 46,
+      "codeLines": 26,
+      "functions": 8,
+      "complexity": 10,
+      "maxComplexity": 3,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/app/Editor.ts",
+      "responsibility": "Facade and Invoker (README §2.1, §2.7): one line of input in, its output lines out.",
+      "lines": 77,
+      "codeLines": 45,
+      "functions": 4,
+      "complexity": 10,
+      "maxComplexity": 4,
+      "category": "kernel",
+      "final": {
+        "path": "src/app/Editor.ts",
+        "mapped": "renamed",
+        "complexity": 11
+      }
+    },
+    {
+      "path": "packages/kernel/src/app/EditorSession.ts",
+      "responsibility": "The session state behind one `Editor` (README §1.2): the current document (none until `init` / `read`), the default `save` path, the history, the event buffer, and the injected file system and committed extensions (design §2.2.5).",
+      "lines": 104,
+      "codeLines": 67,
+      "functions": 15,
+      "complexity": 16,
+      "maxComplexity": 2,
+      "category": "kernel",
+      "final": {
+        "path": "src/app/EditorSession.ts",
+        "mapped": "by file name",
+        "complexity": 11
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/ArgList.ts",
+      "responsibility": "Cursor over the arguments of one command (the tokens after the command name).",
+      "lines": 117,
+      "codeLines": 70,
+      "functions": 14,
+      "complexity": 23,
+      "maxComplexity": 5,
+      "category": "kernel",
+      "final": {
+        "path": "src/commands/ArgList.ts",
+        "mapped": "renamed",
+        "complexity": 23
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/Command.ts",
+      "responsibility": "Root of the command hierarchy (README §2.1).",
+      "lines": 36,
+      "codeLines": 18,
+      "functions": 3,
+      "complexity": 4,
+      "maxComplexity": 2,
+      "category": "kernel",
+      "final": {
+        "path": "src/commands/Command.ts",
+        "mapped": "renamed",
+        "complexity": 4
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/CommandCatalog.ts",
+      "responsibility": "The committed commands, read-only (design §2.2.5): what `help` and the parser need.",
+      "lines": 13,
+      "codeLines": 5,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/commands/CommandCategory.ts",
+      "responsibility": "The four command groups of spec §3, in the order `help` lists them (V7).",
+      "lines": 33,
+      "codeLines": 21,
+      "functions": 4,
+      "complexity": 4,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": {
+        "path": "src/commands/CommandCategory.ts",
+        "mapped": "renamed",
+        "complexity": 3
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/CommandContext.ts",
+      "responsibility": "What a command can see of the session (implemented by `EditorSession` in the app layer, and by a test double).",
+      "lines": 59,
+      "codeLines": 20,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": {
+        "path": "src/commands/CommandContext.ts",
+        "mapped": "by file name",
+        "complexity": 0
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/CommandLine.ts",
+      "responsibility": "A resolved command line: the command type found by name plus its arguments.",
+      "lines": 30,
+      "codeLines": 20,
+      "functions": 4,
+      "complexity": 4,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": {
+        "path": "src/commands/CommandLine.ts",
+        "mapped": "renamed",
+        "complexity": 4
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/CommandParser.ts",
+      "responsibility": "One line of text → `CommandLine`: tokenize, then look the command name up in the registry.",
+      "lines": 32,
+      "codeLines": 19,
+      "functions": 2,
+      "complexity": 3,
+      "maxComplexity": 2,
+      "category": "kernel",
+      "final": {
+        "path": "src/commands/CommandParser.ts",
+        "mapped": "renamed",
+        "complexity": 3
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/CommandRegistry.ts",
+      "responsibility": "Name dispatch #2 (spec §2.1): command name → command type.",
+      "lines": 35,
+      "codeLines": 22,
+      "functions": 3,
+      "complexity": 5,
+      "maxComplexity": 2,
+      "category": "kernel",
+      "final": {
+        "path": "src/commands/CommandRegistry.ts",
+        "mapped": "by file name",
+        "complexity": 6
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/CommandResult.ts",
+      "responsibility": "The output lines of a successful command, warnings included.",
+      "lines": 31,
+      "codeLines": 20,
+      "functions": 6,
+      "complexity": 6,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": {
+        "path": "src/commands/CommandResult.ts",
+        "mapped": "renamed",
+        "complexity": 6
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/CommandType.ts",
+      "responsibility": "The static side of a command class: the class object itself satisfies this interface, so `CommandRegistry` stores classes directly (README §2.5).",
+      "lines": 29,
+      "codeLines": 11,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": {
+        "path": "src/commands/CommandType.ts",
+        "mapped": "renamed",
+        "complexity": 0
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/DocumentCommand.ts",
+      "responsibility": "A document command (init, read, save, canvas with arguments).",
+      "lines": 16,
+      "codeLines": 9,
+      "functions": 1,
+      "complexity": 1,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": {
+        "path": "src/commands/DocumentCommand.ts",
+        "mapped": "renamed",
+        "complexity": 1
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/EditCommand.ts",
+      "responsibility": "An undoable shape-editing command (Template Method, README §2.6).",
+      "lines": 106,
+      "codeLines": 58,
+      "functions": 12,
+      "complexity": 17,
+      "maxComplexity": 3,
+      "category": "kernel",
+      "final": {
+        "path": "src/commands/EditCommand.ts",
+        "mapped": "renamed",
+        "complexity": 14
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/History.ts",
+      "responsibility": "Undo and redo stacks of edit commands plus the io lock (spec §4.3, U1–U8).",
+      "lines": 83,
+      "codeLines": 59,
+      "functions": 10,
+      "complexity": 12,
+      "maxComplexity": 3,
+      "category": "kernel",
+      "final": {
+        "path": "src/commands/History.ts",
+        "mapped": "renamed",
+        "complexity": 10
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/HistoryCommand.ts",
+      "responsibility": "Root of undo / redo: they act on the history inside `execute` and are not recorded themselves.",
+      "lines": 13,
+      "codeLines": 7,
+      "functions": 1,
+      "complexity": 1,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": {
+        "path": "src/commands/HistoryCommand.ts",
+        "mapped": "renamed",
+        "complexity": 1
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/QueryCommand.ts",
+      "responsibility": "A read-only display command (tree, show, help, canvas without arguments): never recorded (U5).",
+      "lines": 10,
+      "codeLines": 7,
+      "functions": 1,
+      "complexity": 1,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": {
+        "path": "src/commands/QueryCommand.ts",
+        "mapped": "renamed",
+        "complexity": 1
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/Token.ts",
+      "responsibility": "One word of a command line.",
+      "lines": 28,
+      "codeLines": 17,
+      "functions": 4,
+      "complexity": 5,
+      "maxComplexity": 2,
+      "category": "kernel",
+      "final": {
+        "path": "src/commands/Token.ts",
+        "mapped": "renamed",
+        "complexity": 5
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/Tokenizer.ts",
+      "responsibility": "Splits a command line into tokens at white space (convention R5):",
+      "lines": 70,
+      "codeLines": 54,
+      "functions": 4,
+      "complexity": 16,
+      "maxComplexity": 8,
+      "category": "kernel",
+      "final": {
+        "path": "src/commands/Tokenizer.ts",
+        "mapped": "renamed",
+        "complexity": 16
+      }
+    },
+    {
+      "path": "packages/kernel/src/commands/UndoStack.ts",
+      "responsibility": "What a command may do with the history (design §2.2.5): undo and redo, nothing else.",
+      "lines": 20,
+      "codeLines": 5,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/extension/ContributionCategory.ts",
+      "responsibility": "The four kinds of registration names a plugin declares under `contributes` (spec §6 loading contract): a closed set of value objects in the fixed order shapes → commands → decorators → attributes, the order in which duplicates are checked and manifest lists are written (design §3.3.1).",
+      "lines": 43,
+      "codeLines": 27,
+      "functions": 6,
+      "complexity": 7,
+      "maxComplexity": 2,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/extension/DocumentListener.ts",
+      "responsibility": "Subscriber to document events (design §3.4), registered with `PluginContext.subscribe`.",
+      "lines": 26,
+      "codeLines": 6,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/extension/ExtensionRegistry.ts",
+      "responsibility": "Every committed registration of one editor (design §3.3): the shape and command registries, the tree decorators, the attribute handlers, the document listeners, and the registration names per category in commit order.",
+      "lines": 80,
+      "codeLines": 55,
+      "functions": 8,
+      "complexity": 13,
+      "maxComplexity": 5,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/extension/InstallOutcome.ts",
+      "responsibility": "The result of one `PluginInstaller.install`: success, or the single failure line (without the `error: ` prefix, which only the editor and the assembler add).",
+      "lines": 33,
+      "codeLines": 22,
+      "functions": 5,
+      "complexity": 6,
+      "maxComplexity": 2,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/extension/Plugin.ts",
+      "responsibility": "A plugin instance (design §3.1).",
+      "lines": 21,
+      "codeLines": 4,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/extension/PluginCandidate.ts",
+      "responsibility": "A plugin waiting to be installed (design §3.3.1, §4.1): how both ways of assembling an editor hand a plugin to `PluginInstaller`.",
+      "lines": 42,
+      "codeLines": 26,
+      "functions": 5,
+      "complexity": 5,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/extension/PluginClass.ts",
+      "responsibility": "The shape of a plugin entry's default export (design §3.1): a class that the installer instantiates with the plugin's options.",
+      "lines": 11,
+      "codeLines": 5,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/extension/PluginContext.ts",
+      "responsibility": "Everything a plugin can do while it is activated (design §3.2).",
+      "lines": 44,
+      "codeLines": 14,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/extension/PluginInstaller.ts",
+      "responsibility": "Transactional registration (design §3.3.1): the one installation path for built-in plugins, plugins listed in the composition root and (from S8) plugins loaded from a configuration.",
+      "lines": 118,
+      "codeLines": 86,
+      "functions": 14,
+      "complexity": 30,
+      "maxComplexity": 6,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/extension/PluginManifest.ts",
+      "responsibility": "A plugin's `package.json`, parsed and checked (design §3.3.2, N11): the package `name` and the registration names it declares under `contributes`.",
+      "lines": 74,
+      "codeLines": 54,
+      "functions": 7,
+      "complexity": 22,
+      "maxComplexity": 8,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/extension/PluginOptions.ts",
+      "responsibility": "The options a plugin is constructed with (design §3.1, §4.4): an immutable value object holding a deep, frozen copy of a JSON-like object.",
+      "lines": 67,
+      "codeLines": 47,
+      "functions": 9,
+      "complexity": 18,
+      "maxComplexity": 4,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/extension/StagingContext.ts",
+      "responsibility": "The only implementation of `PluginContext` (design §3.3): registrations go into a staging area and reach the committed registries only through `ExtensionRegistry.commit`, after the installer's checks.",
+      "lines": 208,
+      "codeLines": 169,
+      "functions": 25,
+      "complexity": 58,
+      "maxComplexity": 12,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/host-api.ts",
+      "responsibility": "Host entry of the kernel, `@svgframe/kernel/host` (design §3.10, P5a): what only the assembly side (src/) needs to install plugins and build an editor.",
+      "lines": 13,
+      "codeLines": 7,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/io/FileSystem.ts",
+      "responsibility": "File system port used by `read` / `save` (README §4.8, rule D5).",
+      "lines": 17,
+      "codeLines": 4,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": {
+        "path": "src/io/FileSystem.ts",
+        "mapped": "renamed",
+        "complexity": 0
+      }
+    },
+    {
+      "path": "packages/kernel/src/io/IdAllocator.ts",
+      "responsibility": "Hands out the ids of imported elements (F13, F14).",
+      "lines": 53,
+      "codeLines": 39,
+      "functions": 6,
+      "complexity": 12,
+      "maxComplexity": 4,
+      "category": "kernel",
+      "final": {
+        "path": "src/io/IdAllocator.ts",
+        "mapped": "renamed",
+        "complexity": 12
+      }
+    },
+    {
+      "path": "packages/kernel/src/io/ImportResult.ts",
+      "responsibility": "Outcome of a successful import: the new document and the warnings raised while building it, in document order.",
+      "lines": 28,
+      "codeLines": 16,
+      "functions": 4,
+      "complexity": 4,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": {
+        "path": "src/io/ImportResult.ts",
+        "mapped": "renamed",
+        "complexity": 4
+      }
+    },
+    {
+      "path": "packages/kernel/src/io/ImportSession.ts",
+      "responsibility": "One read of one file (design §2.1.3, §2.1.4): the `ShapeReader` that shape providers are given, plus the dispatch that chooses a provider per element.",
+      "lines": 352,
+      "codeLines": 256,
+      "functions": 31,
+      "complexity": 87,
+      "maxComplexity": 9,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/io/SvgImporter.ts",
+      "responsibility": "SVG file → new `SvgDocument` plus warnings.",
+      "lines": 148,
+      "codeLines": 110,
+      "functions": 10,
+      "complexity": 31,
+      "maxComplexity": 9,
+      "category": "kernel",
+      "final": {
+        "path": "src/io/SvgImporter.ts",
+        "mapped": "by file name",
+        "complexity": 65
+      }
+    },
+    {
+      "path": "packages/kernel/src/io/SvgSerializer.ts",
+      "responsibility": "A document → SVG text in the F18 format: XML declaration, 2-space indentation, attributes in `svgAttributes()` order, childless elements self-closed, `& < > \"` escaped in attribute values and text, final newline.",
+      "lines": 74,
+      "codeLines": 53,
+      "functions": 6,
+      "complexity": 10,
+      "maxComplexity": 5,
+      "category": "kernel",
+      "final": {
+        "path": "src/io/SvgSerializer.ts",
+        "mapped": "renamed",
+        "complexity": 11
+      }
+    },
+    {
+      "path": "packages/kernel/src/io/XmlDomAdapter.ts",
+      "responsibility": "Adapter (README §2.8): parses text with `@xmldom/xmldom` and converts the library's DOM into `XmlElement`s, so nothing else depends on the W3C DOM.",
+      "lines": 69,
+      "codeLines": 52,
+      "functions": 4,
+      "complexity": 17,
+      "maxComplexity": 10,
+      "category": "kernel",
+      "final": {
+        "path": "src/io/XmlDomAdapter.ts",
+        "mapped": "renamed",
+        "complexity": 17
+      }
+    },
+    {
+      "path": "packages/kernel/src/io/XmlElement.ts",
+      "responsibility": "The io layer's own XML element, independent of any XML library (Adapter target, README §2.8): local tag name, attributes in document order, child elements, and the character data of the whole subtree.",
+      "lines": 68,
+      "codeLines": 42,
+      "functions": 12,
+      "complexity": 12,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": {
+        "path": "src/io/XmlElement.ts",
+        "mapped": "renamed",
+        "complexity": 12
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/AttributeChange.ts",
+      "responsibility": "What an `AttributeHandler.apply` answers (design §2.4.2): the two echoes of the change.",
+      "lines": 20,
+      "codeLines": 4,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/AttributeDispatcher.ts",
+      "responsibility": "The implementation of `AttributePlanner` (design §2.4.3): asks the handlers, resolves conflicts, and tries the winner out as a snapshot transaction.",
+      "lines": 145,
+      "codeLines": 100,
+      "functions": 14,
+      "complexity": 30,
+      "maxComplexity": 6,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/AttributeEdit.ts",
+      "responsibility": "The implementation of `PlannedAttributeEdit` (design §2.4.3): snapshots of the target subtree from before and after the handler ran, plus the two echoes obtained then.",
+      "lines": 41,
+      "codeLines": 29,
+      "functions": 5,
+      "complexity": 5,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/AttributeHandler.ts",
+      "responsibility": "Extension point ④ (design §2.4): what setting one attribute means on one kind of shape.",
+      "lines": 48,
+      "codeLines": 9,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/AttributePlanner.ts",
+      "responsibility": "The attribute-handler pipeline as `set` sees it (design §2.4.3), `CommandContext.attributeEdits()`.",
+      "lines": 20,
+      "codeLines": 5,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/AttributeTarget.ts",
+      "responsibility": "The restricted target subtree an `AttributeHandler.apply` works on (design §2.4.2): it can read, and set whitelisted attributes, but has no structural operation at all (no insert, no remove, no container), so a handler cannot change the structure that the snapshots of the `set` transaction cover.",
+      "lines": 27,
+      "codeLines": 6,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/CanvasSize.ts",
+      "responsibility": "Immutable canvas width × height in px; both must be positive and finite (F2).",
+      "lines": 35,
+      "codeLines": 26,
+      "functions": 5,
+      "complexity": 8,
+      "maxComplexity": 3,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/CanvasSize.ts",
+        "mapped": "renamed",
+        "complexity": 8
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/ChildList.ts",
+      "responsibility": "Ordered children of a container.",
+      "lines": 50,
+      "codeLines": 37,
+      "functions": 6,
+      "complexity": 11,
+      "maxComplexity": 5,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/ChildList.ts",
+        "mapped": "renamed",
+        "complexity": 11
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/ColorProperty.ts",
+      "responsibility": "A paint value (`fill`, `stroke`): any non-empty text, no color syntax check (E5, E9).",
+      "lines": 28,
+      "codeLines": 22,
+      "functions": 4,
+      "complexity": 5,
+      "maxComplexity": 2,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/ColorProperty.ts",
+        "mapped": "renamed",
+        "complexity": 5
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/ContainerShape.ts",
+      "responsibility": "Composite: a shape that holds child shapes (design §3.5).",
+      "lines": 117,
+      "codeLines": 78,
+      "functions": 18,
+      "complexity": 24,
+      "maxComplexity": 3,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/Group.ts",
+        "mapped": "renamed",
+        "complexity": 24
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/CoordinateRole.ts",
+      "responsibility": "Strategy: how a geometry attribute reacts to move and scale, and which values it accepts.",
+      "lines": 14,
+      "codeLines": 5,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/CoordinateRole.ts",
+        "mapped": "renamed",
+        "complexity": 0
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/DocumentView.ts",
+      "responsibility": "Read-only view of a document (design §3.6.1), what tree decorators and document listeners get and what `SvgSerializer` reads.",
+      "lines": 24,
+      "codeLines": 9,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/EditableSubtree.ts",
+      "responsibility": "The only implementation of `AttributeTarget` (design §2.4.2): one shape of the target subtree of a `set`.",
+      "lines": 47,
+      "codeLines": 36,
+      "functions": 5,
+      "complexity": 10,
+      "maxComplexity": 5,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/EditorError.ts",
+      "responsibility": "A user-visible, expected failure (bad input, missing id, constraint violation…).",
+      "lines": 12,
+      "codeLines": 6,
+      "functions": 1,
+      "complexity": 1,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/EditorError.ts",
+        "mapped": "renamed",
+        "complexity": 1
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/ElementView.ts",
+      "responsibility": "Read-only view of one XML element, handed to shape providers during read-back (design §2.1.4).",
+      "lines": 21,
+      "codeLines": 7,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/Extent.ts",
+      "responsibility": "A size (width, height, r, rx, ry): unaffected by move, must be ≥ 0 (E4).",
+      "lines": 20,
+      "codeLines": 15,
+      "functions": 3,
+      "complexity": 4,
+      "maxComplexity": 2,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/Extent.ts",
+        "mapped": "renamed",
+        "complexity": 4
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/ExtraAttributes.ts",
+      "responsibility": "Attributes outside the editable whitelist found when reading a file (`transform`, `font-size`, `data-*`…).",
+      "lines": 26,
+      "codeLines": 15,
+      "functions": 4,
+      "complexity": 4,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/ExtraAttributes.ts",
+        "mapped": "renamed",
+        "complexity": 4
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/FailureReason.ts",
+      "responsibility": "The `<reason>` of a contract-breach message such as `plugin failed to activate: <name> (<reason>)` (design §3.3.1, §3.9): the first line of an `Error`'s message, otherwise `String(value)`.",
+      "lines": 14,
+      "codeLines": 7,
+      "functions": 2,
+      "complexity": 4,
+      "maxComplexity": 3,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/GeometryAttribute.ts",
+      "responsibility": "Context of the `CoordinateRole` strategy: one named numeric geometry attribute of a leaf shape (e.g. `width`), stored at full precision (V3).",
+      "lines": 52,
+      "codeLines": 35,
+      "functions": 8,
+      "complexity": 8,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/GeometryAttribute.ts",
+        "mapped": "renamed",
+        "complexity": 8
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/IdSyntax.ts",
+      "responsibility": "Character-set rule for ids created from the CLI (convention F16).",
+      "lines": 23,
+      "codeLines": 13,
+      "functions": 3,
+      "complexity": 4,
+      "maxComplexity": 2,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/IdSyntax.ts",
+        "mapped": "renamed",
+        "complexity": 4
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/LeafShape.ts",
+      "responsibility": "Shared implementation of leaf shapes.",
+      "lines": 93,
+      "codeLines": 68,
+      "functions": 17,
+      "complexity": 23,
+      "maxComplexity": 2,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/LeafShape.ts",
+        "mapped": "renamed",
+        "complexity": 23
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/NumberFormat.ts",
+      "responsibility": "Strict number parsing (convention R8) and the single output format (V3) shared by tree, show, command echoes and serialization.",
+      "lines": 31,
+      "codeLines": 20,
+      "functions": 3,
+      "complexity": 7,
+      "maxComplexity": 3,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/NumberFormat.ts",
+        "mapped": "renamed",
+        "complexity": 7
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/ParamSpec.ts",
+      "responsibility": "Describes one positional `create` parameter of a shape type: the name shown in usage text, the attribute it sets, whether it may be omitted, and whether a file stores it as element content rather than as an XML attribute.",
+      "lines": 73,
+      "codeLines": 51,
+      "functions": 10,
+      "complexity": 16,
+      "maxComplexity": 5,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/ParamSpec.ts",
+        "mapped": "renamed",
+        "complexity": 16
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/PlannedAttributeEdit.ts",
+      "responsibility": "An attribute change that has been resolved and tried out (design §2.4.3), what `AttributePlanner.plan` answers and `set` keeps.",
+      "lines": 19,
+      "codeLines": 6,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/Shape.ts",
+      "responsibility": "Composite component: every shape element (leaf or `<g>`) has an id, an optional parent, style attributes and pass-through attributes, and supports the same operations so that commands never ask which concrete class it is.",
+      "lines": 175,
+      "codeLines": 100,
+      "functions": 30,
+      "complexity": 36,
+      "maxComplexity": 2,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/Shape.ts",
+        "mapped": "renamed",
+        "complexity": 29
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/ShapeCatalog.ts",
+      "responsibility": "The committed shape types, read-only plus \"build by name\" (design §2.1.2).",
+      "lines": 21,
+      "codeLines": 8,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/ShapeContainer.ts",
+      "responsibility": "What can hold child shapes: a `ContainerShape` and the document root `SvgDocument`.",
+      "lines": 38,
+      "codeLines": 10,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/ShapeContainer.ts",
+        "mapped": "renamed",
+        "complexity": 0
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/ShapeKit.ts",
+      "responsibility": "\"Build a shape of this type by name\" (design §2.1.2, §2.1.5): what a shape provider is given in `create`, so that a composite type can build its parts (for example a `rect` and a `text`) without importing another plugin.",
+      "lines": 15,
+      "codeLines": 4,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/ShapeMemento.ts",
+      "responsibility": "Memento: the attribute state of one shape and, for a container, of all its descendants.",
+      "lines": 56,
+      "codeLines": 37,
+      "functions": 6,
+      "complexity": 6,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/ShapeMemento.ts",
+        "mapped": "renamed",
+        "complexity": 6
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/ShapeProvider.ts",
+      "responsibility": "Extension point ①: one shape type (design §2.1.2).",
+      "lines": 61,
+      "codeLines": 14,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/ShapeReader.ts",
+      "responsibility": "What the kernel offers a shape provider during read-back (design §2.1.4).",
+      "lines": 62,
+      "codeLines": 14,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/ShapeRegistry.ts",
+      "responsibility": "Name dispatch #1 (spec §2.1): type name → shape provider.",
+      "lines": 48,
+      "codeLines": 32,
+      "functions": 6,
+      "complexity": 8,
+      "maxComplexity": 2,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/ShapeType.ts",
+      "responsibility": "The static side of a shape class: the class object itself satisfies this interface (static `typeName`, `params`, `create`), so `ShapeRegistry` stores classes directly and the compiler checks each class when it is registered.",
+      "lines": 22,
+      "codeLines": 7,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/ShapeType.ts",
+        "mapped": "renamed",
+        "complexity": 0
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/ShapeView.ts",
+      "responsibility": "Read-only view of a shape (design §3.6.1), what tree decorators, the `handles` of attribute handlers and document listeners get.",
+      "lines": 42,
+      "codeLines": 13,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/StaticShapeProvider.ts",
+      "responsibility": "Adapter (design §2.1.2): Target `ShapeProvider`, Adaptee `ShapeType` — the static side of a shape class.",
+      "lines": 50,
+      "codeLines": 34,
+      "functions": 8,
+      "complexity": 9,
+      "maxComplexity": 2,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/model/StrokeWidthProperty.ts",
+      "responsibility": "`stroke-width`: a full-precision number validated like a size (≥ 0, E4).",
+      "lines": 33,
+      "codeLines": 23,
+      "functions": 4,
+      "complexity": 5,
+      "maxComplexity": 2,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/StrokeWidthProperty.ts",
+        "mapped": "renamed",
+        "complexity": 5
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/StyleAttributes.ts",
+      "responsibility": "The common optional attributes `fill`, `stroke`, `stroke-width`, held as an ordered list of property objects; the list order is the serialization and display order (F18, V6).",
+      "lines": 77,
+      "codeLines": 51,
+      "functions": 14,
+      "complexity": 17,
+      "maxComplexity": 3,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/StyleAttributes.ts",
+        "mapped": "renamed",
+        "complexity": 17
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/StyleProperty.ts",
+      "responsibility": "One optional style attribute of a shape (`fill`, `stroke`, `stroke-width`).",
+      "lines": 29,
+      "codeLines": 15,
+      "functions": 6,
+      "complexity": 6,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/StyleProperty.ts",
+        "mapped": "renamed",
+        "complexity": 6
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/SvgDocument.ts",
+      "responsibility": "The document root `<svg>`: canvas size plus top-level shapes.",
+      "lines": 97,
+      "codeLines": 66,
+      "functions": 18,
+      "complexity": 21,
+      "maxComplexity": 3,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/SvgDocument.ts",
+        "mapped": "renamed",
+        "complexity": 16
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/TreePosition.ts",
+      "responsibility": "Value object: where a shape sits in the tree, as (parent container, index).",
+      "lines": 39,
+      "codeLines": 26,
+      "functions": 5,
+      "complexity": 6,
+      "maxComplexity": 2,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/TreePosition.ts",
+        "mapped": "renamed",
+        "complexity": 6
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/XCoordinate.ts",
+      "responsibility": "A horizontal position (x, cx, x1, x2): follows dx, any finite value (E4).",
+      "lines": 14,
+      "codeLines": 10,
+      "functions": 3,
+      "complexity": 3,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/XCoordinate.ts",
+        "mapped": "renamed",
+        "complexity": 3
+      }
+    },
+    {
+      "path": "packages/kernel/src/model/YCoordinate.ts",
+      "responsibility": "A vertical position (y, cy, y1, y2): follows dy, any finite value (E4).",
+      "lines": 14,
+      "codeLines": 10,
+      "functions": 3,
+      "complexity": 3,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": {
+        "path": "src/model/YCoordinate.ts",
+        "mapped": "renamed",
+        "complexity": 3
+      }
+    },
+    {
+      "path": "packages/kernel/src/view/ShapeDetailRenderer.ts",
+      "responsibility": "The §5.2 `show` detail (V6):",
+      "lines": 51,
+      "codeLines": 36,
+      "functions": 6,
+      "complexity": 12,
+      "maxComplexity": 4,
+      "category": "kernel",
+      "final": {
+        "path": "src/view/ShapeDetailRenderer.ts",
+        "mapped": "renamed",
+        "complexity": 12
+      }
+    },
+    {
+      "path": "packages/kernel/src/view/TreeDecorator.ts",
+      "responsibility": "Extension point ③ (design §2.3): a tag appended to lines of the structure tree.",
+      "lines": 25,
+      "codeLines": 5,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/view/TreeRenderer.ts",
+      "responsibility": "The §5.1 structure tree.",
+      "lines": 121,
+      "codeLines": 80,
+      "functions": 11,
+      "complexity": 22,
+      "maxComplexity": 7,
+      "category": "kernel",
+      "final": {
+        "path": "src/view/TreeRenderer.ts",
+        "mapped": "by file name",
+        "complexity": 12
+      }
+    },
+    {
+      "path": "packages/kernel/src/view/TreeRow.ts",
+      "responsibility": "The only implementation of `TreeRowView`: a shape line, or the root line when there is no shape.",
+      "lines": 26,
+      "codeLines": 20,
+      "functions": 4,
+      "complexity": 4,
+      "maxComplexity": 1,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "packages/kernel/src/view/TreeRowView.ts",
+      "responsibility": "One line of a `tree` output as a tree decorator sees it (design §2.3.1, §2.3.2): the document root line `svg (800x600)`, or a shape line (the first line of `tree <id>` is a shape line too).",
+      "lines": 18,
+      "codeLines": 7,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "kernel",
+      "final": null
+    },
+    {
+      "path": "plugins/builtin-commands/src/AddToCommand.ts",
+      "responsibility": "`addto <gid> <id>`: moves an existing shape to the end of a container (E24–E26); the same container is allowed and moves it to the end (E25).",
+      "lines": 68,
+      "codeLines": 48,
+      "functions": 6,
+      "complexity": 9,
+      "maxComplexity": 4,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/AddToCommand.ts",
+        "mapped": "renamed",
+        "complexity": 8
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/BackCommand.ts",
+      "responsibility": "`back <id>`: first among its siblings, i.e. drawn first and at the bottom (E27).",
+      "lines": 26,
+      "codeLines": 20,
+      "functions": 4,
+      "complexity": 4,
+      "maxComplexity": 1,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/BackCommand.ts",
+        "mapped": "renamed",
+        "complexity": 4
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/BuiltinCommandsPlugin.ts",
+      "responsibility": "The 19 commands of Phase 1 as a plugin (design §3.3.3).",
+      "lines": 63,
+      "codeLines": 51,
+      "functions": 2,
+      "complexity": 4,
+      "maxComplexity": 3,
+      "category": "plugins: built-in",
+      "final": null
+    },
+    {
+      "path": "plugins/builtin-commands/src/CanvasCommandParser.ts",
+      "responsibility": "The static side of `canvas [w] [h]` (README §2.1): one name, two kinds of command.",
+      "lines": 32,
+      "codeLines": 20,
+      "functions": 1,
+      "complexity": 2,
+      "maxComplexity": 2,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/CanvasCommandParser.ts",
+        "mapped": "renamed",
+        "complexity": 2
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/CreateCommand.ts",
+      "responsibility": "`create <type> <id> [params…] [in <containerId>]` (spec §3, §4.1).",
+      "lines": 176,
+      "codeLines": 130,
+      "functions": 22,
+      "complexity": 46,
+      "maxComplexity": 7,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/CreateCommand.ts",
+        "mapped": "by file name",
+        "complexity": 17
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/DeleteCommand.ts",
+      "responsibility": "`delete <id>`: detaches the shape (a container with its whole subtree).",
+      "lines": 53,
+      "codeLines": 37,
+      "functions": 6,
+      "complexity": 7,
+      "maxComplexity": 2,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/DeleteCommand.ts",
+        "mapped": "renamed",
+        "complexity": 7
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/FrontCommand.ts",
+      "responsibility": "`front <id>`: last among its siblings, i.e. drawn last and on top (E27).",
+      "lines": 26,
+      "codeLines": 20,
+      "functions": 4,
+      "complexity": 4,
+      "maxComplexity": 1,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/FrontCommand.ts",
+        "mapped": "renamed",
+        "complexity": 4
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/GroupCommand.ts",
+      "responsibility": "`group <newGid> <id1> <id2>…`: a new `g` takes in existing shapes, which may come from different containers (E16–E19).",
+      "lines": 112,
+      "codeLines": 75,
+      "functions": 16,
+      "complexity": 21,
+      "maxComplexity": 3,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/GroupCommand.ts",
+        "mapped": "renamed",
+        "complexity": 18
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/HelpCommand.ts",
+      "responsibility": "`help`: every registered command, grouped by the four categories of spec §3 in `CommandCategory.order()`; registration order within a group (V7).",
+      "lines": 48,
+      "codeLines": 31,
+      "functions": 5,
+      "complexity": 7,
+      "maxComplexity": 3,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/HelpCommand.ts",
+        "mapped": "renamed",
+        "complexity": 7
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/InitCommand.ts",
+      "responsibility": "`init [w] [h]`: a new empty canvas becomes the current document, with no default save path (F5).",
+      "lines": 40,
+      "codeLines": 29,
+      "functions": 3,
+      "complexity": 4,
+      "maxComplexity": 2,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/InitCommand.ts",
+        "mapped": "renamed",
+        "complexity": 4
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/MoveCommand.ts",
+      "responsibility": "`move <id> <dx> <dy>`: translation; a container moves all its descendants.",
+      "lines": 51,
+      "codeLines": 39,
+      "functions": 6,
+      "complexity": 6,
+      "maxComplexity": 1,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/MoveCommand.ts",
+        "mapped": "renamed",
+        "complexity": 6
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/ReadCommand.ts",
+      "responsibility": "`read <file.svg>`: the file becomes the current document and its path the default `save` path.",
+      "lines": 38,
+      "codeLines": 23,
+      "functions": 3,
+      "complexity": 3,
+      "maxComplexity": 1,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/ReadCommand.ts",
+        "mapped": "renamed",
+        "complexity": 3
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/RedoCommand.ts",
+      "responsibility": "`redo`: redoes the latest undone edit; the output is the same as the command's first run (U6).",
+      "lines": 22,
+      "codeLines": 14,
+      "functions": 2,
+      "complexity": 2,
+      "maxComplexity": 1,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/RedoCommand.ts",
+        "mapped": "renamed",
+        "complexity": 2
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/ResizeCanvasCommand.ts",
+      "responsibility": "`canvas <w> <h>`: changes the canvas size of the current document.",
+      "lines": 25,
+      "codeLines": 16,
+      "functions": 2,
+      "complexity": 2,
+      "maxComplexity": 1,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/ResizeCanvasCommand.ts",
+        "mapped": "renamed",
+        "complexity": 2
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/SaveCommand.ts",
+      "responsibility": "`save [file.svg]`: writes the current document.",
+      "lines": 42,
+      "codeLines": 29,
+      "functions": 3,
+      "complexity": 6,
+      "maxComplexity": 3,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/SaveCommand.ts",
+        "mapped": "renamed",
+        "complexity": 6
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/ScaleCommand.ts",
+      "responsibility": "`scale <id> <factor>`: every geometry attribute times `factor`, about the origin (E12).",
+      "lines": 55,
+      "codeLines": 39,
+      "functions": 6,
+      "complexity": 7,
+      "maxComplexity": 2,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/ScaleCommand.ts",
+        "mapped": "renamed",
+        "complexity": 7
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/SetCommand.ts",
+      "responsibility": "`set <id> <attr> <value>` (§4.1 whitelist, E6–E9; attribute handlers, design §2.4.3).",
+      "lines": 107,
+      "codeLines": 72,
+      "functions": 10,
+      "complexity": 17,
+      "maxComplexity": 4,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/SetCommand.ts",
+        "mapped": "renamed",
+        "complexity": 13
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/ShowCanvasCommand.ts",
+      "responsibility": "`canvas` without arguments: shows the canvas size.",
+      "lines": 13,
+      "codeLines": 7,
+      "functions": 1,
+      "complexity": 1,
+      "maxComplexity": 1,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/ShowCanvasCommand.ts",
+        "mapped": "renamed",
+        "complexity": 1
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/ShowCommand.ts",
+      "responsibility": "`show <id>`: the §5.2 attribute detail of one shape (V6), laid out by `ShapeDetailRenderer`.",
+      "lines": 28,
+      "codeLines": 21,
+      "functions": 3,
+      "complexity": 3,
+      "maxComplexity": 1,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/ShowCommand.ts",
+        "mapped": "renamed",
+        "complexity": 3
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/TreeCommand.ts",
+      "responsibility": "`tree [id]`: the §5.1 structure tree of the whole document, or of the subtree rooted at one shape (V4, V5).",
+      "lines": 37,
+      "codeLines": 25,
+      "functions": 3,
+      "complexity": 6,
+      "maxComplexity": 3,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/TreeCommand.ts",
+        "mapped": "renamed",
+        "complexity": 6
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/UndoCommand.ts",
+      "responsibility": "`undo`: undoes the latest edit and prints its undo echo.",
+      "lines": 22,
+      "codeLines": 14,
+      "functions": 2,
+      "complexity": 2,
+      "maxComplexity": 1,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/UndoCommand.ts",
+        "mapped": "renamed",
+        "complexity": 2
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/UngroupCommand.ts",
+      "responsibility": "`ungroup <gid>`: the children take the container's place in its parent, in their order (E20–E23).",
+      "lines": 85,
+      "codeLines": 61,
+      "functions": 10,
+      "complexity": 16,
+      "maxComplexity": 4,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/UngroupCommand.ts",
+        "mapped": "renamed",
+        "complexity": 16
+      }
+    },
+    {
+      "path": "plugins/builtin-commands/src/ZOrderCommand.ts",
+      "responsibility": "Template for `front` / `back` (README §2.6): record the index, move the shape among its siblings, move it back on undo.",
+      "lines": 48,
+      "codeLines": 31,
+      "functions": 7,
+      "complexity": 7,
+      "maxComplexity": 1,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/commands/ZOrderCommand.ts",
+        "mapped": "renamed",
+        "complexity": 7
+      }
+    },
+    {
+      "path": "plugins/builtin-shapes/src/BuiltinShapesPlugin.ts",
+      "responsibility": "The six shape types of Phase 1 as a plugin (design §2.1.1): each class's static side is adapted by `StaticShapeProvider`.",
+      "lines": 23,
+      "codeLines": 16,
+      "functions": 2,
+      "complexity": 3,
+      "maxComplexity": 2,
+      "category": "plugins: built-in",
+      "final": null
+    },
+    {
+      "path": "plugins/builtin-shapes/src/Circle.ts",
+      "responsibility": "`<circle cx cy r>`.",
+      "lines": 38,
+      "codeLines": 29,
+      "functions": 5,
+      "complexity": 5,
+      "maxComplexity": 1,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/model/Circle.ts",
+        "mapped": "renamed",
+        "complexity": 5
+      }
+    },
+    {
+      "path": "plugins/builtin-shapes/src/Ellipse.ts",
+      "responsibility": "`<ellipse cx cy rx ry>`.",
+      "lines": 41,
+      "codeLines": 32,
+      "functions": 5,
+      "complexity": 5,
+      "maxComplexity": 1,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/model/Ellipse.ts",
+        "mapped": "renamed",
+        "complexity": 5
+      }
+    },
+    {
+      "path": "plugins/builtin-shapes/src/Group.ts",
+      "responsibility": "The `<g>` container.",
+      "lines": 24,
+      "codeLines": 14,
+      "functions": 3,
+      "complexity": 3,
+      "maxComplexity": 1,
+      "category": "plugins: built-in",
+      "final": null
+    },
+    {
+      "path": "plugins/builtin-shapes/src/Line.ts",
+      "responsibility": "`<line x1 y1 x2 y2>`.",
+      "lines": 42,
+      "codeLines": 33,
+      "functions": 5,
+      "complexity": 5,
+      "maxComplexity": 1,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/model/Line.ts",
+        "mapped": "renamed",
+        "complexity": 5
+      }
+    },
+    {
+      "path": "plugins/builtin-shapes/src/Rect.ts",
+      "responsibility": "`<rect x y width height>`.",
+      "lines": 42,
+      "codeLines": 33,
+      "functions": 5,
+      "complexity": 5,
+      "maxComplexity": 1,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/model/Rect.ts",
+        "mapped": "renamed",
+        "complexity": 5
+      }
+    },
+    {
+      "path": "plugins/builtin-shapes/src/Text.ts",
+      "responsibility": "`<text x y>content</text>`: besides geometry it holds the text content.",
+      "lines": 61,
+      "codeLines": 45,
+      "functions": 8,
+      "complexity": 10,
+      "maxComplexity": 2,
+      "category": "plugins: built-in",
+      "final": {
+        "path": "src/model/Text.ts",
+        "mapped": "renamed",
+        "complexity": 10
+      }
+    },
+    {
+      "path": "src/adapters/NodeFileSystem.ts",
+      "responsibility": "`FileSystem` on Node's synchronous fs API; the only file allowed to import `node:fs` (rule P1).",
+      "lines": 26,
+      "codeLines": 19,
+      "functions": 2,
+      "complexity": 4,
+      "maxComplexity": 2,
+      "category": "host",
+      "final": {
+        "path": "src/io/NodeFileSystem.ts",
+        "mapped": "renamed",
+        "complexity": 4
+      }
+    },
+    {
+      "path": "src/assembly/AssemblyProfile.ts",
+      "responsibility": "Which optional plugins an assembly installs after the built-ins (design §4.3).",
+      "lines": 21,
+      "codeLines": 6,
+      "functions": 1,
+      "complexity": 1,
+      "maxComplexity": 1,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/assembly/AssemblyResult.ts",
+      "responsibility": "What an assembly produced (design §4.1): the editor, and the startup messages — one `error: …` line per optional plugin that failed, in installation order — that the REPL prints after the banner (design §4.5).",
+      "lines": 24,
+      "codeLines": 15,
+      "functions": 3,
+      "complexity": 3,
+      "maxComplexity": 1,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/assembly/BareProfile.ts",
+      "responsibility": "`--bare`: the built-in shapes and commands only, the Phase 1 editor (design §4.3, N14).",
+      "lines": 9,
+      "codeLines": 7,
+      "functions": 1,
+      "complexity": 1,
+      "maxComplexity": 1,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/assembly/CompositionRoot.ts",
+      "responsibility": "Way A: the plugins to install, listed in code.",
+      "lines": 22,
+      "codeLines": 17,
+      "functions": 2,
+      "complexity": 2,
+      "maxComplexity": 1,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/assembly/ConfigProfile.ts",
+      "responsibility": "`--config <file>`: way B, the built-ins plus the plugins of the configuration, not the composition root's optional plugins (design §4.3: otherwise a plugin listed in both would be installed twice).",
+      "lines": 25,
+      "codeLines": 14,
+      "functions": 2,
+      "complexity": 2,
+      "maxComplexity": 1,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/assembly/EditorAssembler.ts",
+      "responsibility": "Builds an `Editor` for an assembly profile (design §4.1–§4.3): installs the built-in plugins, then the profile's optional plugins (way A from the composition root, way B through the loader), all through one `PluginInstaller`, and wires the session to the file system.",
+      "lines": 70,
+      "codeLines": 46,
+      "functions": 6,
+      "complexity": 10,
+      "maxComplexity": 3,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/assembly/FullProfile.ts",
+      "responsibility": "No argument: way A, every optional plugin of the composition root in its order (design §4.3).",
+      "lines": 11,
+      "codeLines": 9,
+      "functions": 2,
+      "complexity": 2,
+      "maxComplexity": 1,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/assembly/OnlyProfile.ts",
+      "responsibility": "`--only <package>…`: part of way A — the composition root's optional plugins whose package name (the candidate's label) was given, still in the order of `optional()` (design §4.3).",
+      "lines": 29,
+      "codeLines": 21,
+      "functions": 6,
+      "complexity": 7,
+      "maxComplexity": 2,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/assembly/StartupRefusal.ts",
+      "responsibility": "The process must not start: the command line asks for something that cannot be assembled (design §4.3) — a usage error from `CliArguments`, or an `--only` name that is not in the code assembly.",
+      "lines": 13,
+      "codeLines": 6,
+      "functions": 1,
+      "complexity": 1,
+      "maxComplexity": 1,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/cli/CliArguments.ts",
+      "responsibility": "The command line of `svg-editor` (design §4.3): which assembly profile to build.",
+      "lines": 71,
+      "codeLines": 54,
+      "functions": 4,
+      "complexity": 17,
+      "maxComplexity": 7,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/cli/Repl.ts",
+      "responsibility": "The read–eval–print loop (README §1.2): prints the banner, then hands every input line unchanged to the `Editor` and writes the lines it returns.",
+      "lines": 105,
+      "codeLines": 75,
+      "functions": 10,
+      "complexity": 17,
+      "maxComplexity": 5,
+      "category": "host",
+      "final": {
+        "path": "src/cli/Repl.ts",
+        "mapped": "same path",
+        "complexity": 16
+      }
+    },
+    {
+      "path": "src/cli/main.ts",
+      "responsibility": "Program entry point (`npm run cli`).",
+      "lines": 38,
+      "codeLines": 21,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "host",
+      "final": {
+        "path": "src/cli/main.ts",
+        "mapped": "same path",
+        "complexity": 0
+      }
+    },
+    {
+      "path": "src/loader/LoadFailure.ts",
+      "responsibility": "A configuration entry, or the configuration itself, that failed before installation (design §4.5 rows 1–3, 8, 9).",
+      "lines": 24,
+      "codeLines": 15,
+      "functions": 3,
+      "complexity": 3,
+      "maxComplexity": 1,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/loader/LoadedCandidate.ts",
+      "responsibility": "A plugin that was found and imported: it goes through the one installation path (design §4.1).",
+      "lines": 19,
+      "codeLines": 14,
+      "functions": 3,
+      "complexity": 3,
+      "maxComplexity": 1,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/loader/LoadedPlugin.ts",
+      "responsibility": "One entry of an assembly's list of optional plugins, in installation order: either a candidate ready for the installer (`LoadedCandidate`) or a failure already known before installation (`LoadFailure`, e.g. `plugin not found`).",
+      "lines": 15,
+      "codeLines": 4,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/loader/LocatedModule.ts",
+      "responsibility": "Where a configured module lives (design §4.6, stage 1): its package directory, its parsed `package.json` (the manifest the installer checks) and the absolute path of its entry file (`exports[\".\"]`).",
+      "lines": 29,
+      "codeLines": 19,
+      "functions": 4,
+      "complexity": 4,
+      "maxComplexity": 1,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/loader/ModuleLocator.ts",
+      "responsibility": "Stage 1 of loading (design §4.6): turns a module string from a plugin configuration into a `LocatedModule` without importing anything, so that \"the module does not exist\" can be told apart from \"the module exists but fails to load\" (Node reports both as `ERR_MODULE_NOT_FOUND`).",
+      "lines": 100,
+      "codeLines": 67,
+      "functions": 9,
+      "complexity": 23,
+      "maxComplexity": 6,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/loader/PluginConfig.ts",
+      "responsibility": "A plugin configuration file such as `plugins.config.json` (way B, design §4.4), read and checked strictly: the top level is an object whose only key is `plugins`, an array of entries (`PluginConfigEntry`).",
+      "lines": 72,
+      "codeLines": 51,
+      "functions": 7,
+      "complexity": 16,
+      "maxComplexity": 9,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/loader/PluginConfigEntry.ts",
+      "responsibility": "One item of the `plugins` array of a plugin configuration (design §4.4): the module string exactly as written, whether it is enabled, and its options as a frozen deep copy (`PluginOptions.of`, `{}` when absent).",
+      "lines": 58,
+      "codeLines": 36,
+      "functions": 7,
+      "complexity": 17,
+      "maxComplexity": 9,
+      "category": "host",
+      "final": null
+    },
+    {
+      "path": "src/loader/PluginLoader.ts",
+      "responsibility": "Way B (design §4.1, §4.6): turns a plugin configuration into the list of optional plugins to install, one `LoadedPlugin` per enabled entry, in array order.",
+      "lines": 80,
+      "codeLines": 56,
+      "functions": 4,
+      "complexity": 14,
+      "maxComplexity": 6,
+      "category": "host",
+      "final": null
+    }
+  ],
+  "final": [
+    {
+      "path": "src/app/Editor.ts",
+      "responsibility": "Facade and Invoker (README §2.1, §2.7): one line of input in, its output lines out.",
+      "lines": 73,
+      "codeLines": 47,
+      "functions": 5,
+      "complexity": 11,
+      "maxComplexity": 4,
+      "target": "packages/kernel/src/app/Editor.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/app/EditorSession.ts",
+      "responsibility": "The session state behind one `Editor` (README §1.2): the current document (none until `init` / `read`), the default `save` path, the history, and the injected file system, command registry and shape factory.",
+      "lines": 68,
+      "codeLines": 50,
+      "functions": 10,
+      "complexity": 11,
+      "maxComplexity": 2,
+      "target": "packages/kernel/src/app/EditorSession.ts",
+      "mapped": "by file name"
+    },
+    {
+      "path": "src/cli/Repl.ts",
+      "responsibility": "The read–eval–print loop (README §1.2): prints the banner, then hands every input line unchanged to the `Editor` and writes the lines it returns.",
+      "lines": 92,
+      "codeLines": 65,
+      "functions": 9,
+      "complexity": 16,
+      "maxComplexity": 5,
+      "target": "src/cli/Repl.ts",
+      "mapped": "same path"
+    },
+    {
+      "path": "src/cli/main.ts",
+      "responsibility": "Program entry point (`npm run cli`).",
+      "lines": 13,
+      "codeLines": 4,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "target": "src/cli/main.ts",
+      "mapped": "same path"
+    },
+    {
+      "path": "src/commands/AddToCommand.ts",
+      "responsibility": "`addto <gid> <id>`: moves an existing shape to the end of a container (E24–E26); the same container is allowed and moves it to the end (E25).",
+      "lines": 67,
+      "codeLines": 51,
+      "functions": 6,
+      "complexity": 8,
+      "maxComplexity": 3,
+      "target": "plugins/builtin-commands/src/AddToCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/ArgList.ts",
+      "responsibility": "Cursor over the arguments of one command (the tokens after the command name).",
+      "lines": 117,
+      "codeLines": 70,
+      "functions": 14,
+      "complexity": 23,
+      "maxComplexity": 5,
+      "target": "packages/kernel/src/commands/ArgList.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/BackCommand.ts",
+      "responsibility": "`back <id>`: first among its siblings, i.e. drawn first and at the bottom (E27).",
+      "lines": 26,
+      "codeLines": 20,
+      "functions": 4,
+      "complexity": 4,
+      "maxComplexity": 1,
+      "target": "plugins/builtin-commands/src/BackCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/CanvasCommandParser.ts",
+      "responsibility": "The static side of `canvas [w] [h]` (README §2.1): one name, two kinds of command.",
+      "lines": 33,
+      "codeLines": 21,
+      "functions": 1,
+      "complexity": 2,
+      "maxComplexity": 2,
+      "target": "plugins/builtin-commands/src/CanvasCommandParser.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/Command.ts",
+      "responsibility": "Root of the command hierarchy (README §2.1).",
+      "lines": 36,
+      "codeLines": 18,
+      "functions": 3,
+      "complexity": 4,
+      "maxComplexity": 2,
+      "target": "packages/kernel/src/commands/Command.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/CommandCategory.ts",
+      "responsibility": "The four command groups of spec §3, in the order `help` lists them (V7).",
+      "lines": 28,
+      "codeLines": 18,
+      "functions": 3,
+      "complexity": 3,
+      "maxComplexity": 1,
+      "target": "packages/kernel/src/commands/CommandCategory.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/CommandContext.ts",
+      "responsibility": "What a command can see of the session (implemented by `EditorSession` in the app layer, and by a test double).",
+      "lines": 41,
+      "codeLines": 16,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "target": "packages/kernel/src/commands/CommandContext.ts",
+      "mapped": "by file name"
+    },
+    {
+      "path": "src/commands/CommandLine.ts",
+      "responsibility": "A resolved command line: the command type found by name plus its arguments.",
+      "lines": 30,
+      "codeLines": 20,
+      "functions": 4,
+      "complexity": 4,
+      "maxComplexity": 1,
+      "target": "packages/kernel/src/commands/CommandLine.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/CommandParser.ts",
+      "responsibility": "One line of text → `CommandLine`: tokenize, then look the command name up in the registry.",
+      "lines": 32,
+      "codeLines": 19,
+      "functions": 2,
+      "complexity": 3,
+      "maxComplexity": 2,
+      "target": "packages/kernel/src/commands/CommandParser.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/CommandRegistry.ts",
+      "responsibility": "Name dispatch #2 (spec §2.1): command name → command class.",
+      "lines": 78,
+      "codeLines": 61,
+      "functions": 4,
+      "complexity": 6,
+      "maxComplexity": 2,
+      "target": "packages/kernel/src/commands/CommandRegistry.ts",
+      "mapped": "by file name"
+    },
+    {
+      "path": "src/commands/CommandResult.ts",
+      "responsibility": "The output lines of a successful command, warnings included.",
+      "lines": 31,
+      "codeLines": 20,
+      "functions": 6,
+      "complexity": 6,
+      "maxComplexity": 1,
+      "target": "packages/kernel/src/commands/CommandResult.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/CommandType.ts",
+      "responsibility": "The static side of a command class: the class object itself satisfies this interface, so `CommandRegistry` stores classes directly (README §2.5).",
+      "lines": 29,
+      "codeLines": 11,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "target": "packages/kernel/src/commands/CommandType.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/CreateCommand.ts",
+      "responsibility": "`create <type> <id> [params…] [in <containerId>]` (spec §3, §4.1).",
+      "lines": 113,
+      "codeLines": 84,
+      "functions": 11,
+      "complexity": 17,
+      "maxComplexity": 4,
+      "target": "plugins/builtin-commands/src/CreateCommand.ts",
+      "mapped": "by file name"
+    },
+    {
+      "path": "src/commands/DeleteCommand.ts",
+      "responsibility": "`delete <id>`: detaches the shape (a container with its whole subtree).",
+      "lines": 55,
+      "codeLines": 40,
+      "functions": 6,
+      "complexity": 7,
+      "maxComplexity": 2,
+      "target": "plugins/builtin-commands/src/DeleteCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/DocumentCommand.ts",
+      "responsibility": "A document command (init, read, save, canvas with arguments).",
+      "lines": 16,
+      "codeLines": 9,
+      "functions": 1,
+      "complexity": 1,
+      "maxComplexity": 1,
+      "target": "packages/kernel/src/commands/DocumentCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/EditCommand.ts",
+      "responsibility": "An undoable shape-editing command (Template Method, README §2.6).",
+      "lines": 89,
+      "codeLines": 51,
+      "functions": 11,
+      "complexity": 14,
+      "maxComplexity": 3,
+      "target": "packages/kernel/src/commands/EditCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/FrontCommand.ts",
+      "responsibility": "`front <id>`: last among its siblings, i.e. drawn last and on top (E27).",
+      "lines": 26,
+      "codeLines": 20,
+      "functions": 4,
+      "complexity": 4,
+      "maxComplexity": 1,
+      "target": "plugins/builtin-commands/src/FrontCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/GroupCommand.ts",
+      "responsibility": "`group <newGid> <id1> <id2>…`: a new `g` takes in existing shapes, which may come from different containers (E16–E19).",
+      "lines": 98,
+      "codeLines": 72,
+      "functions": 14,
+      "complexity": 18,
+      "maxComplexity": 3,
+      "target": "plugins/builtin-commands/src/GroupCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/HelpCommand.ts",
+      "responsibility": "`help`: every registered command, grouped by the four categories of spec §3 in `CommandCategory.order()`; registration order within a group (V7).",
+      "lines": 52,
+      "codeLines": 35,
+      "functions": 5,
+      "complexity": 7,
+      "maxComplexity": 3,
+      "target": "plugins/builtin-commands/src/HelpCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/History.ts",
+      "responsibility": "Undo and redo stacks of edit commands plus the io lock (spec §4.3, U1–U8).",
+      "lines": 69,
+      "codeLines": 51,
+      "functions": 8,
+      "complexity": 10,
+      "maxComplexity": 3,
+      "target": "packages/kernel/src/commands/History.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/HistoryCommand.ts",
+      "responsibility": "Root of undo / redo: they act on the history inside `execute` and are not recorded themselves.",
+      "lines": 13,
+      "codeLines": 7,
+      "functions": 1,
+      "complexity": 1,
+      "maxComplexity": 1,
+      "target": "packages/kernel/src/commands/HistoryCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/InitCommand.ts",
+      "responsibility": "`init [w] [h]`: a new empty canvas becomes the current document, with no default save path (F5).",
+      "lines": 44,
+      "codeLines": 33,
+      "functions": 3,
+      "complexity": 4,
+      "maxComplexity": 2,
+      "target": "plugins/builtin-commands/src/InitCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/MoveCommand.ts",
+      "responsibility": "`move <id> <dx> <dy>`: translation; a container moves all its descendants.",
+      "lines": 55,
+      "codeLines": 43,
+      "functions": 6,
+      "complexity": 6,
+      "maxComplexity": 1,
+      "target": "plugins/builtin-commands/src/MoveCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/QueryCommand.ts",
+      "responsibility": "A read-only display command (tree, show, help, canvas without arguments): never recorded (U5).",
+      "lines": 10,
+      "codeLines": 7,
+      "functions": 1,
+      "complexity": 1,
+      "maxComplexity": 1,
+      "target": "packages/kernel/src/commands/QueryCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/ReadCommand.ts",
+      "responsibility": "`read <file.svg>`: the file becomes the current document and its path the default `save` path.",
+      "lines": 41,
+      "codeLines": 26,
+      "functions": 3,
+      "complexity": 3,
+      "maxComplexity": 1,
+      "target": "plugins/builtin-commands/src/ReadCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/RedoCommand.ts",
+      "responsibility": "`redo`: redoes the latest undone edit; the output is the same as the command's first run (U6).",
+      "lines": 24,
+      "codeLines": 16,
+      "functions": 2,
+      "complexity": 2,
+      "maxComplexity": 1,
+      "target": "plugins/builtin-commands/src/RedoCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/ResizeCanvasCommand.ts",
+      "responsibility": "`canvas <w> <h>`: changes the canvas size of the current document.",
+      "lines": 27,
+      "codeLines": 18,
+      "functions": 2,
+      "complexity": 2,
+      "maxComplexity": 1,
+      "target": "plugins/builtin-commands/src/ResizeCanvasCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/SaveCommand.ts",
+      "responsibility": "`save [file.svg]`: writes the current document.",
+      "lines": 46,
+      "codeLines": 33,
+      "functions": 3,
+      "complexity": 6,
+      "maxComplexity": 3,
+      "target": "plugins/builtin-commands/src/SaveCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/ScaleCommand.ts",
+      "responsibility": "`scale <id> <factor>`: every geometry attribute times `factor`, about the origin (E12).",
+      "lines": 61,
+      "codeLines": 45,
+      "functions": 6,
+      "complexity": 7,
+      "maxComplexity": 2,
+      "target": "plugins/builtin-commands/src/ScaleCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/SetCommand.ts",
+      "responsibility": "`set <id> <attr> <value>` (§4.1 whitelist, E6–E9).",
+      "lines": 88,
+      "codeLines": 63,
+      "functions": 10,
+      "complexity": 13,
+      "maxComplexity": 4,
+      "target": "plugins/builtin-commands/src/SetCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/ShowCanvasCommand.ts",
+      "responsibility": "`canvas` without arguments: shows the canvas size.",
+      "lines": 14,
+      "codeLines": 8,
+      "functions": 1,
+      "complexity": 1,
+      "maxComplexity": 1,
+      "target": "plugins/builtin-commands/src/ShowCanvasCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/ShowCommand.ts",
+      "responsibility": "`show <id>`: the §5.2 attribute detail of one shape (V6), laid out by `ShapeDetailRenderer`.",
+      "lines": 31,
+      "codeLines": 24,
+      "functions": 3,
+      "complexity": 3,
+      "maxComplexity": 1,
+      "target": "plugins/builtin-commands/src/ShowCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/Token.ts",
+      "responsibility": "One word of a command line.",
+      "lines": 28,
+      "codeLines": 17,
+      "functions": 4,
+      "complexity": 5,
+      "maxComplexity": 2,
+      "target": "packages/kernel/src/commands/Token.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/Tokenizer.ts",
+      "responsibility": "Splits a command line into tokens at white space (convention R5):",
+      "lines": 70,
+      "codeLines": 54,
+      "functions": 4,
+      "complexity": 16,
+      "maxComplexity": 8,
+      "target": "packages/kernel/src/commands/Tokenizer.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/TreeCommand.ts",
+      "responsibility": "`tree [id]`: the §5.1 structure tree of the whole document, or of the subtree rooted at one shape (V4, V5).",
+      "lines": 42,
+      "codeLines": 30,
+      "functions": 3,
+      "complexity": 6,
+      "maxComplexity": 3,
+      "target": "plugins/builtin-commands/src/TreeCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/UndoCommand.ts",
+      "responsibility": "`undo`: undoes the latest edit and prints its undo echo.",
+      "lines": 24,
+      "codeLines": 16,
+      "functions": 2,
+      "complexity": 2,
+      "maxComplexity": 1,
+      "target": "plugins/builtin-commands/src/UndoCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/UngroupCommand.ts",
+      "responsibility": "`ungroup <gid>`: the children take the container's place in its parent, in their order (E20–E23).",
+      "lines": 85,
+      "codeLines": 66,
+      "functions": 10,
+      "complexity": 16,
+      "maxComplexity": 4,
+      "target": "plugins/builtin-commands/src/UngroupCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/commands/ZOrderCommand.ts",
+      "responsibility": "Template for `front` / `back` (README §2.6): record the index, move the shape among its siblings, move it back on undo.",
+      "lines": 51,
+      "codeLines": 34,
+      "functions": 7,
+      "complexity": 7,
+      "maxComplexity": 1,
+      "target": "plugins/builtin-commands/src/ZOrderCommand.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/io/FileSystem.ts",
+      "responsibility": "File system port used by `read` / `save` (README §4.8, rule D5).",
+      "lines": 17,
+      "codeLines": 4,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "target": "packages/kernel/src/io/FileSystem.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/io/IdAllocator.ts",
+      "responsibility": "Hands out the ids of imported elements (F13, F14).",
+      "lines": 53,
+      "codeLines": 39,
+      "functions": 6,
+      "complexity": 12,
+      "maxComplexity": 4,
+      "target": "packages/kernel/src/io/IdAllocator.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/io/ImportResult.ts",
+      "responsibility": "Outcome of a successful import: the new document and the warnings raised while building it, in document order.",
+      "lines": 28,
+      "codeLines": 16,
+      "functions": 4,
+      "complexity": 4,
+      "maxComplexity": 1,
+      "target": "packages/kernel/src/io/ImportResult.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/io/NodeFileSystem.ts",
+      "responsibility": "`FileSystem` on Node's synchronous fs API; the only file allowed to import `node:fs` (rule P1).",
+      "lines": 26,
+      "codeLines": 19,
+      "functions": 2,
+      "complexity": 4,
+      "maxComplexity": 2,
+      "target": "src/adapters/NodeFileSystem.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/io/SvgImporter.ts",
+      "responsibility": "SVG file → new `SvgDocument` plus warnings.",
+      "lines": 292,
+      "codeLines": 231,
+      "functions": 20,
+      "complexity": 65,
+      "maxComplexity": 9,
+      "target": "packages/kernel/src/io/SvgImporter.ts",
+      "mapped": "by file name"
+    },
+    {
+      "path": "src/io/SvgSerializer.ts",
+      "responsibility": "`SvgDocument` → SVG text in the F18 format: XML declaration, 2-space indentation, attributes in `Shape.svgAttributes()` order, childless elements self-closed, `& < > \"` escaped in attribute values and text, final newline.",
+      "lines": 73,
+      "codeLines": 54,
+      "functions": 6,
+      "complexity": 11,
+      "maxComplexity": 5,
+      "target": "packages/kernel/src/io/SvgSerializer.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/io/XmlDomAdapter.ts",
+      "responsibility": "Adapter (README §2.8): parses text with `@xmldom/xmldom` and converts the library's DOM into `XmlElement`s, so nothing else depends on the W3C DOM.",
+      "lines": 69,
+      "codeLines": 52,
+      "functions": 4,
+      "complexity": 17,
+      "maxComplexity": 10,
+      "target": "packages/kernel/src/io/XmlDomAdapter.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/io/XmlElement.ts",
+      "responsibility": "The io layer's own XML element, independent of any XML library (Adapter target, README §2.8): local tag name, attributes in document order, child elements, and the character data of the whole subtree.",
+      "lines": 65,
+      "codeLines": 41,
+      "functions": 12,
+      "complexity": 12,
+      "maxComplexity": 1,
+      "target": "packages/kernel/src/io/XmlElement.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/CanvasSize.ts",
+      "responsibility": "Immutable canvas width × height in px; both must be positive and finite (F2).",
+      "lines": 35,
+      "codeLines": 26,
+      "functions": 5,
+      "complexity": 8,
+      "maxComplexity": 3,
+      "target": "packages/kernel/src/model/CanvasSize.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/ChildList.ts",
+      "responsibility": "Ordered children of a container.",
+      "lines": 50,
+      "codeLines": 37,
+      "functions": 6,
+      "complexity": 11,
+      "maxComplexity": 5,
+      "target": "packages/kernel/src/model/ChildList.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/Circle.ts",
+      "responsibility": "`<circle cx cy r>`.",
+      "lines": 43,
+      "codeLines": 34,
+      "functions": 5,
+      "complexity": 5,
+      "maxComplexity": 1,
+      "target": "plugins/builtin-shapes/src/Circle.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/ColorProperty.ts",
+      "responsibility": "A paint value (`fill`, `stroke`): any non-empty text, no color syntax check (E5, E9).",
+      "lines": 28,
+      "codeLines": 22,
+      "functions": 4,
+      "complexity": 5,
+      "maxComplexity": 2,
+      "target": "packages/kernel/src/model/ColorProperty.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/CoordinateRole.ts",
+      "responsibility": "Strategy: how a geometry attribute reacts to move and scale, and which values it accepts.",
+      "lines": 14,
+      "codeLines": 5,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "target": "packages/kernel/src/model/CoordinateRole.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/EditorError.ts",
+      "responsibility": "A user-visible, expected failure (bad input, missing id, constraint violation…).",
+      "lines": 12,
+      "codeLines": 6,
+      "functions": 1,
+      "complexity": 1,
+      "maxComplexity": 1,
+      "target": "packages/kernel/src/model/EditorError.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/Ellipse.ts",
+      "responsibility": "`<ellipse cx cy rx ry>`.",
+      "lines": 46,
+      "codeLines": 37,
+      "functions": 5,
+      "complexity": 5,
+      "maxComplexity": 1,
+      "target": "plugins/builtin-shapes/src/Ellipse.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/Extent.ts",
+      "responsibility": "A size (width, height, r, rx, ry): unaffected by move, must be ≥ 0 (E4).",
+      "lines": 20,
+      "codeLines": 15,
+      "functions": 3,
+      "complexity": 4,
+      "maxComplexity": 2,
+      "target": "packages/kernel/src/model/Extent.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/ExtraAttributes.ts",
+      "responsibility": "Attributes outside the editable whitelist found when reading a file (`transform`, `font-size`, `data-*`…).",
+      "lines": 26,
+      "codeLines": 15,
+      "functions": 4,
+      "complexity": 4,
+      "maxComplexity": 1,
+      "target": "packages/kernel/src/model/ExtraAttributes.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/GeometryAttribute.ts",
+      "responsibility": "Context of the `CoordinateRole` strategy: one named numeric geometry attribute of a leaf shape (e.g. `width`), stored at full precision (V3).",
+      "lines": 52,
+      "codeLines": 35,
+      "functions": 8,
+      "complexity": 8,
+      "maxComplexity": 1,
+      "target": "packages/kernel/src/model/GeometryAttribute.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/Group.ts",
+      "responsibility": "Composite: the `<g>` container.",
+      "lines": 114,
+      "codeLines": 81,
+      "functions": 18,
+      "complexity": 24,
+      "maxComplexity": 3,
+      "target": "packages/kernel/src/model/ContainerShape.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/IdSyntax.ts",
+      "responsibility": "Character-set rule for ids created from the CLI (convention F16).",
+      "lines": 23,
+      "codeLines": 13,
+      "functions": 3,
+      "complexity": 4,
+      "maxComplexity": 2,
+      "target": "packages/kernel/src/model/IdSyntax.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/LeafShape.ts",
+      "responsibility": "Shared implementation of leaf shapes.",
+      "lines": 93,
+      "codeLines": 68,
+      "functions": 17,
+      "complexity": 23,
+      "maxComplexity": 2,
+      "target": "packages/kernel/src/model/LeafShape.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/Line.ts",
+      "responsibility": "`<line x1 y1 x2 y2>`.",
+      "lines": 46,
+      "codeLines": 37,
+      "functions": 5,
+      "complexity": 5,
+      "maxComplexity": 1,
+      "target": "plugins/builtin-shapes/src/Line.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/NumberFormat.ts",
+      "responsibility": "Strict number parsing (convention R8) and the single output format (V3) shared by tree, show, command echoes and serialization.",
+      "lines": 31,
+      "codeLines": 20,
+      "functions": 3,
+      "complexity": 7,
+      "maxComplexity": 3,
+      "target": "packages/kernel/src/model/NumberFormat.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/ParamSpec.ts",
+      "responsibility": "Describes one positional `create` parameter of a shape type: the name shown in usage text, the attribute it sets, whether it may be omitted, and whether a file stores it as element content rather than as an XML attribute.",
+      "lines": 73,
+      "codeLines": 51,
+      "functions": 10,
+      "complexity": 16,
+      "maxComplexity": 5,
+      "target": "packages/kernel/src/model/ParamSpec.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/Rect.ts",
+      "responsibility": "`<rect x y width height>`.",
+      "lines": 47,
+      "codeLines": 38,
+      "functions": 5,
+      "complexity": 5,
+      "maxComplexity": 1,
+      "target": "plugins/builtin-shapes/src/Rect.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/Shape.ts",
+      "responsibility": "Composite component: every shape element (leaf or `<g>`) has an id, an optional parent, style attributes and pass-through attributes, and supports the same operations so that commands never ask which concrete class it is.",
+      "lines": 143,
+      "codeLines": 84,
+      "functions": 25,
+      "complexity": 29,
+      "maxComplexity": 2,
+      "target": "packages/kernel/src/model/Shape.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/ShapeContainer.ts",
+      "responsibility": "What can hold child shapes: `Group` and the document root `SvgDocument`.",
+      "lines": 23,
+      "codeLines": 8,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "target": "packages/kernel/src/model/ShapeContainer.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/ShapeFactory.ts",
+      "responsibility": "Name dispatch #1 (spec §2.1): type name → shape class.",
+      "lines": 51,
+      "codeLines": 35,
+      "functions": 4,
+      "complexity": 6,
+      "maxComplexity": 2,
+      "target": null,
+      "mapped": "deleted"
+    },
+    {
+      "path": "src/model/ShapeMemento.ts",
+      "responsibility": "Memento: the attribute state of one shape and, for a container, of all its descendants.",
+      "lines": 56,
+      "codeLines": 37,
+      "functions": 6,
+      "complexity": 6,
+      "maxComplexity": 1,
+      "target": "packages/kernel/src/model/ShapeMemento.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/ShapeType.ts",
+      "responsibility": "The static side of a shape class: the class object itself satisfies this interface (static `typeName`, `params`, `create`), so `ShapeFactory` stores classes directly and the compiler checks each class when it is registered.",
+      "lines": 22,
+      "codeLines": 7,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "target": "packages/kernel/src/model/ShapeType.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/StrokeWidthProperty.ts",
+      "responsibility": "`stroke-width`: a full-precision number validated like a size (≥ 0, E4).",
+      "lines": 33,
+      "codeLines": 23,
+      "functions": 4,
+      "complexity": 5,
+      "maxComplexity": 2,
+      "target": "packages/kernel/src/model/StrokeWidthProperty.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/StyleAttributes.ts",
+      "responsibility": "The common optional attributes `fill`, `stroke`, `stroke-width`, held as an ordered list of property objects; the list order is the serialization and display order (F18, V6).",
+      "lines": 77,
+      "codeLines": 51,
+      "functions": 14,
+      "complexity": 17,
+      "maxComplexity": 3,
+      "target": "packages/kernel/src/model/StyleAttributes.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/StyleProperty.ts",
+      "responsibility": "One optional style attribute of a shape (`fill`, `stroke`, `stroke-width`).",
+      "lines": 29,
+      "codeLines": 15,
+      "functions": 6,
+      "complexity": 6,
+      "maxComplexity": 1,
+      "target": "packages/kernel/src/model/StyleProperty.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/SvgDocument.ts",
+      "responsibility": "The document root `<svg>`: canvas size plus top-level shapes.",
+      "lines": 69,
+      "codeLines": 49,
+      "functions": 13,
+      "complexity": 16,
+      "maxComplexity": 3,
+      "target": "packages/kernel/src/model/SvgDocument.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/Text.ts",
+      "responsibility": "`<text x y>content</text>`: besides geometry it holds the text content.",
+      "lines": 65,
+      "codeLines": 49,
+      "functions": 8,
+      "complexity": 10,
+      "maxComplexity": 2,
+      "target": "plugins/builtin-shapes/src/Text.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/TreePosition.ts",
+      "responsibility": "Value object: where a shape sits in the tree, as (parent container, index).",
+      "lines": 39,
+      "codeLines": 26,
+      "functions": 5,
+      "complexity": 6,
+      "maxComplexity": 2,
+      "target": "packages/kernel/src/model/TreePosition.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/XCoordinate.ts",
+      "responsibility": "A horizontal position (x, cx, x1, x2): follows dx, any finite value (E4).",
+      "lines": 14,
+      "codeLines": 10,
+      "functions": 3,
+      "complexity": 3,
+      "maxComplexity": 1,
+      "target": "packages/kernel/src/model/XCoordinate.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/model/YCoordinate.ts",
+      "responsibility": "A vertical position (y, cy, y1, y2): follows dy, any finite value (E4).",
+      "lines": 14,
+      "codeLines": 10,
+      "functions": 3,
+      "complexity": 3,
+      "maxComplexity": 1,
+      "target": "packages/kernel/src/model/YCoordinate.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/view/ShapeDetailRenderer.ts",
+      "responsibility": "The §5.2 `show` detail (V6):",
+      "lines": 51,
+      "codeLines": 36,
+      "functions": 6,
+      "complexity": 12,
+      "maxComplexity": 4,
+      "target": "packages/kernel/src/view/ShapeDetailRenderer.ts",
+      "mapped": "renamed"
+    },
+    {
+      "path": "src/view/TreeRenderer.ts",
+      "responsibility": "The §5.1 structure tree.",
+      "lines": 51,
+      "codeLines": 32,
+      "functions": 7,
+      "complexity": 12,
+      "maxComplexity": 4,
+      "target": "packages/kernel/src/view/TreeRenderer.ts",
+      "mapped": "by file name"
+    }
+  ],
+  "vscodeSvg": {
+    "files": [
+      {
+        "path": "vscode-svg/src/core/Badge.ts",
+        "responsibility": "The short text shown next to a resource in the Explorer, plus its tooltip.",
+        "lines": 36,
+        "codeLines": 20,
+        "functions": 3,
+        "complexity": 5,
+        "maxComplexity": 3
+      },
+      {
+        "path": "vscode-svg/src/core/FileTypeMask.ts",
+        "responsibility": "A `vscode.FileType` value, decoded without importing `vscode`.",
+        "lines": 44,
+        "codeLines": 22,
+        "functions": 3,
+        "complexity": 6,
+        "maxComplexity": 4
+      },
+      {
+        "path": "vscode-svg/src/core/OpenElement.ts",
+        "responsibility": "An element whose start tag has been read but whose end tag has not (yet): one entry of `OutlineTreeBuilder`'s stack.",
+        "lines": 51,
+        "codeLines": 32,
+        "functions": 5,
+        "complexity": 5,
+        "maxComplexity": 1
+      },
+      {
+        "path": "vscode-svg/src/core/OutlineNode.ts",
+        "responsibility": "One element in the outline: everything the host needs to build a `vscode.DocumentSymbol`, already decided here (spec A.2, VA17–VA20).",
+        "lines": 71,
+        "codeLines": 42,
+        "functions": 7,
+        "complexity": 11,
+        "maxComplexity": 3
+      },
+      {
+        "path": "vscode-svg/src/core/OutlineRole.ts",
+        "responsibility": "The structural role of an element in the outline (VA18), decided from the tree alone — no SVG vocabulary:",
+        "lines": 34,
+        "codeLines": 18,
+        "functions": 3,
+        "complexity": 5,
+        "maxComplexity": 3
+      },
+      {
+        "path": "vscode-svg/src/core/OutlineTreeBuilder.ts",
+        "responsibility": "Builds the outline tree from the tag stream with an explicit stack, so nesting depth costs heap, not call stack.",
+        "lines": 85,
+        "codeLines": 59,
+        "functions": 6,
+        "complexity": 13,
+        "maxComplexity": 3
+      },
+      {
+        "path": "vscode-svg/src/core/ResourceKind.ts",
+        "responsibility": "What a resource is, in the extension's own terms (independent of `vscode.FileType`).",
+        "lines": 75,
+        "codeLines": 49,
+        "functions": 10,
+        "complexity": 15,
+        "maxComplexity": 4
+      },
+      {
+        "path": "vscode-svg/src/core/ResourcePath.ts",
+        "responsibility": "The path part of a resource URI (`Uri.path`: always `/`-separated, never a Windows path), with the naming questions the badge rule needs.",
+        "lines": 38,
+        "codeLines": 21,
+        "functions": 5,
+        "complexity": 6,
+        "maxComplexity": 2
+      },
+      {
+        "path": "vscode-svg/src/core/SchemeFilter.ts",
+        "responsibility": "Which URI schemes the extension decorates at all (VA6).",
+        "lines": 26,
+        "codeLines": 10,
+        "functions": 2,
+        "complexity": 2,
+        "maxComplexity": 1
+      },
+      {
+        "path": "vscode-svg/src/core/SourceSpan.ts",
+        "responsibility": "A half-open range `[start, end)` of UTF-16 offsets into a document's text.",
+        "lines": 36,
+        "codeLines": 23,
+        "functions": 5,
+        "complexity": 10,
+        "maxComplexity": 5
+      },
+      {
+        "path": "vscode-svg/src/core/SvgBadgeRule.ts",
+        "responsibility": "Spec A.1: a resource gets the `[]` badge exactly when its name ends in `.svg` (case-insensitive, VA3; hidden `.svg` excluded, VA4) **and** it is a file.",
+        "lines": 39,
+        "codeLines": 18,
+        "functions": 4,
+        "complexity": 6,
+        "maxComplexity": 3
+      },
+      {
+        "path": "vscode-svg/src/core/SvgOutline.ts",
+        "responsibility": "The result of parsing one version of a document: the top-level outline nodes, plus the first syntax error when the text is not well-formed (then the nodes cover only the text before the error, VA16).",
+        "lines": 29,
+        "codeLines": 19,
+        "functions": 4,
+        "complexity": 4,
+        "maxComplexity": 1
+      },
+      {
+        "path": "vscode-svg/src/core/SvgOutlineParser.ts",
+        "responsibility": "Spec A.2's pure logic: text → outline tree with source spans (VA13).",
+        "lines": 30,
+        "codeLines": 21,
+        "functions": 1,
+        "complexity": 4,
+        "maxComplexity": 4
+      },
+      {
+        "path": "vscode-svg/src/core/SvgOutlineScope.ts",
+        "responsibility": "Which documents get the SVG outline (VA14): the `DocumentFilter` content, as plain data so it stays testable without `vscode`.",
+        "lines": 24,
+        "codeLines": 7,
+        "functions": 1,
+        "complexity": 1,
+        "maxComplexity": 1
+      },
+      {
+        "path": "vscode-svg/src/core/XmlAttributeDecoder.ts",
+        "responsibility": "Turns a raw attribute value, as written between the quotes, into the value a DOM would report (`getAttribute`), so `id=\"a&amp;b\"` displays as `a&b` (VA17).",
+        "lines": 47,
+        "codeLines": 31,
+        "functions": 3,
+        "complexity": 15,
+        "maxComplexity": 9
+      },
+      {
+        "path": "vscode-svg/src/core/XmlEndTag.ts",
+        "responsibility": "A complete end tag `</name>`, as produced by `XmlTokenizer`.",
+        "lines": 27,
+        "codeLines": 19,
+        "functions": 4,
+        "complexity": 4,
+        "maxComplexity": 1
+      },
+      {
+        "path": "vscode-svg/src/core/XmlStartTag.ts",
+        "responsibility": "A complete start tag `<name attr=\"…\" …>` or empty-element tag `<name …/>`, as produced by `XmlTokenizer`.",
+        "lines": 60,
+        "codeLines": 37,
+        "functions": 7,
+        "complexity": 8,
+        "maxComplexity": 2
+      },
+      {
+        "path": "vscode-svg/src/core/XmlSyntaxError.ts",
+        "responsibility": "The text is not (yet) well-formed at `offset`: an unterminated construct, a malformed tag, a mismatched or stray end tag, or elements still open at the end of the text.",
+        "lines": 22,
+        "codeLines": 11,
+        "functions": 2,
+        "complexity": 2,
+        "maxComplexity": 1
+      },
+      {
+        "path": "vscode-svg/src/core/XmlTokenizer.ts",
+        "responsibility": "A small XML scanner that reports only what an outline needs: start tags and end tags with their exact source offsets (VA13).",
+        "lines": 209,
+        "codeLines": 165,
+        "functions": 11,
+        "complexity": 49,
+        "maxComplexity": 11
+      },
+      {
+        "path": "vscode-svg/src/extension.ts",
+        "responsibility": null,
+        "lines": 44,
+        "codeLines": 28,
+        "functions": 2,
+        "complexity": 2,
+        "maxComplexity": 1
+      },
+      {
+        "path": "vscode-svg/src/host/OutlineSymbolAdapter.ts",
+        "responsibility": "Adapter: the core outline tree (`OutlineNode`, UTF-16 offsets) → VSCode's `DocumentSymbol` tree (`Range` of line/character positions).",
+        "lines": 54,
+        "codeLines": 38,
+        "functions": 4,
+        "complexity": 7,
+        "maxComplexity": 3
+      },
+      {
+        "path": "vscode-svg/src/host/SvgDocumentSymbolProvider.ts",
+        "responsibility": "The object VSCode calls whenever it needs the outline of an SVG document (Outline view, breadcrumbs, \"Go to Symbol in Editor\").",
+        "lines": 45,
+        "codeLines": 26,
+        "functions": 2,
+        "complexity": 5,
+        "maxComplexity": 4
+      },
+      {
+        "path": "vscode-svg/src/host/SvgFileDecorationProvider.ts",
+        "responsibility": "The object VSCode calls back for every resource it renders (Explorer rows, editor tabs, …).",
+        "lines": 48,
+        "codeLines": 36,
+        "functions": 3,
+        "complexity": 8,
+        "maxComplexity": 6
+      },
+      {
+        "path": "vscode-svg/src/host/SvgResourceWatcher.ts",
+        "responsibility": "Turns file-system events for `*.svg` paths into the `onDidChangeFileDecorations` event (VA7).",
+        "lines": 46,
+        "codeLines": 23,
+        "functions": 6,
+        "complexity": 7,
+        "maxComplexity": 2
+      },
+      {
+        "path": "vscode-svg/src/host/VscodeResourceKindReader.ts",
+        "responsibility": "Adapter: `workspace.fs.stat(uri).type` (a `vscode.FileType` bit mask) → `ResourceKind`.",
+        "lines": 31,
+        "codeLines": 17,
+        "functions": 2,
+        "complexity": 3,
+        "maxComplexity": 2
+      }
+    ],
+    "source": {
+      "files": 25,
+      "lines": 1251,
+      "codeLines": 792,
+      "functions": 105,
+      "complexity": 203
+    },
+    "tests": {
+      "files": 31,
+      "lines": 2414,
+      "codeLines": 1942
+    }
+  }
+}

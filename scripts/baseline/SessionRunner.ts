@@ -11,11 +11,14 @@ import type { TranscriptSession } from "./TranscriptSession.js";
  * a fresh temporary directory, the session's fixtures copied into it, the CLI
  * started there with stdin redirected from the input file (so it is not a TTY),
  * then stdout, stderr, exit code and every file left in the directory collected.
+ *
+ * `args` (one run of a run group, placeholders already expanded) go after the
+ * entry script; nothing else depends on them (design §4.8).
  */
 export class SessionRunner {
   private static readonly TIMEOUT_MS = 60_000;
 
-  run(session: TranscriptSession): SessionOutcome {
+  run(session: TranscriptSession, args: readonly string[]): SessionOutcome {
     const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `svg-baseline-${session.name}-`));
     try {
       if (session.hasFixtures()) {
@@ -23,7 +26,7 @@ export class SessionRunner {
       }
       const input = fs.openSync(session.inputPath, "r");
       try {
-        const result = spawnSync(BaselinePaths.TSX, [BaselinePaths.entryAbsolute()], {
+        const result = spawnSync(BaselinePaths.TSX, [BaselinePaths.entryAbsolute(), ...args], {
           cwd: workDir,
           stdio: [input, "pipe", "pipe"],
           timeout: SessionRunner.TIMEOUT_MS,
