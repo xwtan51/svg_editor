@@ -2,7 +2,7 @@
  * Architecture rules, checked by scanning the source of the three regions of
  * design §1.1: the kernel (packages/kernel/src), the host (src) and every
  * plugin (plugins/<directory>/src). Which rule applies where follows design
- * §1.2.1 (layer rules L1–L4, L6–L8, L10; L9 without the loader part),
+ * §1.2.1 (layer rules L1–L10),
  * §1.2.2 (dependency rules D1–D8 inside the kernel), §1.2.4 (README's P rules
  * per region) and §1.3 (P5a, P5b).
  *
@@ -55,6 +55,8 @@ const PLUGIN_PACKAGE_PREFIX = "@svgframe/plugin-";
 const ENTRY_SCRIPT = "src/cli/main.ts";
 /** L4: the only file that may import plugin packages. */
 const COMPOSITION_ROOT = "src/assembly/CompositionRoot.ts";
+/** Way B's loader (design §1.1): L5, and the loader part of L9. */
+const LOADER_SRC = "src/loader/";
 
 interface SourceFile {
   /** Repository-relative location, POSIX separators, e.g. "packages/kernel/src/model/Shape.ts". */
@@ -261,6 +263,7 @@ const PACKAGE_TARGETS = packageTargets(PLUGINS);
 const NAMES = registrationNames(PLUGINS);
 const ALL_NAMES = [...new Set([...NAMES.values()].flat())];
 const PLUGIN_SHAPE_NAMES = NAMES.get(ContributionCategory.SHAPES) ?? [];
+const PACKAGE_NAMES = PLUGINS.map(packageName).filter((name) => name.length > 0);
 const KERNEL_ENTRY_FILES = Object.values(exportsOf(readJson(`${KERNEL_DIR}/package.json`)))
   .map((target) => exportTarget(KERNEL_DIR, target))
   .filter((location): location is string => location !== null);
@@ -439,6 +442,53 @@ function hostImportViolations(files: readonly SourceFile[]): string[] {
       return !(pluginPackage && ref.from.location === COMPOSITION_ROOT);
     })
     .map((ref) => `${describeImport(ref)} (L4)`);
+}
+
+// ---------------------------------------------------------------- L5: the loader knows no plugin
+
+/**
+ * The contents of every string literal in `code` (comments already removed);
+ * a template literal contributes its static parts, the text between its
+ * `${…}` expressions (an expression containing `}` is not split correctly).
+ */
+function stringFragments(code: string): string[] {
+  const fragments: string[] = [];
+  for (const match of code.matchAll(/(["'`])((?:\\[\s\S]|(?!\1)[^\\])*)\1/g)) {
+    const content = match[2] ?? "";
+    fragments.push(...(match[1] === "`" ? content.split(/\$\{[^}]*\}/) : [content]));
+  }
+  return fragments;
+}
+
+/**
+ * L5 (design §1.2.1; spec §6 "loader independence"): the loader (src/loader)
+ * imports no plugin, by package name or by path; no string literal (template
+ * static parts included) contains a plugin's package name or the
+ * `@svgframe/plugin-` prefix; no literal equals a registration name; no
+ * `switch`. Comments do not count. Both name lists come from
+ * plugins/<directory>/package.json, so a new plugin is covered unchanged.
+ */
+function loaderViolations(
+  files: readonly SourceFile[],
+  packageNames: readonly string[] = PACKAGE_NAMES,
+  names: readonly string[] = ALL_NAMES,
+): string[] {
+  const loader = files.filter((file) => file.location.startsWith(LOADER_SRC));
+  const imports = allImports(loader)
+    .filter((ref) => ref.specifier.startsWith(PLUGIN_PACKAGE_PREFIX) || (ref.target !== null && isPlugin(regionOf(ref.target))))
+    .map((ref) => `${describeImport(ref)} (L5: the loader imports no plugin)`);
+  const literals = loader.flatMap((file) => {
+    const fragments = stringFragments(file.code);
+    const packages = fragments
+      .filter((fragment) => [PLUGIN_PACKAGE_PREFIX, ...packageNames].some((name) => fragment.includes(name)))
+      .map((fragment) => `${file.location} names a plugin package in "${fragment}" (L5)`);
+    const registrations = fragments
+      .filter((fragment) => names.includes(fragment))
+      .map((fragment) => `${file.location} contains the registration name "${fragment}" (L5)`);
+    return [...packages, ...registrations];
+  });
+  const switches = switchViolations(loader).map((violation) => `${violation} (L5)`);
+  return [...imports, ...literals, ...switches];
 }
 
 // ---------------------------------------------------------------- L6: no registration names in the kernel
@@ -644,7 +694,10 @@ function cliDependencyViolations(files: readonly SourceFile[]): string[] {
 const RESTRICTED_IMPORTS: ReadonlyArray<{ what: RegExp; allowedIn: (file: SourceFile) => boolean }> = [
   {
     what: /^(node:)?(fs(\/promises)?|module)$/,
-    allowedIn: (file) => file.location.startsWith("src/adapters/") || (isPlugin(file.region) && baseName(file.location).startsWith("Node")),
+    allowedIn: (file) =>
+      file.location.startsWith("src/adapters/") ||
+      file.location.startsWith(LOADER_SRC) ||
+      (isPlugin(file.region) && baseName(file.location).startsWith("Node")),
   },
   { what: /^@xmldom\/xmldom(\/.*)?$/, allowedIn: (file) => file.location === `${KERNEL_SRC}io/XmlDomAdapter.ts` },
   { what: /^(node:)?readline(\/promises)?$/, allowedIn: (file) => file.location.startsWith("src/cli/") },
@@ -953,13 +1006,17 @@ function entryInternalViolations(
 
 // ---------------------------------------------------------------- P7: the `error:` prefix
 
-/** P7: string literals that start with `error:` appear only where the prefix is added (design §1.2.4). */
+/**
+ * P7: string literals that start with `error:` appear only where the prefix is
+ * added (design §1.2.4). A template literal counts through its static parts
+ * (`stringFragments`), so `` `error: ${x}` `` is caught as well.
+ */
 const ERROR_PREFIX_FILES = [`${KERNEL_SRC}app/Editor.ts`, "src/assembly/EditorAssembler.ts"];
 
 function errorPrefixViolations(files: readonly SourceFile[]): string[] {
   return files
     .filter((file) => !ERROR_PREFIX_FILES.includes(file.location))
-    .filter((file) => file.literals.some((literal) => literal.startsWith("error:")))
+    .filter((file) => stringFragments(file.code).some((fragment) => fragment.startsWith("error:")))
     .map((file) => `${file.location} writes the error: prefix itself (P7)`);
 }
 
@@ -1057,6 +1114,14 @@ describe("scanning (design §1.2.3)", () => {
     }
   });
 
+  it("the loader's files are scanned as host files (design §1.1, rules L5 and L9)", () => {
+    const loader = sources.filter((file) => file.location.startsWith(LOADER_SRC));
+    expect(loader.map((file) => file.location)).toEqual(
+      expect.arrayContaining([`${LOADER_SRC}PluginLoader.ts`, `${LOADER_SRC}ModuleLocator.ts`, `${LOADER_SRC}PluginConfig.ts`]),
+    );
+    expect(new Set(loader.map((file) => `${file.region}/${file.module}`))).toEqual(new Set(["host/loader"]));
+  });
+
   it("the plugin list comes from plugins/*/package.json, and every directory under plugins/ is a plugin", () => {
     expect(PLUGINS.length).toBeGreaterThanOrEqual(2);
     expect(directoriesWithoutManifest()).toEqual([]);
@@ -1066,6 +1131,11 @@ describe("scanning (design §1.2.3)", () => {
     const locations = sources.map((file) => file.location);
     expect(PLUGIN_ENTRY_FILES).toHaveLength(PLUGINS.length);
     for (const entry of PLUGIN_ENTRY_FILES) expect(locations).toContain(entry);
+  });
+
+  it("the plugin package names are collected from every package.json (L5)", () => {
+    expect(PACKAGE_NAMES).toHaveLength(PLUGINS.length);
+    expect(PACKAGE_NAMES).toEqual(expect.arrayContaining(["@svgframe/plugin-builtin-shapes", "@svgframe/plugin-builtin-commands"]));
   });
 
   it("the registration names are collected from every contributes", () => {
@@ -1107,6 +1177,10 @@ describe("layer rules (design §1.2.1) applied to the source", () => {
 
   it("L4: the host imports the kernel's two entries; only the composition root imports plugins", () => {
     expect(hostImportViolations(sources)).toEqual([]);
+  });
+
+  it("L5: the loader imports no plugin and names no plugin package, no registration name, and has no switch", () => {
+    expect(loaderViolations(sources)).toEqual([]);
   });
 
   it("L6: no registration name appears as a string literal in the kernel", () => {
@@ -1378,6 +1452,54 @@ describe("architecture rules detect synthetic violations", () => {
     expect(hostImportViolations([file(COMPOSITION_ROOT, text)])).toEqual([]);
   });
 
+  const loaderFile = (path: string, text: string) => host(`loader/${path}`, text);
+  const L5_PACKAGES = ["@svgframe/plugin-shape-box", "@acme/tree-star"];
+  const L5_NAMES = ["box", "tree", "box-type-label"];
+  const l5 = (f: SourceFile) => loaderViolations([f], L5_PACKAGES, L5_NAMES);
+
+  it("L5: the loader importing a plugin package, by name, by its package.json, or by a path into plugins/", () => {
+    expect(l5(loaderFile("X.ts", 'import Box from "@svgframe/plugin-shape-box";'))).not.toEqual([]);
+    expect(l5(loaderFile("X.ts", 'import m from "@svgframe/plugin-other/package.json" with { type: "json" };'))).not.toEqual([]);
+    expect(l5(loaderFile("X.ts", 'import { BuiltinShapesPlugin } from "../../plugins/builtin-shapes/src/BuiltinShapesPlugin.js";'))).not.toEqual([]);
+    expect(l5(loaderFile("X.ts", 'const m = await import("@svgframe/plugin-shape-box");'))).not.toEqual([]);
+  });
+
+  it.each([
+    ["a package name in a string", 'const box = "@svgframe/plugin-shape-box";'],
+    ["a package name inside a longer string", "const hint = 'try @acme/tree-star first';"],
+    ["a package name in a template's static part", "const p = `${dir}/node_modules/@acme/tree-star/package.json`;"],
+    ["the prefix in a string", 'const isOurs = name.startsWith("@svgframe/plugin-");'],
+    ["the prefix in a template", "const full = `@svgframe/plugin-${shortName}`;"],
+  ])("L5: %s", (_case, text) => {
+    expect(l5(loaderFile("PluginLoader.ts", text))).toHaveLength(1);
+  });
+
+  it("L5: a literal equal to a registration name (string or template), but not one merely containing it", () => {
+    expect(l5(loaderFile("X.ts", 'if (name === "tree") {}'))).toHaveLength(1);
+    expect(l5(loaderFile("X.ts", "const t = `box-type-label`;"))).toHaveLength(1);
+    expect(l5(loaderFile("X.ts", "const t = `${a}box${b}`;"))).toHaveLength(1);
+    expect(l5(loaderFile("X.ts", 'const m = "tree decorator"; const n = `${a} box`;'))).toEqual([]);
+  });
+
+  it("L5: switch in the loader", () => {
+    expect(l5(loaderFile("X.ts", "switch (moduleName) { default: break; }"))).toHaveLength(1);
+  });
+
+  it("L5: comments may mention plugin packages, names and switch; other host files are not checked by L5", () => {
+    const commented = [
+      "// Loads e.g. @svgframe/plugin-shape-box without importing it; no switch (x) here.",
+      '/* { "module": "@acme/tree-star" } registers "tree" */',
+      'import { PluginCandidate } from "@svgframe/kernel/host";',
+      'const json = "package.json";',
+    ].join("\n");
+    expect(l5(loaderFile("ModuleLocator.ts", commented))).toEqual([]);
+    expect(l5(host("assembly/CompositionRoot.ts", 'import Box from "@svgframe/plugin-shape-box";\nconst t = "tree";'))).toEqual([]);
+  });
+
+  it("L5: string fragments, templates split at their expressions", () => {
+    expect(stringFragments("const a = \"x\\\"y\"; const b = 'p'; const c = `q${r}s${t}`;")).toEqual(['x\\"y', "p", "q", "s", ""]);
+  });
+
   it("L6: a registration name as a whole literal in the kernel; contained in a message, or outside the kernel, it is fine", () => {
     const names = ["rect", "init", "read", "box-type-label"];
     expect(registrationNameViolations([kernel("model/X.ts", 'const t = "rect";')], names)).toHaveLength(1);
@@ -1535,6 +1657,9 @@ describe("architecture rules detect synthetic violations", () => {
     ["@xmldom/xmldom outside XmlDomAdapter", kernel("io/X.ts", 'import { DOMParser } from "@xmldom/xmldom";')],
     ["@xmldom/xmldom in a plugin", plugin("p", "X.ts", 'import { DOMParser } from "@xmldom/xmldom";')],
     ["node:readline outside src/cli", host("assembly/X.ts", 'import { createInterface } from "node:readline";')],
+    ["node:module in src/assembly", host("assembly/X.ts", 'import { createRequire } from "node:module";')],
+    ["node:fs in src/cli", host("cli/X.ts", 'import { readFileSync } from "node:fs";')],
+    ["node:fs in a directory merely named like the loader", host("assembly/loader/X.ts", 'import { readFileSync } from "node:fs";')],
     ["console in a plugin", plugin("p", "X.ts", "console.log(1);")],
     ["process.stdout in the kernel", kernel("app/X.ts", "process.stdout.write('x');")],
   ])("P1 / L9: %s", (_case, f) => {
@@ -1550,6 +1675,17 @@ describe("architecture rules detect synthetic violations", () => {
         host("cli/Repl.ts", 'import * as readline from "node:readline";\nconsole.log(process.stdin);'),
       ]),
     ).toEqual([]);
+  });
+
+  it("P1 / L9: node:fs and node:module are allowed in the loader (design §1.2.1 L9, S8)", () => {
+    expect(
+      ioIsolationViolations([
+        host("loader/ModuleLocator.ts", 'import { createRequire } from "node:module";\nimport { readFileSync } from "node:fs";'),
+        host("loader/PluginConfig.ts", 'import { readFileSync } from "fs";'),
+      ]),
+    ).toEqual([]);
+    expect(ioIsolationViolations([host("loader/X.ts", 'import { createInterface } from "node:readline";')])).toHaveLength(1);
+    expect(ioIsolationViolations([host("loader/X.ts", "console.log(1);")])).toHaveLength(1);
   });
 
   it("P2: type registries", () => {
@@ -1708,6 +1844,7 @@ describe("architecture rules detect synthetic violations", () => {
 
   it("P7: an error: prefix written outside Editor / EditorAssembler", () => {
     expect(errorPrefixViolations([plugin("p", "X.ts", 'return ["error: nope"];')])).toHaveLength(1);
+    expect(errorPrefixViolations([plugin("p", "X.ts", "return [`error: ${x}`];")])).toHaveLength(1);
     expect(errorPrefixViolations([kernel("app/Editor.ts", 'private static readonly ERROR_PREFIX = "error: ";')])).toEqual([]);
     expect(errorPrefixViolations([host("cli/Repl.ts", "write(`internal error: ${x}`);")])).toEqual([]);
   });

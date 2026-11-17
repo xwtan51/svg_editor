@@ -1,0 +1,11 @@
+{
+  "name": "@fixture/manifest-mismatch",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/MismatchPlugin.ts",
+    "./package.json": "./package.json"
+  },
+  "contributes": { "commands": ["fixture-declared"] }
+}

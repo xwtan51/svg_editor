@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { TempWorkspace } from "../../support/TempWorkspace.js";
 import { TranscriptRunner } from "../../system/TranscriptRunner.js";
 
 // The real entry point in a child process, fed through a pipe (not a TTY).
@@ -17,8 +18,8 @@ const TIMEOUT_MS = 10_000;
 const BANNER = "svg-editor 0.1 — type 'help' for commands";
 const NO_DOCUMENT = "error: no document. use 'init' or 'read' first";
 
-function runMain(input: string, cwd?: string) {
-  return spawnSync(process.execPath, [tsxCli, mainTs], { input, encoding: "utf8", timeout: TIMEOUT_MS, cwd });
+function runMain(input: string, cwd?: string, args: readonly string[] = []) {
+  return spawnSync(process.execPath, [tsxCli, mainTs, ...args], { input, encoding: "utf8", timeout: TIMEOUT_MS, cwd });
 }
 
 describe("cli/main.ts over a pipe", () => {
@@ -99,6 +100,105 @@ describe("cli/main.ts over a pipe", () => {
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
+    },
+    TIMEOUT_MS + 2_000,
+  );
+});
+
+describe("cli/main.ts: assembly profiles (design §4.3, §4.5)", () => {
+  const USAGE = "usage: svg-editor [--bare | --only <plugin>… | --config <file>]";
+  const SESSION = "init\ncreate rect r 0 0 10 10\n";
+  const SESSION_OUTPUT = ["canvas 800x600 created", "rect#r created"];
+  const lines = (...all: string[]) => all.map((line) => `${line}\n`).join("");
+
+  it(
+    "--bare runs a session like no argument does",
+    () => {
+      const result = runMain(SESSION, undefined, ["--bare"]);
+      expect(result.status).toBe(0);
+      expect(result.stderr).toBe("");
+      expect(result.stdout).toBe(lines(BANNER, ...SESSION_OUTPUT));
+      expect(result.stdout).toBe(runMain(SESSION).stdout);
+    },
+    TIMEOUT_MS + 2_000,
+  );
+
+  it(
+    "--config with a module that cannot be found: banner, the error line, then the first command's output; exit code 0",
+    () => {
+      const workspace = new TempWorkspace();
+      try {
+        workspace.writeConfig([{ module: "./nope" }, { module: "@svgframe/plugin-nope" }]);
+        // A relative --config is relative to the current directory.
+        const result = runMain(SESSION, workspace.root, ["--config", "plugins.config.json"]);
+        expect(result.status).toBe(0);
+        expect(result.stderr).toBe("");
+        expect(result.stdout).toBe(
+          lines(BANNER, "error: plugin not found: ./nope", "error: plugin not found: @svgframe/plugin-nope", ...SESSION_OUTPUT),
+        );
+      } finally {
+        workspace.remove();
+      }
+    },
+    TIMEOUT_MS + 2_000,
+  );
+
+  it(
+    "--config loads a fixture plugin under tsx, from an unrelated current directory",
+    () => {
+      const workspace = new TempWorkspace();
+      try {
+        const result = runMain("fixture-ok\nfixture-count\n", workspace.root, ["--config", join(TempWorkspace.FIXTURES, "relative.config.json")]);
+        expect(result.stderr).toBe("");
+        expect(result.status).toBe(0);
+        expect(result.stdout).toBe(lines(BANNER, "fixture ok", "count=1"));
+      } finally {
+        workspace.remove();
+      }
+    },
+    TIMEOUT_MS + 2_000,
+  );
+
+  it(
+    "a malformed configuration: error: invalid plugin config, then the session goes on as bare",
+    () => {
+      const workspace = new TempWorkspace();
+      try {
+        const config = workspace.writeText("bad.json", '{ "plugins": [ { "module": "./x", "enable": false } ] }');
+        const result = runMain(`${SESSION}stats\n`, workspace.root, ["--config", config]);
+        expect(result.status).toBe(0);
+        expect(result.stderr).toBe("");
+        expect(result.stdout).toBe(lines(BANNER, "error: invalid plugin config", ...SESSION_OUTPUT, "error: unknown command: stats"));
+      } finally {
+        workspace.remove();
+      }
+    },
+    TIMEOUT_MS + 2_000,
+  );
+
+  it.each([
+    ["two kinds of option", ["--bare", "--config", "x.json"]],
+    ["an unknown argument", ["--verbose"]],
+    ["--config without a value", ["--config"]],
+    ["--only without a value", ["--only"]],
+  ])(
+    "usage error (%s): nothing on stdout, the usage line on stderr, exit code 2",
+    (_case, args) => {
+      const result = runMain(SESSION, undefined, args);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toBe(`${USAGE}\n`);
+      expect(result.status).toBe(2);
+    },
+    TIMEOUT_MS + 2_000,
+  );
+
+  it(
+    "--only with a package that is not in the code assembly: no banner, the error on stderr, exit code 2",
+    () => {
+      const result = runMain(SESSION, undefined, ["--only", "nope"]);
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toBe("error: --only: no such plugin in the code assembly: nope\n");
+      expect(result.status).toBe(2);
     },
     TIMEOUT_MS + 2_000,
   );

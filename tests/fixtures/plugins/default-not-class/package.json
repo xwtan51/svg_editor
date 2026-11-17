@@ -1,0 +1,11 @@
+{
+  "name": "@fixture/default-not-class",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/InstancePlugin.ts",
+    "./package.json": "./package.json"
+  },
+  "contributes": {}
+}

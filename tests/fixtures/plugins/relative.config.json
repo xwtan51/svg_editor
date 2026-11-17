@@ -1,0 +1,6 @@
+{
+  "plugins": [
+    { "module": "./ok" },
+    { "module": "../plugins/stateful" }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@fixture/eval-throws",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/EvalThrowsPlugin.ts",
+    "./package.json": "./package.json"
+  },
+  "contributes": {}
+}

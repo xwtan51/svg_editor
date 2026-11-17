@@ -47,11 +47,19 @@ function editor(): Editor {
   return new Editor(session);
 }
 
-async function runRepl(input: string, interactive: boolean): Promise<{ code: number; out: string; err: string }> {
+async function runRepl(
+  input: string,
+  interactive: boolean,
+  startupMessages?: readonly string[],
+): Promise<{ code: number; out: string; err: string }> {
   const stdin = new PassThrough();
   const out = new Capture();
   const err = new Capture();
-  const done = new Repl(editor(), stdin, out, err, interactive).run();
+  const repl =
+    startupMessages === undefined
+      ? new Repl(editor(), stdin, out, err, interactive)
+      : new Repl(editor(), stdin, out, err, interactive, startupMessages);
+  const done = repl.run();
   stdin.end(input);
   const code = await done;
   return { code, out: out.text, err: err.text };
@@ -97,5 +105,35 @@ describe("Repl", () => {
     expect(result.code).toBe(1);
     expect(result.out).toBe(`${BANNER}\nrect#r created\n`);
     expect(result.err).toMatch(/^internal error: Error: broken invariant\n/);
+  });
+
+  it("startup messages come after the banner and before the first command's output", async () => {
+    const messages = ["error: plugin not found: @x/nope", "error: duplicate registration: commands/tree"];
+    const result = await runRepl("create rect r 0 0 1 1\nnosuch\n", false, messages);
+    expect(result).toEqual({
+      code: 0,
+      out: [BANNER, ...messages, "rect#r created", "error: unknown command: nosuch", ""].join("\n"),
+      err: "",
+    });
+  });
+
+  it("startup messages are printed even when there is no input", async () => {
+    expect(await runRepl("", false, ["error: invalid plugin config"])).toEqual({
+      code: 0,
+      out: `${BANNER}\nerror: invalid plugin config\n`,
+      err: "",
+    });
+  });
+
+  it("interactive: the first prompt comes after the startup messages", async () => {
+    const result = await runRepl("create rect r 0 0 1 1\n", true, ["error: plugin not found: ./x"]);
+    expect(result.out).toBe(`${BANNER}\nerror: plugin not found: ./x\nsvg> rect#r created\nsvg> \n`);
+  });
+
+  it("no startup messages: byte for byte the output without the parameter", async () => {
+    const input = "# script\ncreate rect r 0 0 1 1\nmove r\nnosuch\n";
+    for (const interactive of [false, true]) {
+      expect(await runRepl(input, interactive, [])).toEqual(await runRepl(input, interactive));
+    }
   });
 });

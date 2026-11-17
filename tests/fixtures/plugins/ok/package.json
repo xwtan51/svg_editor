@@ -1,0 +1,11 @@
+{
+  "name": "@fixture/ok",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/OkPlugin.ts",
+    "./package.json": "./package.json"
+  },
+  "contributes": { "commands": ["fixture-ok"] }
+}

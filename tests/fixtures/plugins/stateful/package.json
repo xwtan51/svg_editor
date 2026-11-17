@@ -1,0 +1,11 @@
+{
+  "name": "@fixture/stateful",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/CounterPlugin.ts",
+    "./package.json": "./package.json"
+  },
+  "contributes": { "commands": ["fixture-count"] }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@fixture/default-undefined",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/UndefinedDefault.ts",
+    "./package.json": "./package.json"
+  },
+  "contributes": {}
+}
