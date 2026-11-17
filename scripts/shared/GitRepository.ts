@@ -17,6 +17,11 @@ export class GitRepository {
     private readonly env: NodeJS.ProcessEnv = process.env,
   ) {}
 
+  /** The environment git runs with. */
+  environment(): NodeJS.ProcessEnv {
+    return this.env;
+  }
+
   /** Runs `git args…`; returns stdout and the exit status (never throws on a non-zero status). */
   run(args: readonly string[]): { stdout: string; stderr: string; status: number } {
     const result = spawnSync("git", [...args], { cwd: this.dir, env: this.env, encoding: "utf8", maxBuffer: GitRepository.MAX_BUFFER });

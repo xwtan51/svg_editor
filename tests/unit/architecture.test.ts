@@ -40,6 +40,7 @@ import { describe, expect, it } from "vitest";
 import { ContributionCategory } from "../../packages/kernel/src/extension/ContributionCategory.js";
 import { PluginManifest } from "../../packages/kernel/src/extension/PluginManifest.js";
 import { EditorError } from "../../packages/kernel/src/model/EditorError.js";
+import { ClassComment } from "../../scripts/metrics/ClassComment.js";
 
 const REPO_DIR = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -61,6 +62,8 @@ const LOADER_SRC = "src/loader/";
 interface SourceFile {
   /** Repository-relative location, POSIX separators, e.g. "packages/kernel/src/model/Shape.ts". */
   location: string;
+  /** The file as written. */
+  text: string;
   /** "kernel", "host" or "plugin:<directory>" (design §1.2.3); "other" outside the three. */
   region: string;
   /** Kernel: first directory under packages/kernel/src ("(entry)" for api.ts, host-api.ts); host: first directory under src; plugin: "(plugin)". */
@@ -148,7 +151,7 @@ function moduleOf(location: string, region: string): string {
 
 function analyze(location: string, text: string): SourceFile {
   const region = regionOf(location);
-  return { location, region, module: moduleOf(location, region), ...stripSource(text) };
+  return { location, region, module: moduleOf(location, region), text, ...stripSource(text) };
 }
 
 function listDirectories(dir: string): string[] {
@@ -1080,6 +1083,19 @@ function viewCastViolations(files: readonly SourceFile[]): string[] {
   );
 }
 
+/**
+ * Design §1.4 (S9): every source file of the three regions has a class
+ * comment, the `/** … *\/` block right above its first export declaration
+ * (or, in a file without export declarations, the block it starts with). Its
+ * first sentence is the file's responsibility in docs/metrics, so the rule
+ * uses the metrics script's own `ClassComment` to find it.
+ */
+function classCommentViolations(files: readonly SourceFile[]): string[] {
+  return files
+    .filter((file) => ClassComment.of(file.text) === null)
+    .map((file) => `${file.location} has no class comment: a /** … */ block right above its first export declaration, or opening a file without one (design §1.4)`);
+}
+
 // ---------------------------------------------------------------- the rules applied to the source
 
 const sources = loadFiles(scanRoots(PLUGINS));
@@ -1299,6 +1315,11 @@ describe("paradigm rules per region (design §1.2.4, §1.3) applied to the sourc
 
   it("P10: plugin source never casts to Shape, SvgDocument or ContainerShape", () => {
     expect(viewCastViolations(sources)).toEqual([]);
+  });
+
+  it("every source file of the three regions has a class comment (design §1.4, the responsibility in docs/metrics)", () => {
+    expect(sources.map((file) => file.location)).toEqual(expect.arrayContaining([`${KERNEL_SRC}api.ts`, `${KERNEL_SRC}host-api.ts`, ENTRY_SCRIPT, ...PLUGIN_ENTRY_FILES]));
+    expect(classCommentViolations(sources)).toEqual([]);
   });
 });
 
@@ -1878,6 +1899,34 @@ describe("architecture rules detect synthetic violations", () => {
       "plugins/q/src/C.ts casts to ContainerShape (P10)",
       "plugins/q/src/C.ts casts to Shape (P10)",
     ]);
+  });
+
+  it("class comment: a class without one, or with only a // comment or a detached one, is reported in every region", () => {
+    expect(
+      classCommentViolations([
+        kernel("model/Bare.ts", 'import { A } from "./A.js";\n\nexport class Bare {}\n'),
+        host("assembly/Slashes.ts", "// The slashes.\nexport class Slashes {}\n"),
+        plugin("p", "Detached.ts", "/** Detached. */\n\nexport default class Detached {}\n"),
+        plugin("p", "Block.ts", "/* Not a doc comment. */\nexport interface Block {}\n"),
+      ]),
+    ).toEqual([
+      `${KERNEL_SRC}model/Bare.ts has no class comment: a /** … */ block right above its first export declaration, or opening a file without one (design §1.4)`,
+      "src/assembly/Slashes.ts has no class comment: a /** … */ block right above its first export declaration, or opening a file without one (design §1.4)",
+      "plugins/p/src/Detached.ts has no class comment: a /** … */ block right above its first export declaration, or opening a file without one (design §1.4)",
+      "plugins/p/src/Block.ts has no class comment: a /** … */ block right above its first export declaration, or opening a file without one (design §1.4)",
+    ]);
+  });
+
+  it("class comment: right above the export, after imports; a re-export file or an entry script opening with one passes", () => {
+    expect(
+      classCommentViolations([
+        kernel("model/Fine.ts", 'import { A } from "./A.js";\n\n/**\n * Fine.\n */\nexport abstract class Fine {}\n'),
+        kernel("api.ts", '/** Public entry. */\nexport { A } from "./model/A.js";\nexport type { B } from "./model/B.js";\n'),
+        host("cli/main.ts", '/**\n * Entry.\n */\nimport { Repl } from "./Repl.js";\nnew Repl();\n'),
+        plugin("p", "PPlugin.ts", "/** The p plugin. */\nexport default class PPlugin {}\n"),
+      ]),
+    ).toEqual([]);
+    expect(classCommentViolations([kernel("api.ts", '// Public entry.\nexport { A } from "./model/A.js";\n')])).toHaveLength(1);
   });
 
   it("P10: whole words only (as ShapeView, as ShapeKit, as ShapeContainer pass); comments, strings, kernel and host are not checked", () => {
