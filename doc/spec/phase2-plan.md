@@ -15,7 +15,9 @@
 >
 > **修订记录（2026-11-15）**：S7 经 PR #21 合并（`main` = `1762627`），评审后修订了设计文档（ungroup 的保护、结构违约的处理、事件派发位置、`containerId`、`renderSubtree` 签名、§8.3/§8.4 草图、G17–G21）。受影响的 S7、S12、S13 各节加了 **〔S7 修订〕** 段落。
 >
-> **进度**：S0–S7 已合并；里程碑 ① 完成（`dcd5f37`）。
+> **修订记录（2026-11-17）**：S8 经 PR #22 合并（`main` = `d4cfd64`），评审后修订了设计文档（加载结果按配置项交错、`StartupRefusal`、命令行边界情况、`process.exitCode`、§8 开头换成实际的 `rg` 输出、P7 覆盖模板字符串、N17、G22–G25）。受影响的 S8、S9、插件步骤的通用做法、S14、S15 各节加了 **〔S8 修订〕** 段落。
+>
+> **进度**：S0–S8 已合并；里程碑 ① 完成（`dcd5f37`）。
 
 ---
 
@@ -280,6 +282,8 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 
 **分支**：`feat/p2-loader`。
 
+**〔S8 修订〕已完成**（PR #22，合并提交 `d4cfd64`，1450 个测试）。与原设计不同、已写回设计文档的决定：`PluginLoader.load(configFile)` 返回 `LoadedPlugin[]`（每个 enabled 项一个 `LoadedCandidate` 或 `LoadFailure`），装配器逐项安装，启动消息因此按配置项交错（§4.1，G22）；方式 A 的候选也包成 `LoadedCandidate`，三种装配共用一条安装路径；四种装配配置是 `AssemblyProfile` 的四个子类；用法错误与 `--only` 未知包名都抛 `StartupRefusal`，由 `main.ts` 写 stderr、退出码 2（§4.3，G25）；`main.ts` 改用 `process.exitCode`；命令行边界情况见 §4.3；坏掉的禁用项也让整个配置作废（N17）；`<reason>` 的规则在 `PluginLoader` 里另实现一份，内核 `FailureReason` 仍不导出（§4.5）；§8 开头换成实际的 `rg` 输出，原预测中 `createRequire` 那一行因为 `rg` 区分大小写永远匹配不到（G23）；P7 也检查模板字符串的静态部分（§1.2.4，G24）。
+
 ---
 
 ### S9　框架 e：度量与检查工具 → 里程碑 ②
@@ -305,6 +309,15 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 
 **验收**：metrics 可以由脚本复现；差异检查脚本对一个人为构造的“改了内核”的提交能报出失败。最后一个提交为 `milestone(2/6): 框架可扩展`。
 
+**〔S8 修订〕**：
+
+- 三个已有会话的 `.runs.json`（`--bare` 与 `--config {transcript}/configs/empty.json`）把 S8 手工做过的验收固定下来。S10 之前 `optional()` 为空，任何 `--only` 都会被拒（退出码 2），所以通用装配契约测试此时没有真实插件可测：必须另有一个用替身组合根证明机制有效的用例，否则空表会让 vitest 报 “No test found in suite”。
+- 差异检查脚本的第 3 部分按 S8 修订后的 §8 开头输出（文件按路径排序），对提交 `C` 而不是工作区取内容。
+- 顺带补两处 S7、S8 遗留：内核测试补“在 `appliedMessage` / `undoneMessage` 里改结构也是程序错误”（现有测试在把 `checkStructure` 挪到取文案之前时仍全绿）；设计 §4.1 时序图 `alt` 标签里的两个 `--` 被 PlantUML 渲染成删除线，需转义。
+- **允许修改**另加：`packages/kernel/tests/`（只限上一条的测试）、`doc/design-phase2.md`（只限同步本步的决定与上一条的时序图）、`doc/transcript/README.md`（补 `.runs.json` 的说明）、`doc/process-log.md`。
+- 读 git 历史或做提交的测试（`plugin-diff`、metrics 的 `final` 映射）一律在临时仓库里跑：CI 的 `actions/checkout@v4` 是浅克隆，没有 `final` tag，也没有配置 git 身份。
+
+
 **分支**：`chore/p2-tooling`。
 
 ---
@@ -326,6 +339,8 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 | C′（配置） | `M plugins.config.json`，以及该插件需要的会话数据（`doc/transcript/…`） | 只改配置与测试数据 |
 
 `box` 另有演示分支 `demo/box-config` 上的方式 B 提交 C_B（`A plugins/shape-box/**`、`M plugins.config.json`、`M package-lock.json`）。每次接入的完整判据命令和预测的 `--name-status` 见设计 §1.5 与第 8 节。
+
+**〔S8 修订〕**：加载器已定稿，每次接入都要求 `rg -n "import|require|switch" src/loader --sort path` 的输出与设计 §8 开头那段逐字相同（不加 `--sort path` 时只有文件先后不同）；`git diff C^ C -- src/loader` 为空。
 
 ---
 
@@ -437,6 +452,8 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 
 **〔S4 修订〕另加**：`cli-1` 的 full 双装配组（不带参数 vs `--config plugins.config.json`），它只能在 S13 之后加，因为 S10–S13 每次接入的 C 与 C′ 之间两种装配会短暂不一致；`cli-2` 的期望输出（如 S11 未生成，需同意 `--update cli-2`）；组合根与配置的插件集合、顺序、options 一致性测试；CI 加 `npm run typecheck:scripts`、`npm run baseline`，处理 `actions/checkout@v4`、`actions/setup-node@v4` 的 Node 20 弃用提示。
 
+**〔S8 修订〕**：`PluginConfig`、`ModuleLocator`、`PluginLoader`、`EditorAssembler` 的测试用 `process.chdir`，依赖 vitest 默认的 `forks` 池（设计 §9.1）；改 `vitest.config.ts` 时不能换成 `threads`。CI 的 `actions/checkout@v4` 默认是深度 1 的浅克隆、不带 tag，所以 `npm run baseline` 可以进 CI，`npm run metrics`（要读 `final`）不进，或者给 checkout 加 `fetch-depth: 0`。
+
 **允许修改**：测试、会话数据、CI 配置。**不改运行代码**；发现问题时单独开修复 PR。
 
 **验收**：`npm test` 和 CI 全绿。
@@ -466,6 +483,8 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 4. 最后一个提交为 `milestone(6/6): 收尾`。合并后打 tag：`git tag p2 && git push origin p2`。
 
 **〔S4 修订〕另加**：`vscode-svg/doc/analysis.md` §1.4 中“设计文档尚未编写”的说法改为指向 README；README §3 合并 L1–L10、P5a/P5b/P10 与 §1.2.4 的区域表；README §5 记录 K1、K2 的消除；改正 README V1 与 `tests/unit/view/TreeRenderer.test.ts:135` 注释中 `tree n1` “第 18 列”的笔误（实为 19）。
+
+**〔S8 修订〕**：README 的已知局限里记一条：`PluginContext.shapeTypes()`、`CommandContext.shapes()` 返回的是真实注册表，插件用 `as any` 强转可以绕过安装器（类型层面已禁止，设计 §2.3.5 定为故意违约）。
 
 **允许修改**：文档、metrics 产物。〔S4 修订〕即 `doc/`、`docs/metrics/`、`vscode-svg/doc/analysis.md`，以及上述测试注释。
 
