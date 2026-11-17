@@ -16,7 +16,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "baseline": "tsx scripts/baseline/main.ts",
-    "typecheck:scripts": "tsc --noEmit -p scripts"
+    "typecheck:scripts": "tsc --noEmit -p scripts",
+    "plugin-diff": "tsx scripts/plugin-diff/main.ts"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
