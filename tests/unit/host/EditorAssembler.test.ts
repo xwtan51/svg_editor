@@ -88,12 +88,16 @@ describe("EditorAssembler", () => {
     expect(editor.executeLine("stats")).toEqual(["error: unknown command: stats"]);
   });
 
-  it("full: in S6 the same commands as bare, and no startup message", async () => {
+  it("full: the commands of bare plus those every optional plugin declares, and no startup message", async () => {
     const assembler = new EditorAssembler(new MemoryFileSystem());
     const full = await assembler.assemble(new FullProfile());
     expect(full.startupMessages()).toEqual([]);
     const bare = (await new EditorAssembler(new MemoryFileSystem()).assemble(new BareProfile())).editor();
-    expect(full.editor().executeLine("help")).toEqual(bare.executeLine("help"));
+    const declared = new CompositionRoot()
+      .optional()
+      .flatMap((candidate) => (candidate.manifestJson() as { contributes?: { commands?: string[] } }).contributes?.commands ?? []);
+    const expected = [...commandNames(bare.executeLine("help")), ...declared];
+    expect(commandNames(full.editor().executeLine("help")).sort()).toEqual(expected.sort());
   });
 
   it("each editor gets its own registrations", async () => {

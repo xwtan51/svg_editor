@@ -31,7 +31,14 @@ describe("CompositionRoot", () => {
     }
   });
 
-  it("has no optional plugin in S6", () => {
-    expect(new CompositionRoot().optional()).toEqual([]);
+  it("labels every optional plugin with its manifest's name, distinct and never a built-in's", () => {
+    const root = new CompositionRoot();
+    const builtinLabels = root.builtins().map((candidate) => candidate.label());
+    const labels = root.optional().map((candidate) => candidate.label());
+    for (const candidate of root.optional()) {
+      expect((candidate.manifestJson() as { name: string }).name).toBe(candidate.label());
+      expect(builtinLabels).not.toContain(candidate.label());
+    }
+    expect(new Set(labels).size).toBe(labels.length);
   });
 });
