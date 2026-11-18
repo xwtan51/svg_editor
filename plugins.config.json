@@ -1,1 +1,1 @@
-{ "plugins": [] }
+{ "plugins": [ { "module": "@svgframe/plugin-command-stats" } ] }
