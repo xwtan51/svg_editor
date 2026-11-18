@@ -17,7 +17,9 @@
 >
 > **修订记录（2026-11-17）**：S8 经 PR #22 合并（`main` = `d4cfd64`），评审后修订了设计文档（加载结果按配置项交错、`StartupRefusal`、命令行边界情况、`process.exitCode`、§8 开头换成实际的 `rg` 输出、P7 覆盖模板字符串、N17、G22–G25）。受影响的 S8、S9、插件步骤的通用做法、S14、S15 各节加了 **〔S8 修订〕** 段落。
 >
-> **进度**：S0–S8 已合并；里程碑 ① 完成（`dcd5f37`）。
+> **修订记录（2026-11-18）**：S9 经 PR #23 合并（`main` = `33b8ab1`），设计文档同步了 S9 的决定（`plugin-diff` 的判定规则与退出码、`.runs.json` 的严格校验与报告格式、metrics 的 `final` 映射与“职责”切分、工具测试一律用临时仓库、N18、N19、G26–G33）。为写 S10 提示词做草稿实测时发现：S6 写的两个装配处测试把 `optional()` 为空钉死了，组合根一加插件就失败。受影响的插件步骤的通用做法、S10、S14、S15 各节加了 **〔S9 修订〕** 段落。
+>
+> **进度**：S0–S9 已合并；里程碑 ①（`dcd5f37`）、②（`92db60a`）完成。
 
 ---
 
@@ -342,6 +344,13 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 
 **〔S8 修订〕**：加载器已定稿，每次接入都要求 `rg -n "import|require|switch" src/loader --sort path` 的输出与设计 §8 开头那段逐字相同（不加 `--sort path` 时只有文件先后不同）；`git diff C^ C -- src/loader` 为空。
 
+**〔S9 修订〕**：
+
+- `plugin-diff` 已实现，判定规则见设计 §1.5“判定规则与退出码”：`C` 必须恰好有一个父提交；文件清单用 `--no-renames`；`packages/`、`src/`、`plugins/` 以外的改动（锁文件等）列为“需要在 PR 中逐项说明”，不判失败（N18）；方式 A 要求排除新插件目录后恰好只有 `M src/assembly/CompositionRoot.ts`，且 `plugins.config.json` 不变；方式 B 要求运行代码不变、配置有改动。第 3 部分用 `git grep` 读提交 `C` 的内容，与 `rg -n "import|require|switch" src/loader --sort path` 逐字节相同。PR 描述贴 C 的完整输出。
+- **C′ 不跑 `plugin-diff`**：插件目录在 C′ 的父提交里已经存在，脚本按规则判 FAIL（“not a new plugin”），这是预期结果，不是问题。C′ 用 `git diff --name-status C C′` 证明只改了配置与会话数据。
+- `docs/metrics/` 在插件步骤中不重新生成（记录的 `R` 是 S9 的 `c52893a`），终版在 S15。
+- 通用装配契约测试（`tests/system/assemblyContract.test.ts`）在接入时**不改**；它的一个测试名里写着 “empty until S10 …”，S10 之后就过时了，留到 S14 改名。
+
 ---
 
 ### S10　命令插件 `stats`
@@ -353,6 +362,13 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 **〔S4 修订〕**：两种装配都支持（C + C′）；“`help` / `unknown command`”由 S9 的通用装配契约测试自动覆盖，不用另写。设计见 §8.1。**允许修改**：`plugins/command-stats/`、`src/assembly/CompositionRoot.ts`、`plugins.config.json`、`package-lock.json`、`doc/`。
 
 **验收**：差异检查脚本通过；全部测试通过；基线会话（禁用新增插件时）仍与 `final` 逐字节一致。
+
+**〔S9 修订〕**（来自写 S10 提示词前的草稿实测）：
+
+- **先修两个 S6 的测试**：`tests/unit/host/CompositionRoot.test.ts` 的 “has no optional plugin in S6” 断言 `optional()` 等于 `[]`，`tests/unit/host/EditorAssembler.test.ts` 的 “full: in S6 the same commands as bare …” 断言 full 的 `help` 与 bare 相同。组合根一加 `stats` 这两个就失败，而接入提交 C 不能碰测试。所以在 C 之前单独加一个只改这两个测试的提交，改成不写插件名的通用写法（例如“full 的命令 = bare 的命令 + `optional()` 各清单声明的命令”），S11–S13 接入时不用再改。这是设计缺口，从 G34 起登记。
+- **测试替身**：设计 8.1 说 `StatsCommand` 测试用“替身 `History`”，做不到：`History` 是带私有字段的类，`api.ts` 只以 `export type` 导出它，结构相同的对象过不了类型检查，插件测试也不能 `new History()`。“不进 undo 栈”改为经 `@svgframe/kernel/host` 的真实 `EditorSession` + `Editor` 运行 `stats`，比较前后的 `undoDepth`、`redoDepth`、`isLocked` 与序列化结果。
+- `stats` 不加会话：包含 `stats` 的会话是 S11 的 `cli-2`，S10 不碰 `doc/transcript/`。
+- **允许修改**另加：`tests/unit/host/CompositionRoot.test.ts`、`tests/unit/host/EditorAssembler.test.ts`（只限第一条）、`doc/spec/phase2-plan.md`（刷新副本）、`doc/design-phase2.md`（只限 8.1 改成实际情况、8.5 的新缺口、9.2 的 S10 一行）、`doc/README.md`（只限扩展点清单补 `stats`）、`doc/process-log.md`。
 
 **分支**：`feat/plugin-stats`。
 
@@ -454,6 +470,12 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 
 **〔S8 修订〕**：`PluginConfig`、`ModuleLocator`、`PluginLoader`、`EditorAssembler` 的测试用 `process.chdir`，依赖 vitest 默认的 `forks` 池（设计 §9.1）；改 `vitest.config.ts` 时不能换成 `threads`。CI 的 `actions/checkout@v4` 默认是深度 1 的浅克隆、不带 tag，所以 `npm run baseline` 可以进 CI，`npm run metrics`（要读 `final`）不进，或者给 checkout 加 `fetch-depth: 0`。
 
+**〔S9 修订〕**（S9 审查遗留，本步测试可改时补上）：
+
+- `FinalMapping` 的“`final` 中有两个同名的 `D` 文件 → 都判为已删除”没有测试（去掉这个条件仍全绿）；`GitRepository.nameStatus` 的 `--no-renames` 没有测试钉住（改成 `-M` 仍全绿，实际影响很小）。
+- `tests/unit/cli/main.test.ts` 的 SIGINT 用例在机器高负载时偶尔得到退出码 130（S8 起就有，疑为 tsx 父进程转发信号的竞态），进 CI 前要处理。
+- `tests/system/assemblyContract.test.ts` 里 “(empty until S10 adds the first optional plugin)” 的测试名改掉。
+
 **允许修改**：测试、会话数据、CI 配置。**不改运行代码**；发现问题时单独开修复 PR。
 
 **验收**：`npm test` 和 CI 全绿。
@@ -485,6 +507,8 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 **〔S4 修订〕另加**：`vscode-svg/doc/analysis.md` §1.4 中“设计文档尚未编写”的说法改为指向 README；README §3 合并 L1–L10、P5a/P5b/P10 与 §1.2.4 的区域表；README §5 记录 K1、K2 的消除；改正 README V1 与 `tests/unit/view/TreeRenderer.test.ts:135` 注释中 `tree n1` “第 18 列”的笔误（实为 19）。
 
 **〔S8 修订〕**：README 的已知局限里记一条：`PluginContext.shapeTypes()`、`CommandContext.shapes()` 返回的是真实注册表，插件用 `as any` 强转可以绕过安装器（类型层面已禁止，设计 §2.3.5 定为故意违约）。
+
+**〔S9 修订〕**：设计 §1.1 的目录树没有列出 S9 新增的 `scripts/shared/`（§0.4 已登记），README 的一致性自查与目录说明要补上。`npm run metrics -- HEAD` 生成终版之后，用记录的提交号复现一次，`git diff --exit-code docs/metrics` 应为空。
 
 **允许修改**：文档、metrics 产物。〔S4 修订〕即 `doc/`、`docs/metrics/`、`vscode-svg/doc/analysis.md`，以及上述测试注释。
 
