@@ -2162,9 +2162,12 @@ src/loader/PluginLoader.ts:60:      namespace = (await import(pathToFileURL(loca
 | `src/StatsPlugin.ts` | 入口，`export default class StatsPlugin`（P5b） |
 | `src/StatsCommand.ts` | 命令：静态侧 + 命令对象（与内置命令同一写法） |
 | `src/ShapeTally.ts` | 计数器：按首次出现的顺序累计叶子、统计容器 |
-| `tests/FakeLeaf.ts`、`tests/FakeContainer.ts` | 测试替身：分别继承内核的 `LeafShape`、`ContainerShape`，`kindName` 可指定，用来搭任意文档（不依赖内置图形插件） |
-| `tests/FakeCommandContext.ts` | 测试替身：`CommandContext` 的内存实现 |
+| `tests/doubles/FakeLeaf.ts`、`tests/doubles/FakeContainer.ts` | 测试替身：分别继承内核的 `LeafShape`、`ContainerShape`，`kindName` 可指定（叶子的 `tagName` 也可另外指定，容器的 `tagName` 固定为 `g`），用来搭任意文档（不依赖内置图形插件） |
+| `tests/doubles/TestEditor.ts` | 最小编辑器：`ExtensionRegistry` + `PluginInstaller` 依次安装一个测试插件（下面四条替身命令）与真实的 `StatsPlugin`（以本包 `package.json` 为清单），再 `new EditorSession(<替身文件系统>, registry)`、`new Editor(session)`；没有 `init`，文档用 `session.replaceDocument(new SvgDocument(), null)` 放进去 |
+| `tests/doubles/AddLeafCommand.ts`、`tests/doubles/BarrierCommand.ts`、`tests/doubles/FakeUndoCommand.ts`、`tests/doubles/FakeRedoCommand.ts`、`tests/doubles/NoFileSystem.ts` | 测试替身：`add <id>`（`EditCommand`，往根下追加一个叶子，填充 undo / redo 栈）、`barrier`（`DocumentCommand`，加 io 锁）、`undo` / `redo`（`HistoryCommand`，经 `UndoStack`；真实的在内置命令插件里，L3 不能 import）、没有文件的 `FileSystem` |
 | `tests/ShapeTally.test.ts`、`tests/StatsCommand.test.ts`、`tests/StatsPlugin.test.ts` | 见下 |
+
+（S10 修订：原清单是 `tests/FakeLeaf.ts`、`tests/FakeContainer.ts`、`tests/FakeCommandContext.ts`。`FakeCommandContext` 与“替身 `History`”做不到（缺口 G35），改为经真实 `EditorSession` + `Editor` 运行；替身照 `plugins/builtin-commands/tests/doubles/` 的写法放进 `tests/doubles/`。）
 
 **2. 草图**
 
@@ -2237,6 +2240,8 @@ export class ShapeTally {
 
 **3. 接入提交 C 与判据**
 
+S10 的实际结果（S10 修订：原来这里是预测，`tests/` 下的文件按 8.1 第 1 小节的修订变了；C = `8dc2c43`）：
+
 ```text
 $ git diff --name-status C^ C
 M	package-lock.json
@@ -2244,14 +2249,21 @@ A	plugins/command-stats/package.json
 A	plugins/command-stats/src/ShapeTally.ts
 A	plugins/command-stats/src/StatsCommand.ts
 A	plugins/command-stats/src/StatsPlugin.ts
-A	plugins/command-stats/tests/FakeCommandContext.ts
-A	plugins/command-stats/tests/FakeContainer.ts
-A	plugins/command-stats/tests/FakeLeaf.ts
 A	plugins/command-stats/tests/ShapeTally.test.ts
 A	plugins/command-stats/tests/StatsCommand.test.ts
 A	plugins/command-stats/tests/StatsPlugin.test.ts
+A	plugins/command-stats/tests/doubles/AddLeafCommand.ts
+A	plugins/command-stats/tests/doubles/BarrierCommand.ts
+A	plugins/command-stats/tests/doubles/FakeContainer.ts
+A	plugins/command-stats/tests/doubles/FakeLeaf.ts
+A	plugins/command-stats/tests/doubles/FakeRedoCommand.ts
+A	plugins/command-stats/tests/doubles/FakeUndoCommand.ts
+A	plugins/command-stats/tests/doubles/NoFileSystem.ts
+A	plugins/command-stats/tests/doubles/TestEditor.ts
 M	src/assembly/CompositionRoot.ts
 ```
+
+C 之前还有一个只改测试的提交 `2dc394b`（S10 修订，缺口 G34）：S6 的两个装配处测试把 `optional()` 为空钉死了（`CompositionRoot.test.ts` 的 “has no optional plugin in S6”、`EditorAssembler.test.ts` 的 “full: in S6 the same commands as bare …”），组合根一加插件就失败，而 C 不能碰测试。两个测试改成不写插件名的写法：每个可选候选的 `label()` 等于其清单的 `name`、互不相同、不与内置插件同名；full 的命令名（排序后）= bare 的命令名 + `optional()` 各清单 `contributes.commands` 的并集，且没有启动消息。S11–S13 接入时不用再改。
 
 | 插件目录以外的文件 | 为什么必须改 |
 |---|---|
@@ -2281,7 +2293,7 @@ rg -n "import|require|switch" src/loader                                        
 
 没有一项需要内核再提供什么。
 
-**测试**：`ShapeTally`：空文档 → `(total 0, containers 0)`；规格示例（3 rect、1 circle、2 text、2 容器，含嵌套）→ 原样；首次出现顺序（先 text 后 rect 的文档 → `text: … rect: …`）；容器内的叶子计数、容器嵌套容器、`kindName` 与 `tagName` 不同的叶子按 `kindName` 计。`StatsCommand`：`stats x` → `usage: stats`；执行前后文档序列化相同、`recordIn` 后 undo 深度不变（替身 `History`）。`StatsPlugin`：替身 `PluginContext` 收到恰好一个命令 `stats`。“已加载时出现在 `help` 中、未加载时报 `unknown command`”由 S9 的通用装配契约测试覆盖（9.2），接入时不改那个测试。
+**测试**（S10 修订：按实际写法）：`ShapeTally`：空文档 → `(total 0, containers 0)`；规格示例（3 rect、1 circle、2 text、2 容器，含嵌套；文档按深度优先推出，不是照抄示例去配）→ 原样；首次出现顺序（先 text 后 rect 的文档 → `text: … rect: …`）；深度优先而不是广度优先（根下 `[g1[text], circle]` → `text` 在 `circle` 之前）；按当前子节点顺序；容器内的叶子计数、容器嵌套容器、`kindName` 为 `box` 的容器只计入 containers、`kindName` 与 `tagName` 不同的叶子按 `kindName` 计、只有容器 → `(total 0, containers N)`。`StatsCommand`（经 `TestEditor` 的真实 Invoker）：没有文档 → `no document`；`stats x` → `usage: stats`；有文档时输出一行；先用 `add`、`undo` 让 undo 栈与 redo 栈都非空，`stats` 前后的序列化结果、`undoDepth`、`redoDepth`、`isLocked` 都相同；`stats` 之后 `undo` 撤销的仍是之前那条 `add`；`barrier` 加锁后 `stats` 不解锁。`StatsPlugin`：本包 `package.json` 的 `contributes` 恰为 `{ commands: ["stats"] }`；用真实 `PluginInstaller`、以它为清单安装成功，注册的恰好是 `StatsCommand`；装在测试插件之后时 `stats` 排在命令目录末尾、类别是 `CommandCategory.DISPLAY`（`help` 的分组依据）；两个编辑器各有自己的注册。真实的 `help` 在内置命令插件里，插件测试不能运行它（L3，缺口 G36）；“已加载时出现在 `help` 中、未加载时报 `unknown command`”由 S9 的通用装配契约测试覆盖（9.2），接入时不改那个测试。
 
 ### 8.2 `dir`（S11）
 
@@ -2918,6 +2930,9 @@ rg -n "import|require|switch" src/loader                                        
 | G31 | S9 实现（metrics 自查） | 附录 B.4 的 `final` 合计 $M = 669$ 与 5.3 的口径不一致：B.4 的实验没数 `&&=`、`\|\|=`、`??=` | 按 5.3 为 671（`SvgImporter.ts:78-79` 的两个 `??=`），在 B.4 旁注明；S9 补上（S9 修订） |
 | G32 | S9 实现（“职责”一栏） | “第一个句号或空行”切不好以列表开头的类注释：`ShapeDetailRenderer` 的第一句会被切成 “… (V6): 1.”，`Tokenizer` 的第一句会吞下整个列表 | 5.3：Markdown 列表的第一项与空行一样开始新的块，`e.g.` 等缩写与反引号内的句号不算句子结束；S9 补上（S9 修订） |
 | G33 | S9 实现（工具脚本的测试） | CI 是深度为 1 的浅克隆、没有 tag、没有 git 身份，读本仓库历史的测试在 CI 上必然失败 | 9.1：测试一律在临时仓库里进行并隔离 git 配置；S9 补上（S9 修订） |
+| G34 | S10 草稿（组合根加第一个可选插件） | S6 的两个装配处测试把“`optional()` 为空”钉死：`CompositionRoot.test.ts` 断言 `optional()` 等于 `[]`，`EditorAssembler.test.ts` 断言 full 的 `help` 与 bare 逐行相同。组合根一加插件两者就失败，而接入提交 C 只能有插件目录、组合根和锁文件（1.6） | C 之前单独一个只改这两个测试的提交，改成不写插件名、不依赖 `optional()` 长度的写法（8.1 第 3 小节）；S10 补上（S10 修订） |
+| G35 | S10 草稿（照抄 8.1 的测试计划） | 8.1 的“替身 `History`”在类型上不可能：`History` 是带私有字段的类，`api.ts` 只以 `export type` 导出它，结构相同的对象传给 `recordIn` 时 `tsc` 报 TS2739；插件测试也不能 `new History()`（两个入口都不导出它的值）。`FakeCommandContext` 的 `history()` 同理 | 经 `@svgframe/kernel/host` 的真实 `EditorSession` + `Editor` 运行 `stats`，比较前后的 `undoDepth`、`redoDepth`、`isLocked` 与序列化结果（8.1 第 1 小节与“测试”）；S10 补上（S10 修订） |
+| G36 | S10 实现（插件测试的最小编辑器） | 插件测试只装本插件与替身插件（9.1），而 `undo`、`redo`、`help` 都在内置命令插件里，L3 不许 import：“`stats` 之后 `undo`”与“`help` 里有 `stats`”在插件测试里没有现成的命令可用 | `undo` / `redo` 在测试插件里用 `HistoryCommand` 的替身（经 `UndoStack`，与内置的写法相同）；`help` 的分组依据是命令目录与 `category`，插件测试断言 `stats` 在目录末尾、类别为 `DISPLAY`，`help` 中的那一行由通用装配契约测试覆盖（8.1“测试”）；S10 补上（S10 修订） |
 
 ---
 
@@ -2948,7 +2963,7 @@ rg -n "import|require|switch" src/loader                                        
 | S7 | 内核：`AttributeDispatcher`（命中、未命中 → null、优先级、并列 → `ambiguous`、`handles` 抛错、`apply` 部分修改后抛 `EditorError` / 抛普通 `Error` → 文档与 undo/redo 深度、io 锁都不变、不回退白名单、undo / redo 各一次整体恢复、redo 回显与首次相同）；`TreeRenderer`（无标签逐字节不变、单个标签、两个标签按注册顺序、根行与 `tree <id>` 第一行、标签不参与列宽、`tagFor` 违约 → `tree decorator failed`）；`DocumentEvents`（三个事件的触发点、失败命令不派发、`read` / `save` 失败无事件、订阅顺序）；`canRelease`（替身容器拒绝时 `delete` / `addto` / `group` 的状态完全不变、同容器 `addto` 允许）；`SvgSerializer(DocumentView)`。architecture test：P10 | 基线 0 差异；对照第 8 节逐项确认 box 与 `modified-star` 需要的内核接口都已存在（S7 的验收） |
 | S8 | 装配处：`CliArguments`（四种配置、互斥、未知参数、`--only` 未知包名、退出码 2）；`PluginConfig`（合法、语法错误、顶层多键、项缺 `module`、`enabled` 非布尔、`options` 非对象、文件不存在）；`ModuleLocator`（相对路径以配置目录为基准、包名经 `node_modules`、目录无 `package.json`、`exports` 缺 `./package.json`、入口文件不存在）；`PluginLoader`：**四条规格失败路径**（`not found`、`no default export`、`manifest mismatch`、`failed to activate`）+ 重复注册 + 求值失败 + 依赖缺失（报 `failed to load` 而非 `not found`）+ 默认导出不是类 + 回滚后后续插件照常加载 + `enabled: false` 完全跳过 + 数组顺序 + options 传递 + 同一插件装进两个 `Editor` 状态独立；`Repl` 的启动消息位置。architecture test：L5、L9 的 loader 部分 | 手工验证：`--bare` 与 `--config <空配置>` 两种方式下基线三个会话与 `final` 逐字节一致（S9 固定成 `.runs.json`） |
 | S9 | `SessionPlan` / `RunGroup`（缺省组、占位符替换、组内比对、`--update` 拒绝组内不一致）；`ComplexityCounter`（内置样本自检：`readQuoted` 的 M = 8）；`PluginDiffCheck`（对人为构造的“改了内核”的提交报失败、对路径不存在报失败）；architecture test：每个源文件有类注释（metrics 的职责来源）；**通用装配契约测试**：对 `CompositionRoot.optional()` 中每个候选，读其清单的 `commands`，断言 bare 下执行报 `unknown command: <name>`、`--only <包名>` 下 `help` 含以 `  <name>` 开头的一行（S10、S11 接入时自动覆盖，不改测试） | 三个已有会话的 `.runs.json`（`--bare` + 空配置）0 差异；metrics 可由脚本复现 |
-| S10 | `stats` 插件自己的测试（8.1） | 判据脚本通过；装配契约测试覆盖 `stats` |
+| S10 | `stats` 插件自己的测试（8.1）；C 之前改两个 S6 的装配处测试（`CompositionRoot.test.ts` 的可选候选改为“`label()` 等于清单 `name`、互不相同、不与内置同名”，`EditorAssembler.test.ts` 的 full 改为“bare 的命令 + `optional()` 各清单声明的命令，没有启动消息”，缺口 G34）（S10 修订） | 判据脚本通过；装配契约测试覆盖 `stats` |
 | S11 | `dir` 插件自己的测试（8.2）：替身（混合、空目录、隐藏项、读取失败、稳定排序、多余参数）、真实临时目录（含符号链接与断链）、状态（无文档可用；有文档时成功与失败都不改文档、undo/redo 深度、io 锁） | 判据脚本通过；`cli-2` 的双装配组 A = B |
 | S12 | box 插件自己的测试（8.3）；根 `tests/system/` 加一条“未装插件时降级并原样写回 `data-kind`”的测试（bare 读写） | 判据脚本对 C_A、C_B 都通过；`git diff C_A C_B -- plugins/shape-box` 为空；`cli-1-1b` 两次运行都等于期望输出 |
 | S13 | `modified-star` 插件自己的测试：8.4 状态机表的每一行一条；与 box 并存时的拼接顺序（替身 `(box)` 标签） | 判据脚本通过；`--bare` 下 `tree` 与 `final` 逐字节相同 |
