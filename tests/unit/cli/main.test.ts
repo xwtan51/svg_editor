@@ -88,7 +88,8 @@ describe("cli/main.ts over a pipe", () => {
       const dir = mkdtempSync(join(tmpdir(), "svg-editor-main-"));
       try {
         copyFileSync(new URL("fixtures/other.svg", TranscriptRunner.DIRECTORY), join(dir, "other.svg"));
-        const result = runMain(transcript.inputs().map((line) => `${line}\n`).join(""), dir);
+        // A Phase 1 session means "all new plugins disabled": from S13 on, the full assembly's `tree` adds " *" (modified-star).
+        const result = runMain(transcript.inputs().map((line) => `${line}\n`).join(""), dir, ["--bare"]);
         expect(result.error).toBeUndefined();
         expect(result.stderr).toBe("");
         expect(result.status).toBe(0);
