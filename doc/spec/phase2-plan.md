@@ -19,7 +19,9 @@
 >
 > **修订记录（2026-11-18）**：S9 经 PR #23 合并（`main` = `33b8ab1`），设计文档同步了 S9 的决定（`plugin-diff` 的判定规则与退出码、`.runs.json` 的严格校验与报告格式、metrics 的 `final` 映射与“职责”切分、工具测试一律用临时仓库、N18、N19、G26–G33）。为写 S10 提示词做草稿实测时发现：S6 写的两个装配处测试把 `optional()` 为空钉死了，组合根一加插件就失败。受影响的插件步骤的通用做法、S10、S14、S15 各节加了 **〔S9 修订〕** 段落。
 >
-> **进度**：S0–S9 已合并；里程碑 ①（`dcd5f37`）、②（`92db60a`）完成。
+> **修订记录（2026-11-18，二）**：S10 经 PR #24 合并（`main` = `1665666`；C = `8dc2c43`，C′ = `83e44e8`），设计文档同步了 8.1 的实际文件与测试写法、9.2 的 S10 一行，以及 G34–G36（S6 测试钉死空 `optional()`；“替身 `History`”不可能；插件测试用不到内置的 `undo`/`redo`/`help`）。受影响的 S11、S14 两节加了 **〔S10 修订〕** 段落。
+>
+> **进度**：S0–S10 已合并；里程碑 ①（`dcd5f37`）、②（`92db60a`）完成。
 
 ---
 
@@ -391,6 +393,14 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 
 **验收**：差异检查脚本通过；以上测试全部通过。最后一个提交为 `milestone(3/6): 命令插件完成`。
 
+**〔S10 修订〕**（含写 S11 提示词前的草稿实测）：
+
+- **`cli-2` 的期望输出在 S11 生成**（2026-11-18 用户同意）：C′ 里执行 `npm run baseline -- --update cli-2`（只生成这一个会话），逐行对照规格 §2.1、§2.2 手工核对后提交；`cli-2.runs.json` 的 `expected` 写 `"cli-2"`，不再是 `null`。设计 §4.7、§9.3 中“期望输出在 S14 补”的说法随之改为 S11。理由：box 不贡献命令、`modified-star` 只影响 `tree`，按设计推断都不改变 `cli-2` 的输出（S12、S13 的接入提交上基线会实际检验这一点）。
+- `cli-2` 的输入加一条 `help`，把 `stats`、`dir` 在 `Display:` 组里的位置逐字节固定下来（G36 留下的端到端空白）。夹具除设计 8.2 的几项外再加一个大写开头的文件（如 `README.md`），让 UTF-16 码元顺序与 `localeCompare` 的结果不同，排序规则才算被会话钉住。
+- C′ 必须把配置改动和 `cli-2` 放在同一个提交里：只加 `cli-2` 不改配置时，不带参数的运行比 `--config` 的多一个 `dir`，基线报差异。
+- 状态测试的最小编辑器照 `plugins/command-stats/tests/doubles/TestEditor.ts` 另写一份（`add`、`barrier`、`undo`/`redo` 替身；L3 不许跨插件 import，G36）；“dirty 不变”用测试插件订阅 `DocumentListener`，断言 `dir` 前后没有任何事件。
+- **允许修改**另加：`doc/transcript/expected/cli-2/`（只由 `--update cli-2` 生成）、`doc/spec/phase2-plan.md`（刷新副本）、`doc/design-phase2.md`（只限 8.2、4.7、9.2、9.3 中与本步有关的行与 8.5 的新缺口）。
+
 **分支**：`feat/plugin-dir`。
 
 ---
@@ -475,6 +485,8 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 - `FinalMapping` 的“`final` 中有两个同名的 `D` 文件 → 都判为已删除”没有测试（去掉这个条件仍全绿）；`GitRepository.nameStatus` 的 `--no-renames` 没有测试钉住（改成 `-M` 仍全绿，实际影响很小）。
 - `tests/unit/cli/main.test.ts` 的 SIGINT 用例在机器高负载时偶尔得到退出码 130（S8 起就有，疑为 tsx 父进程转发信号的竞态），进 CI 前要处理。
 - `tests/system/assemblyContract.test.ts` 里 “(empty until S10 adds the first optional plugin)” 的测试名改掉。
+
+**〔S10 修订〕**：`tests/unit/host/CompositionRoot.test.ts` 顶部 describe 注释结尾的 “no optional plugin yet” 已过时，与上一条一起改。
 
 **允许修改**：测试、会话数据、CI 配置。**不改运行代码**；发现问题时单独开修复 PR。
 
