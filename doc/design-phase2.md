@@ -1927,7 +1927,7 @@ S15 把这些草稿整理进 README。
 | TR-023 | §2.1 效果 | 统计不进入 undo 栈 | `QueryCommand`（2.2.6） | S10 | `StatsCommand` 测试 |
 | TR-024 | §2.1 判据 | `stats` 包独立于内置命令表所在的包 | `plugins/command-stats` 与 `plugins/builtin-commands` 是两个包；L3 | S10 | architecture test |
 | TR-025 | §2.2 效果 | 列出当前工作目录下的文件和子目录 | `DirCommand`（8.2） | S11 | 替身测试 |
-| TR-026 | §2.2 效果 | 工作目录是启动目录，`read`、`save` 不改变它 | `WorkingDirectory`（8.2） | S11 | `DirInEditor`：`read` 前后 `dir` 结果相同 |
+| TR-026 | §2.2 效果 | 工作目录是启动目录，`read`、`save` 不改变它 | `WorkingDirectory`（8.2） | S11 | `cli-2` 会话中 `read demo.svg` 前后 `dir` 输出相同（S11 审查遗留：插件测试里没有 `read`） |
 | TR-027 | §2.2 效果 | 不接收参数 | `args.expectEnd()` → `usage: dir`（X12） | S11 | 替身测试 |
 | TR-028 | §2.2 效果 | 只列直接子项，不递归 | `NodeDirectoryLister` | S11 | 真实临时目录测试 |
 | TR-029 | §2.2 效果 | 包含隐藏项，不列 `.`、`..` | 8.2 | S11 | 两类测试 |
@@ -2394,7 +2394,7 @@ export class NodeDirectoryLister implements DirectoryLister {
 | 多余的参数 | `usage: dir` |
 | 没有文档时可用 | `requiresDocument = false` |
 | 不改变文档、dirty、undo/redo、io 锁 | 不调用 `context` 的任何方法；`QueryCommand.recordIn` 为空；不触发事件（所以 `modified-star` 的状态也不变） |
-| 两种装配用同一个实现、同一个接口 | 两种方式都由安装器执行 `new DirPlugin(options)`（4.1），构造出同一个 `NodeDirectoryLister`；命令只经 `DirectoryLister` 访问文件系统 |
+| 两种装配用同一个实现、同一个接口 | 两种方式都由安装器执行 `new DirPlugin(options)`（4.1），构造出同一个类的 `NodeDirectoryLister`（每次安装各 `new` 一个实例，S11 审查遗留）；命令只经 `DirectoryLister` 访问文件系统 |
 
 **3. 接入提交 C 与判据**
 
@@ -2490,8 +2490,13 @@ M	plugins.config.json
 | `src/BoxAttributeHandler.ts` | `implements AttributeHandler`：`fill`、`label` |
 | `src/BoxFillChange.ts`、`src/BoxLabelChange.ts` | `implements AttributeChange` |
 | `src/BoxTypeLabel.ts` | `implements TreeDecorator`：`(box)`。**`(box)` 标注放在 box 插件里**：没装 box 就没有 box，也就不需要这个标签；它只认自己的 `kindName`，与 `modified-star` 互不感知 |
-| `tests/FakeShapesPlugin.ts`、`tests/FakeRect.ts`、`tests/FakeText.ts`、`tests/FakeGroup.ts` | 测试替身：不依赖内置图形插件的 rect/text/g（继承内核的 `LeafShape` / `ContainerShape`，用 `StaticShapeProvider` 注册） |
-| `tests/BoxProvider.test.ts`、`tests/BoxReadBack.test.ts`、`tests/BoxAttributeHandler.test.ts`、`tests/BoxInEditor.test.ts`、`tests/BoxTypeLabel.test.ts` | 见下表 |
+| `tests/doubles/FakeRect.ts`、`tests/doubles/FakeText.ts`、`tests/doubles/FakeGroup.ts`、`tests/doubles/FakeShapesPlugin.ts` | 测试替身：照内置 `Rect`、`Text`、`Group` 写的 rect/text/g（继承内核的 `LeafShape` / `ContainerShape`），`FakeShapesPlugin.candidate(types)` 经 `StaticShapeProvider` 注册其中几种（缺省三种都注册；只给一部分时测“缺 rect/text”） |
+| `tests/doubles/BoxTestbed.ts` | 最小环境：`ExtensionRegistry` + `PluginInstaller` 依次安装替身图形插件与真实 `BoxPlugin`（以本包 `package.json` 为清单；也可以不装 box）；`registry.shapes().build("box", …)` 造 box（走 `BoxProvider.create` 与真实 `ShapeKit`），`SvgImporter` 读回、`SvgSerializer` 序列化、`TreeRenderer` 出树，`new EditorSession(…)` 供属性管线 |
+| `tests/doubles/MemoryFiles.ts`、`tests/doubles/FakeElement.ts`、`tests/doubles/FakeRow.ts` | 测试替身：内存里的 `FileSystem`（读回用）、`ElementView`（测 `matchScore`）、`TreeRowView`（测 `tagFor`） |
+| `tests/BoxShape.test.ts`、`tests/BoxProvider.test.ts`、`tests/BoxReadBack.test.ts`、`tests/BoxAttributeHandler.test.ts`、`tests/BoxTypeLabel.test.ts`、`tests/BoxPlugin.test.ts` | 见下表与 9.2 |
+| 根 `tests/system/boxInEditor.test.ts`（不在插件目录里，C_A2 之后单独提交） | 真实命令下的行为：`EditorAssembler` + `OnlyProfile(["@svgframe/plugin-shape-box"])` / `BareProfile` + `MemoryFileSystem`，与 CLI 的装配完全相同（缺口 G41） |
+
+（S12 修订：原清单是 `tests/FakeShapesPlugin.ts`、`tests/FakeRect.ts`、`tests/FakeText.ts`、`tests/FakeGroup.ts` 与包括 `tests/BoxInEditor.test.ts` 在内的五个测试。替身照 S10、S11 的做法放进 `tests/doubles/`；`BoxInEditor` 要用的 `create`、`move`、`set`、`group`、`read`、`save` 等都在内置命令插件里，插件测试不能 import（L3），替身命令等于把内置命令重写一遍，所以改为根 `tests/system/boxInEditor.test.ts`（缺口 G41）。`BoxShape`、`BoxPlugin` 两个测试是新增的。）
 
 **2. 草图**
 
@@ -2652,35 +2657,46 @@ export default class BoxPlugin implements Plugin {
 }
 ```
 
+`structureProblem` 的实际正文（S12 修订）见 `plugins/shape-box/src/BoxProvider.ts`（`structureProblem` 与 `partProblem`）：只看 `ElementView`，没有副作用；按“id → 框 → 标题”的顺序检查，返回第一个问题。部件按派生 id 在**直接子元素**中找，不按位置（X7）。四种文案：
+
+- 没有 id（缺省或空串，与 F13 同口径）→ `no id`，警告为 `box (no id) read as plain g: no id`。草图的 `${id ?? "(no id)"}` 遇到 `id=""` 会写成 `box  read as plain g`（两个空格），S12 把空串也当作没有 id；
+- 直接子元素里没有 `<id>-rect` / `<id>-label` → `missing n1-rect`（部件写在更深的 `g` 里、或没写 id 而被自动分配为 `rect1` 时也是这样）；
+- 同一个派生 id 有多个直接子元素 → `2 children with id n1-rect`。其中被导入的不止一个时，`requireUnique` 随后仍然拒绝整个读入，这条警告不会出现；只有一个被导入时（另一个是被跳过的 `<path>` 之类），读入成功、降级为 `g`；
+- 类型不对 → `n1-rect is <circle>, expected <rect>`。
+
+`read` 的实际写法与草图只差一处：先把空串 id 当作没有 id，`requireUnique` 仍在结构检查之前（降级也不豁免，ADR-2）。
+
 **3. 行为覆盖（规格 §3.4、§4，P1 规格 §4.4）**
+
+（S12 修订：“测试”一列换成实际文件。`BoxShape`、`BoxProvider`、`BoxReadBack`、`BoxAttributeHandler`、`BoxTypeLabel`、`BoxPlugin` 指 `plugins/shape-box/tests/<名字>.test.ts`；`boxInEditor` 指根 `tests/system/boxInEditor.test.ts`（G41）。）
 
 | 行为 | 产生它的机制 | 测试 |
 |---|---|---|
-| `create box n1 120 100 160 60 "开始"` → `box#n1 created (g#n1 + rect#n1-rect + text#n1-label)` | `CreateCommand`（2.1.6）+ `BoxProvider.create` / `creationDetail` + `BoxShape.label()` | `BoxInEditor` |
-| 派生 id 冲突：`n1-rect` 已存在 → `error: id already exists: n1-rect`，不留下 `n1` 与 `n1-label` | `claimedIds` 一次性查重（2.1.6） | `BoxInEditor`：执行前后序列化相同、undo 深度不变 |
+| `create box n1 120 100 160 60 "开始"` → `box#n1 created (g#n1 + rect#n1-rect + text#n1-label)` | `CreateCommand`（2.1.6）+ `BoxProvider.create` / `creationDetail` + `BoxShape.label()` | `BoxProvider`（`creationDetail`）、`boxInEditor`、`cli-1-1b` |
+| 派生 id 冲突：`n1-rect` 已存在 → `error: id already exists: n1-rect`，不留下 `n1` 与 `n1-label` | `claimedIds` 一次性查重（2.1.6） | `BoxProvider`（`claimedIds`）；`boxInEditor`：三个 id 各被占用一次，执行前后 `tree`、文档、undo / redo 深度与孪生编辑器相同，另外两个 id 都不存在 |
 | 派生 id 不合法（`n1` 合法则派生 id 也合法；`IdSyntax` 对每个 claimed id 检查） | `checkNewId` | `BoxProvider` |
-| `create box n3 … in n1` → `box#n3 created (g#n3 + …) in box#n1` | `findContainer` 接受 `ContainerShape`（3.5，N1）、回显顺序（X4） | `BoxInEditor` |
-| 嵌套 box、`create rect r9 … in n1`、`addto n1 r9` | 同上；`canRelease` 只保护两个部件 | `BoxInEditor` |
-| `move n2 0 100` → `box#n2 moved by (0,100)`；undo → `box#n2 moved back by (0,-100)` | `ContainerShape.moveBy` / `moveDescription`、`label()` | `BoxInEditor` |
-| `delete n1` 一个 undo 单元；undo → `box#n1 restored` | `DeleteCommand`（现有）+ `TreePosition` | `BoxInEditor` |
-| `group cluster n1 n2` → `g#cluster created with 2 children` | `GroupCommand`（3.5） | `BoxInEditor` |
-| `ungroup n1` → `error: cannot ungroup composite shape: n1` | `BoxShape.canUngroup()` + `UngroupCommand`（现有文案） | `BoxInEditor` |
-| `set n1 fill #f5a623` 改 `n1-rect`，一个 undo 单元 | `BoxAttributeHandler` + `AttributeDispatcher`（2.4.3） | `BoxAttributeHandler`、`BoxInEditor` |
+| `create box n3 … in n1` → `box#n3 created (g#n3 + …) in box#n1` | `findContainer` 接受 `ContainerShape`（3.5，N1）、回显顺序（X4） | `boxInEditor` |
+| 嵌套 box、`create rect r9 … in n1`、`addto n1 r9` | 同上；`canRelease` 只保护两个部件 | `BoxShape`、`boxInEditor` |
+| `move n2 0 100` → `box#n2 moved by (0,100)`；undo → `box#n2 moved back by (0,-100)` | `ContainerShape.moveBy` / `moveDescription`、`label()` | `boxInEditor`、`cli-1-1b` |
+| `delete n1` 一个 undo 单元；undo → `box#n1 restored` | `DeleteCommand`（现有）+ `TreePosition` | `boxInEditor`（在 `g#flowchart` 里时回显 `box#n1 restored into g#flowchart`） |
+| `group cluster n1 n2` → `g#cluster created with 2 children` | `GroupCommand`（3.5） | `boxInEditor` |
+| `ungroup n1` → `error: cannot ungroup composite shape: n1` | `BoxShape.canUngroup()` + `UngroupCommand`（现有文案） | `BoxShape`、`boxInEditor`（状态不变） |
+| `set n1 fill #f5a623` 改 `n1-rect`，一个 undo 单元 | `BoxAttributeHandler` + `AttributeDispatcher`（2.4.3） | `BoxAttributeHandler`、`boxInEditor`、`cli-1-1b` |
 | `set n1 label "处理数据 v2"` 改 `n1-label`，一个 undo 单元；undo / redo 各一次 | 同上 | 同上 |
-| 处理器失败回滚（`set n1 fill ""` → `invalid value for fill: ""`，文档与历史不变） | 2.4.3 第 5 步 | `BoxInEditor` |
-| 序列化 `<g id="n1" data-kind="box">`，`data-kind` 只写一次 | `BoxShape.svgAttributes` + `applyAttributes(…, ["data-kind"])` | `BoxReadBack`：读 → 存 → 读 → 存，两次文件逐字节相同 |
-| 读回还原为 box | `matchScore` = 2 > `g` 的 1（2.1.3） | `BoxReadBack` |
-| 没装插件时降级为 `g`，`data-kind` 原样写回 | 2.1.3；`g` 的提供者 + 透传属性（F7） | 根测试（`tests/system/`，S12）：用 bare 读写同一文件 |
+| 处理器失败回滚（`set n1 fill ""` → `invalid value for fill: ""`，文档与历史不变） | 2.4.3 第 5 步 | `BoxAttributeHandler`、`boxInEditor` |
+| 序列化 `<g id="n1" data-kind="box">`，`data-kind` 只写一次 | `BoxShape.svgAttributes` + `applyAttributes(…, ["data-kind"])` | `BoxShape`；`BoxReadBack`：读 → 存 → 读 → 存，两次文件逐字节相同；`boxInEditor` |
+| 读回还原为 box | `matchScore` = 2 > `g` 的 1（2.1.3） | `BoxReadBack`、`boxInEditor` |
+| 没装插件时降级为 `g`，`data-kind` 原样写回 | 2.1.3；`g` 的提供者 + 透传属性（F7） | `BoxReadBack`（不装 box 的注册表）；`boxInEditor`：`BareProfile` 读写同一份文本，逐字节相同，再用 `OnlyProfile` 读回是 box |
 | 子部件不完整 / 类型错误 → 警告并降级 | `structureProblem` + `readWithNext`（ADR-2） | `BoxReadBack`：缺 `n1-label`、`n1-rect` 是 `<circle>`、box 无 id、部件 id 是自动分配的 |
 | 部件顺序调换、多出子元素（嵌套 box） | 按派生 id 识别（X7） | `BoxReadBack` |
-| 重复 id → 拒绝整个读入，原文档不变 | `requireUnique`（2.1.4） | `BoxReadBack`：① 另一处 `<rect id="n1-rect">` → 拒绝；② box 内有两个 `<rect id="n1-rect">`（结构不完整、降级）→ 仍拒绝；③ 文件中另有被跳过的 `<path id="n1-rect">` → **照常读入**为 box（与 F14 同口径）；④ 嵌套在被跳过元素里的同名 id → 照常读入。`BoxInEditor`：`read` 失败后 `tree` 不变 |
-| `delete n1-rect`、`addto other n1-label`、`group x n1-rect` → `cannot detach required part of composite shape: <id>` | `canRelease` + `checkReleasable`（3.7） | `BoxInEditor`：状态完全不变 |
-| `front n1-rect`（box 内部调顺序）允许 | 3.7 | `BoxInEditor` |
-| `tree` 中 `g#n1 (box)`；`tree n1` 第一行 `g#n1 (box)` | `treeLabel()` + `BoxTypeLabel`（2.3） | `BoxTypeLabel`、`cli-1-1b` |
-| `show n1` → `box#n1  parent=…`；`show n1-rect` → `parent=box#n1` | `label()`、`containerLabel()`（3.6，X20） | `BoxInEditor` |
-| `stats` 中 box 计入 containers、部件照常计数 | 8.1 | `stats` 的测试（替身容器） |
-| 缺 rect/text 时 → `plugin failed to activate: … (requires shape types: rect, text)` | `BoxPlugin.activate` + `shapeTypes()` | `BoxPlugin`：替身上下文 |
-| 插件测试不依赖其他插件 | 替身 rect/text/g（`tests/Fake*.ts`）+ `@svgframe/kernel/host` 组装最小编辑器 | 全部 box 测试 |
+| 重复 id → 拒绝整个读入，原文档不变 | `requireUnique`（2.1.4） | `BoxReadBack`：① 另一处 `<rect id="n1-rect">` → 拒绝；② box 内有两个 `<rect id="n1-rect">`（结构不完整、降级）→ 仍拒绝；③ 文件中另有被跳过的 `<path id="n1-rect">` → **照常读入**为 box（与 F14 同口径）；④ 嵌套在被跳过元素里的同名 id → 照常读入。`boxInEditor`：`read` 失败后 `tree`、文档与历史都不变 |
+| `delete n1-rect`、`addto other n1-label`、`group x n1-rect` → `cannot detach required part of composite shape: <id>` | `canRelease` + `checkReleasable`（3.7） | `BoxShape`；`boxInEditor`：状态完全不变 |
+| `front n1-rect`（box 内部调顺序）允许 | 3.7 | `boxInEditor` |
+| `tree` 中 `g#n1 (box)`；`tree n1` 第一行 `g#n1 (box)` | `treeLabel()` + `BoxTypeLabel`（2.3） | `BoxTypeLabel`、`boxInEditor`、`cli-1-1b` |
+| `show n1` → `box#n1  parent=…`；`show n1-rect` → `parent=box#n1` | `label()`、`containerLabel()`（3.6，X20） | `boxInEditor` |
+| `stats` 中 box 计入 containers、部件照常计数 | 8.1 | `stats` 的测试（替身容器）；`boxInEditor`（`--only` box 与 stats） |
+| 缺 rect/text 时 → `plugin failed to activate: … (requires shape types: rect, text)` | `BoxPlugin.activate` + `shapeTypes()` | `BoxPlugin`：真实安装器 + 替身图形插件，注册表没有残留 |
+| 插件测试不依赖其他插件 | 替身 rect/text/g（`tests/doubles/`）+ `@svgframe/kernel/host` 组装最小环境（`BoxTestbed`） | 全部插件测试 |
 
 **4. P1 规格 §6.1B 逐行**
 
@@ -2711,7 +2727,7 @@ export default class BoxPlugin implements Plugin {
 
 **5. 接入提交与判据**
 
-主线提交 C_A（方式 A），父提交 P：
+主线提交 C_A（方式 A），父提交 P。S12 的实际结果（S12 修订：原来这里是预测，`tests/` 下的文件按第 1 小节的修订变了；P = `3c87ebe`，C_A = `f999fd1`，都在 `feat/plugin-box` 上）：
 
 ```text
 $ git diff --name-status P C_A
@@ -2725,23 +2741,28 @@ A	plugins/shape-box/src/BoxProvider.ts
 A	plugins/shape-box/src/BoxShape.ts
 A	plugins/shape-box/src/BoxTypeLabel.ts
 A	plugins/shape-box/tests/BoxAttributeHandler.test.ts
-A	plugins/shape-box/tests/BoxInEditor.test.ts
+A	plugins/shape-box/tests/BoxPlugin.test.ts
 A	plugins/shape-box/tests/BoxProvider.test.ts
 A	plugins/shape-box/tests/BoxReadBack.test.ts
+A	plugins/shape-box/tests/BoxShape.test.ts
 A	plugins/shape-box/tests/BoxTypeLabel.test.ts
-A	plugins/shape-box/tests/FakeGroup.ts
-A	plugins/shape-box/tests/FakeRect.ts
-A	plugins/shape-box/tests/FakeShapesPlugin.ts
-A	plugins/shape-box/tests/FakeText.ts
+A	plugins/shape-box/tests/doubles/BoxTestbed.ts
+A	plugins/shape-box/tests/doubles/FakeElement.ts
+A	plugins/shape-box/tests/doubles/FakeGroup.ts
+A	plugins/shape-box/tests/doubles/FakeRect.ts
+A	plugins/shape-box/tests/doubles/FakeRow.ts
+A	plugins/shape-box/tests/doubles/FakeShapesPlugin.ts
+A	plugins/shape-box/tests/doubles/FakeText.ts
+A	plugins/shape-box/tests/doubles/MemoryFiles.ts
 M	src/assembly/CompositionRoot.ts
 ```
 
-演示分支 `demo/box-config` 上的提交 C_B（方式 B），父提交同为 P：
+演示分支 `demo/box-config` 上的提交 C_B（方式 B），父提交同为 P（S12 修订：实际结果，C_B = `077bd88`；插件目录由 `git checkout C_A -- plugins/shape-box` 取得，锁文件由 `npm install` 生成，与 C_A 的相同）：
 
 ```text
 $ git diff --name-status P C_B
 M	package-lock.json
-A	plugins/shape-box/…（与 C_A 完全相同的 18 个文件）
+A	plugins/shape-box/…（与 C_A 完全相同的 22 个文件）
 M	plugins.config.json
 ```
 
@@ -2764,20 +2785,22 @@ git diff C_A C_B -- plugins/shape-box                                           
 rg -n "import|require|switch" src/loader                                                # 推演：同本节开头
 ```
 
-主线随后的配置提交 C_A2：
+（S12 修订：实际结果——`npm run plugin-diff -- C_A plugins/shape-box --mode A` 与 `-- C_B plugins/shape-box --mode B` 都是 `plugin-diff: PASS`；交叉运行时，C_A 的 `--mode B` 最后一行是 `plugin-diff: FAIL (way B: run code changed: src/assembly/CompositionRoot.ts; way B: plugins.config.json not changed)`，C_B 的 `--mode A` 是 `plugin-diff: FAIL (way A: src/assembly/CompositionRoot.ts not modified; way A: plugins.config.json changed)`；上面三条 `git diff` 与 `git diff C_A C_B -- package-lock.json` 都无输出；在 C_A、C_B 的检出上 `rg -n "import|require|switch" src/loader --sort path` 与本节开头那段逐字相同。）
+
+主线随后的配置提交 C_A2（S12 修订：实际结果，C_A2 = `9997e35`，`git diff --name-status C_A C_A2`，按路径排序；`plugins.config.json` 的改动与 C_B 相同）：
 
 ```text
-M	plugins.config.json
-A	doc/transcript/cli-1-1b.txt
+M	doc/transcript/README.md
 A	doc/transcript/cli-1-1b.runs.json        { "groups": [ { "expected": "cli-1-1b", "runs": [["--only", "@svgframe/plugin-shape-box"], ["--config", "{transcript}/configs/box.json"]] } ] }
+A	doc/transcript/cli-1-1b.txt
 A	doc/transcript/configs/box.json          { "plugins": [ { "module": "@svgframe/plugin-shape-box" } ] }
 A	doc/transcript/expected/cli-1-1b/exit-code.txt
 A	doc/transcript/expected/cli-1-1b/files/flowchart-box.svg
 A	doc/transcript/expected/cli-1-1b/stdout.txt
-M	doc/transcript/README.md
+M	plugins.config.json
 ```
 
-（`configs/empty.json` 在 S9 已加。期望输出用 `--update cli-1-1b` 生成，需要事先得到明确同意，并逐行对照 P1 规格 §6.1B，见 9.2。）
+（`configs/empty.json` 在 S9 已加。期望输出用 `--update cli-1-1b` 生成，需要事先得到明确同意，并逐行对照 P1 规格 §6.1B，见 9.2。S12 修订：已在 S12 经用户同意执行 `npm run baseline -- --update cli-1-1b`（只带这一个参数），输出 `wrote doc/transcript/expected/cli-1-1b: stdout 21 lines, exit 0, files flowchart-box.svg`，只新增了 `expected/cli-1-1b/`；逐行对照第 4 小节的表与规格原文核对后提交，与规格原文只差树里三处摘要前的空格（N4、T3）。`configs/box.json` 必须在仓库里：配置里的模块名按配置文件所在位置解析（4.6），放到仓库外会报 `plugin not found`。）
 
 **6. 内核零改动**
 
@@ -2971,6 +2994,8 @@ rg -n "import|require|switch" src/loader                                        
 | G38 | S11 草稿（在 macOS 上生成期望输出） | `SessionRunner` 用 `fs.cpSync` 复制的是**工作区**里的 `fixtures/<会话>/`，不是 git 里的内容。被 `.gitignore` 忽略的文件（如 macOS 的 `.DS_Store`）与未跟踪的文件 `git status` 不显眼，却会被复制进临时目录、出现在 `dir` 的输出里，使本机比对与 CI 不同，`--update` 时还会被写进期望输出 | `doc/transcript/README.md` 写明：比对或生成之前确认 `git status --ignored --short doc/transcript/fixtures/cli-2` 没有输出；S11 在全新 clone 上跑四项检查，证明 `expected/cli-2/` 不依赖本机工作区。让 `SessionRunner` 只复制 git 跟踪的文件要改 `scripts/`，不在 S11 范围内，留给 S14 决定（S11 修订） |
 | G39 | S11 草稿（读取失败怎样测） | “`chdir` 进临时目录再删掉”模拟不了读取失败：`readdirSync(".")` 在已删除的目录上返回 `[]`；在还没调用过 `process.cwd()` 的进程里删掉目录后，`process.cwd()` 直接抛 `ENOENT`。而运行中的 CLI 里 `process.cwd()` 返回缓存的路径，`readdirSync(<绝对路径>)` 抛 `ENOENT`，输出正确（N7）。另外 macOS 的 `os.tmpdir()` 是符号链接，`mkdtemp` 返回的路径与 `process.cwd()` 不同 | 插件测试一律不 `chdir`：读取失败用替身抛错，真实适配器读不存在的路径与普通文件（9.2 的 S11 行）；真实 CLI 中删掉工作目录的情形在 S11 的 PR 中用一次性脚本手工验证。`process.cwd()` 本身抛错（`NodeWorkingDirectory.current()` 抛出非 `EditorError`，CLI 以退出码 1 结束）的情形不处理，记在 S11 的 PR 中（S11 修订） |
 | G40 | S11 实现（“不调用 `context`”怎样验证） | 8.2 对照表说 `dir` 不调用 `context` 的任何方法，但经真实 `EditorSession` 运行时，调用 `document()`、`history()` 这类只读方法不留痕迹，状态测试只能发现改动，发现不了读取（例如没有文档时调 `document()` 会抛 `no document`，有文档时却看不出来） | 每个方法都抛错的 `UntouchableContext`，`DirCommand` 的替身测试全部经它运行（8.2 第 1 小节）；S11 补上（S11 修订） |
+| G41 | S12 草稿（照抄 8.3 的测试计划） | 8.3 的 `BoxInEditor` 在插件测试里做不到：它要用的 `create`、`move`、`delete`、`set`、`group`、`ungroup`、`addto`、`front`、`show`、`read`、`save` 都在内置命令插件里，插件测试不能 import（L3），替身命令等于把内置命令重写一遍 | 拆成两处（S12 修订）：插件自己的测试只用替身 rect/text/g 与内核（`BoxTestbed`：经真实 `PluginInstaller` 安装，`registry.shapes().build` 造 box，`SvgImporter` / `SvgSerializer` / `TreeRenderer` / `EditorSession.attributeEdits().plan` 直接驱动）；真实命令下的行为放到根 `tests/system/boxInEditor.test.ts`，用 `EditorAssembler` + `OnlyProfile` / `BareProfile` + `MemoryFileSystem` 组装与 CLI 相同的编辑器。`EditorAssembler` 只交出 `Editor`，拿不到会话，所以“状态不变”用孪生编辑器比较：两个编辑器执行相同的前置命令，只有一个执行失败的那条，然后用同样的方式探查（`undo` 到底、`redo` 到底、`save`），输出与文件都相同即文档、undo 深度、redo 深度都相同（8.3 第 1、3 小节，9.2） |
+| G42 | S12 草稿（C_A2 的检查） | 配置里的 box 在 S14 之前没有测试管着：box 不贡献命令，`cli-1-1b` 用的是 `configs/box.json`，`cli-2` 的两次运行与 box 无关，所以 C_A2 即使忘了改 `plugins.config.json`，测试和基线也全绿 | 组合根与配置一致性的系统测试在 S14 加（4.9，9.2 的 S14 一行）；S12 用 `git show C_A2:plugins.config.json` 与 `git show C_B:plugins.config.json` 相同作检查，结果写进 PR（S12 修订） |
 
 ---
 
@@ -3003,7 +3028,7 @@ rg -n "import|require|switch" src/loader                                        
 | S9 | `SessionPlan` / `RunGroup`（缺省组、占位符替换、组内比对、`--update` 拒绝组内不一致）；`ComplexityCounter`（内置样本自检：`readQuoted` 的 M = 8）；`PluginDiffCheck`（对人为构造的“改了内核”的提交报失败、对路径不存在报失败）；architecture test：每个源文件有类注释（metrics 的职责来源）；**通用装配契约测试**：对 `CompositionRoot.optional()` 中每个候选，读其清单的 `commands`，断言 bare 下执行报 `unknown command: <name>`、`--only <包名>` 下 `help` 含以 `  <name>` 开头的一行（S10、S11 接入时自动覆盖，不改测试） | 三个已有会话的 `.runs.json`（`--bare` + 空配置）0 差异；metrics 可由脚本复现 |
 | S10 | `stats` 插件自己的测试（8.1）；C 之前改两个 S6 的装配处测试（`CompositionRoot.test.ts` 的可选候选改为“`label()` 等于清单 `name`、互不相同、不与内置同名”，`EditorAssembler.test.ts` 的 full 改为“bare 的命令 + `optional()` 各清单声明的命令，没有启动消息”，缺口 G34）（S10 修订） | 判据脚本通过；装配契约测试覆盖 `stats` |
 | S11 | `dir` 插件自己的测试（8.2），共 42 个（S11 修订：按实际补全）。`DirCommand.test.ts`（14，替身 + 每个方法都抛错的 context）：规格 §2.2 示例原样；目录在前；`(empty directory)`；隐藏项；读取失败 → `EditorError("cannot read directory: <替身给的路径>")`，不带 `error:`，编辑器加前缀后下一行照常；UTF-16 码元而不是 `localeCompare`（大小写、`.`、`_`、`-` 开头）；非 ASCII（码元而不是码点）；打乱 25 次与倒序输出相同；名字都从下标 7 开始；名字原样输出；`dir x` → `usage: dir`；`execute` 不调用 context（成功、空目录、失败）。`NodeDirectoryLister.test.ts`（6，真实临时目录，不 `chdir`）：文件、子目录、隐藏项；只列直接子项；指向目录的符号链接（绝对与相对）→ 目录，指向文件的与断链 → 文件；空目录 → `[]`；不存在的路径、普通文件 → 抛错。`DirOnRealFileSystem.test.ts`（4）：`DirCommandType(new NodeDirectoryLister(), <固定为临时目录的替身>)` 经编辑器运行，输出与预先写好的逐行相同；空目录；真实读取失败（不存在、普通文件）与之后照常执行；`NodeWorkingDirectory.current()` = `process.cwd()`。`DirInEditor.test.ts`（14，经 `TestEditor`）：无文档可用、之后仍无文档（成功与失败）；成功与失败两种情况下各 6 条——undo 与 redo 栈都非空时序列化结果、`undoDepth`、`redoDepth`、`isLocked` 不变，之后 `undo` / `redo` 作用于之前的编辑，io 锁既不加也不解，未加锁时仍未加锁，没有任何文档事件（`EventLog`），下一条命令照常。`DirPlugin.test.ts`（4）：`contributes` 恰为 `{ commands: ["dir"] }`；真实安装器以本包清单安装，注册的是一个 `DirCommandType` 实例（`requiresDocument` 为 `false`、`DISPLAY`）；排在先装的命令之后；两个插件实例各有自己的命令对象。另外契约测试自动多出 `@svgframe/plugin-command-dir` 一行 | 判据脚本通过；`cli-2` 的双装配组两次运行都等于 `expected/cli-2/`（S11 修订） |
-| S12 | box 插件自己的测试（8.3）；根 `tests/system/` 加一条“未装插件时降级并原样写回 `data-kind`”的测试（bare 读写） | 判据脚本对 C_A、C_B 都通过；`git diff C_A C_B -- plugins/shape-box` 为空；`cli-1-1b` 两次运行都等于期望输出 |
+| S12 | box 插件自己的测试（8.3），共 58 个（S12 修订：按实际补全）。`BoxShape.test.ts`（6）：`tagName` 为 `g`、`kindName` 为 `box`、`label` 为 `box#n1`、`treeLabel` 为 `g#n1`；`canUngroup()` 为 `false`；`canRelease` 对两个部件为 `false`，对嵌套 box、其他子元素与嵌套 box 的部件为 `true`；派生 id；`svgAttributes` 中 `data-kind` 紧跟 `id` 且只出现一次（读回带样式与透传属性时也是）。`BoxProvider.test.ts`（11）：经 `registry.shapes().build` 造出，子树的 id 恰为 `claimedIds`；合法 id 的派生 id 也合法；rect 的四个几何值原样、`fill` 为 `#4a90d9`；标题位置按 X3，含 $w \ne 160$ 的三个例子（`(1.25,10)`、`(0.875,8.5)`、负的 x 与 h = 0）；`creationDetail`；`params` 的 usage 记号与键名；非法尺寸由替身 rect 报 `invalid value for width: -1`，非数字报 `invalid number`。`BoxReadBack.test.ts`（20，真实 `SvgImporter` + 内存文件）：序列化结果等于预先写好的文件；读 → 存 → 读 → 存逐字节相同；`matchScore` 为 2、`g` 为 1，其他元素为 0；不装 box 读同一份文本 → 普通 `g`，`data-kind` 原样写回；9 种不完整（缺标题、缺框、框是 `<circle>`、标题是 `<rect>`、无 id、空 id、部件无 id、部件不是直接子元素、同一派生 id 两个子元素但只有一个被导入），每种断言完整的警告列表并写回 `data-kind`；部件顺序调换、多出子元素与嵌套 box 照常读成 box；重复 id 拒绝（另一处 `n1-rect`、box 之前的 `n1-label`、box 内两个 `n1-rect`）与照常读入（被跳过的 `<path>`、被跳过元素里的同名 id）。`BoxAttributeHandler.test.ts`（8）：`handles` 只对 box 的 `fill`、`label` 为真；注册的处理器与优先级；`EditorSession.attributeEdits().plan` 得到的编辑：计划时文档不变，`redo()` / `undo()` 后的序列化结果与两条回显（`fill` 只改框、box 自身没有样式；`label` 的撤销回显是旧文本；空标签）；`fill ""` 被拒绝且文档不变；`stroke` 不归它管（答 `null`）；两个 `AttributeChange` 的文案。`BoxTypeLabel.test.ts`（4）：只对 box 行答 `(box)`；注册的标签；整棵树（含嵌套 box）；不装 box 时没有标签。`BoxPlugin.test.ts`（9）：`contributes` 恰为三类各一项；以本包清单安装成功，注册的恰是三个对象、没有命令与监听器；只要 rect、text；没有任何图形、缺 rect、缺 text 三种 → `plugin failed to activate: @svgframe/plugin-shape-box (requires shape types: rect, text)`，注册表没有残留；补装图形后可以安装；两次安装各有自己的对象；候选用的是本包的入口与清单。根 `tests/system/boxInEditor.test.ts`（25，G41）：创建回显（含 `in box#n1`、undo / redo）；三个 id 各被占用时整个拒绝、什么都不留下；非法尺寸、缺标签、非法 id；`create … in`、`addto`、嵌套 box；`move`、`scale`、`delete` 及其 undo；`group`、拒绝 `ungroup`、box 里普通 `g` 的 `ungroup` 照常；`delete` / `addto` / `group` 移走部件被拒绝、状态不变（孪生编辑器）；`front`、移走非部件子元素允许；`set fill`、`set label` 各是一个 undo 单元，`undo`、`redo` 各一次；`fill ""` 失败后不变；其他属性走白名单；`tree`、`tree n1`、`show`；`stats` 把 box 计入 containers；`save` / `read` 往返逐字节相同；不完整的 box 读成 `g`；两种重复 id 的 `read` 被拒绝、原文档与历史不变；`BareProfile` 读写同一份文本逐字节相同、树里没有 `(box)`、`show` 有 `data-kind=box`、`set label` 报 `unknown attribute`，再用 `OnlyProfile` 读回是 box。另外契约测试自动多出 `@svgframe/plugin-shape-box` 一行（box 不声明命令，这一行等于空检查） | 判据脚本对 C_A、C_B 都通过；`git diff C_A C_B -- plugins/shape-box` 为空；`cli-1-1b` 两次运行都等于期望输出 |
 | S13 | `modified-star` 插件自己的测试：8.4 状态机表的每一行一条；与 box 并存时的拼接顺序（替身 `(box)` 标签） | 判据脚本通过；`--bare` 下 `tree` 与 `final` 逐字节相同 |
 | S14 | 系统测试：组合根与配置的插件集合、顺序、options 相同（4.9）；双装配会话（4.7 #3–#5）；基线兼容 | `npm test`、`npm run baseline`、CI 全绿 |
 | S15 | 无新增测试；README 的一致性自查用脚本输出作证据 | — |
@@ -3045,9 +3070,9 @@ rg -n "import|require|switch" src/loader                                        
 
 | 步骤 | 事项 |
 |---|---|
-| S12 | `cli-1-1b` 的期望输出**必须逐行手工对照 P1 规格 §6.1B**（8.3 第 4 小节的表就是对照表），不能只靠 `--update` 生成。树的对齐与规格原文差一位：原文三处摘要前分别是 2/1/7 个空格，按 V1（最宽 + 2）是 3/2/8；规格 §5 的示例恰好是 3/2/8。期望输出沿用 V1，并在 `doc/transcript/README.md` 中加注（约定补充 N4、偏差 T3）。`--update cli-1-1b` 仍然需要用户事先明确同意 |
+| S12 | `cli-1-1b` 的期望输出**必须逐行手工对照 P1 规格 §6.1B**（8.3 第 4 小节的表就是对照表），不能只靠 `--update` 生成。树的对齐与规格原文差一位：原文三处摘要前分别是 2/1/7 个空格，按 V1（最宽 + 2）是 3/2/8；规格 §5 的示例恰好是 3/2/8。期望输出沿用 V1，并在 `doc/transcript/README.md` 中加注（约定补充 N4、偏差 T3）。`--update cli-1-1b` 仍然需要用户事先明确同意（S12 修订：已在 S12 经用户同意执行，只带 `cli-1-1b` 一个参数，逐行核对的结果写进了 PR） |
 | S9 | 圈复杂度脚本按决策 X18（5.3）实现：`typescript/unstable/sync`，启动自检，口径与输出格式按 5.3 |
-| S14 | CI 统一处理：`typecheck:scripts` 与 `baseline` 进 CI；`actions/checkout@v4`、`actions/setup-node@v4` 的 Node 20 弃用提示；`cli-2` 的 `--update` 需要事先同意 |
+| S14 | CI 统一处理：`typecheck:scripts` 与 `baseline` 进 CI；`actions/checkout@v4`、`actions/setup-node@v4` 的 Node 20 弃用提示；`cli-2` 的期望输出已在 S11 经用户同意生成（S11 审查遗留） |
 | S5–S15 | `npm run baseline -- --update` 未经用户明确同意一律不用（`CLAUDE.md`） |
 
 ---
@@ -3151,7 +3176,7 @@ rg -n "import|require|switch" src/loader                                        
 | `tests/unit/architecture.test.ts` | 留在根；S5 改扫描根与过渡映射（1.2.2–1.2.3），S6/S8 加 L 规则 |
 | `scripts/baseline/` | 留在原处。CLI 入口仍是 `src/cli/main.ts`，`BaselinePaths.CLI_ENTRY` 不改；S9 扩展按会话传参（4.8） |
 | `scripts/metrics/`、`scripts/plugin-diff/` | S9 新建；`scripts/tsconfig.json` 的 `include: ["."]` 自动覆盖 |
-| `doc/transcript/` | S5–S8 不动；S9 为已有的三个会话加 `<会话>.runs.json`（4.8）；S12 加 `cli-1-1b`，S14 加 `cli-2` |
+| `doc/transcript/` | S5–S8 不动；S9 为已有的三个会话加 `<会话>.runs.json`（4.8）；S12 加 `cli-1-1b`，S11 加 `cli-2`（S11 审查遗留：原写 S14） |
 | `vscode-svg/` | 不动；不进 workspaces、tsconfig、vitest、architecture test、CLI 的 metrics（1.4） |
 
 ---

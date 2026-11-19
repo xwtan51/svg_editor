@@ -21,7 +21,9 @@
 >
 > **修订记录（2026-11-18，二）**：S10 经 PR #24 合并（`main` = `1665666`；C = `8dc2c43`，C′ = `83e44e8`），设计文档同步了 8.1 的实际文件与测试写法、9.2 的 S10 一行，以及 G34–G36（S6 测试钉死空 `optional()`；“替身 `History`”不可能；插件测试用不到内置的 `undo`/`redo`/`help`）。受影响的 S11、S14 两节加了 **〔S10 修订〕** 段落。
 >
-> **进度**：S0–S10 已合并；里程碑 ①（`dcd5f37`）、②（`92db60a`）完成。
+> **修订记录（2026-11-18，三）**：S11 经 PR #25 合并（`main` = `e287111`；C = `2977cb5`，C′ = `07bb3ea`），`cli-2` 的期望输出已在 S11 经同意生成，设计文档同步了 8.2 的实际文件与测试、4.7、9.2、9.3，以及 G37–G40（夹具只有小写名字钉不住排序；`cpSync` 复制工作区里被忽略的文件；读取失败不能用 `chdir` 再删目录来模拟；“不调用 context”要靠每个方法都抛错的替身）。审查时发现设计里还有几处过时的措辞不在 S11 的修改范围内。受影响的 S12、S14、S15 各节加了 **〔S11 修订〕** 段落。
+>
+> **进度**：S0–S11 已合并；里程碑 ①（`dcd5f37`）、②（`92db60a`）、③（`9e9f786`）完成。
 
 ---
 
@@ -432,6 +434,12 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 
 **〔S7 修订〕**：S7 已经照抄 §8.3 草图在临时 worktree 里跑通了整段 §6.1B 会话，内核接口齐全，没有发现内核缺口，所以 box 相关提交仍然要求内核零改动。设计 §8.3 草图已经修正，`BoxProvider.create` 改为逐个取值（G19），`BoxFillChange`、`BoxLabelChange` 补上了正文；但 `BoxProvider.read` 的完整实现和 `structureProblem` 的正文仍需在 S12 写出，草图中的 import 也都省略了。保护钩子现在也覆盖 `ungroup`（§3.7，G21）：box 的必要部件是 rect 和 text，不是 `g`，所以对 box 没有影响；box 内部普通 `g` 的 `ungroup` 照常允许。`BoxAttributeHandler` 只能经 `AttributeTarget` 修改属性，如果绕过接口改结构，会以程序错误终止，而不是报一行 `error:`。
 
+**〔S11 修订〕**：
+
+- `cli-2` 已有期望输出，四个会话都参与比对。box 不贡献命令，按设计推断 C_A 与 C_A2 都不改变 `cli-2` 的输出；C_A 上 `npm run baseline` 必须仍是 4 个会话 0 差异，这就是对推断的检验。`cli-2` 的夹具 `demo.svg` 没有 `data-kind`，装上 box 后仍读成 `g`。
+- 设计文档里 S11 审查时发现的四处过时措辞，在本步改设计时一并改掉（每处标“（S11 审查遗留）”）：TR-026 的核验方式改为“`cli-2` 会话中 `read demo.svg` 前后 `dir` 输出相同”（插件测试里没有 `read`）；§9.4 S14 一行“`cli-2` 的 `--update` 需要事先同意”与附录 A `doc/transcript/` 一行“S14 加 `cli-2`”改成 S11 已生成；§8.2 “构造出同一个 `NodeDirectoryLister`”改为“同一个类”（每次安装各 `new` 一个实例）。
+- 插件测试的写法照 `plugins/command-stats/tests/` 与 `plugins/command-dir/tests/`：替身在本包 `tests/doubles/` 下另写，不跨插件 import（L3）；“不调用某个接口”用每个方法都抛错的替身证明（G40）。
+
 **验收**：两次差异检查都通过；§6.1B 会话通过；基线会话（禁用新增插件时）仍与 `final` 逐字节一致。最后一个提交为 `milestone(4/6): box 接入`。
 
 **评审点（重）**：合并前发给我。我会核对两个演示提交的 `git diff --name-status` 和三条判据的原始输出。
@@ -488,6 +496,12 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 
 **〔S10 修订〕**：`tests/unit/host/CompositionRoot.test.ts` 顶部 describe 注释结尾的 “no optional plugin yet” 已过时，与上一条一起改。
 
+**〔S11 修订〕**：
+
+- `cli-2` 的期望输出已在 S11 生成（`expected/cli-2/`），本步不再需要 `--update cli-2`；第 1 条第三组会话就是 `cli-2`。
+- G38：`scripts/baseline/SessionRunner.ts` 用 `fs.cpSync` 复制工作区里的夹具，被忽略或未跟踪的文件（macOS 的 `.DS_Store`）会进入 `dir` 的输出。本步决定是否改成只复制 git 跟踪的文件（例如 `git ls-files` 列出后逐个复制），或保留现状、只靠 `doc/transcript/README.md` 的提醒；改的话要有测试（夹具目录里放一个被忽略的文件，输出不变），并同步设计 G38。这一条要改 `scripts/`，所以本步的“允许修改”另加 `scripts/baseline/`。
+- G39：`process.cwd()` 本身抛错时 CLI 以退出码 1 结束，S11 决定不处理，本步不改。
+
 **允许修改**：测试、会话数据、CI 配置。**不改运行代码**；发现问题时单独开修复 PR。
 
 **验收**：`npm test` 和 CI 全绿。
@@ -521,6 +535,8 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 **〔S8 修订〕**：README 的已知局限里记一条：`PluginContext.shapeTypes()`、`CommandContext.shapes()` 返回的是真实注册表，插件用 `as any` 强转可以绕过安装器（类型层面已禁止，设计 §2.3.5 定为故意违约）。
 
 **〔S9 修订〕**：设计 §1.1 的目录树没有列出 S9 新增的 `scripts/shared/`（§0.4 已登记），README 的一致性自查与目录说明要补上。`npm run metrics -- HEAD` 生成终版之后，用记录的提交号复现一次，`git diff --exit-code docs/metrics` 应为空。
+
+**〔S11 修订〕**：S11 已在 README 写了 `## dir 的适配器（Phase 2，S11）` 一节，第 1 条的“`dir` 的适配器说明”在它的基础上整理，不重写；其中“注册的都是同一个 `DirCommandType`”改为“同一个类”（每次安装各 `new` 一个实例）。已知局限里记一条：`process.cwd()` 本身抛错（进程启动前工作目录就已被删除）时 `dir` 以程序错误终止，退出码 1（设计 G39）。
 
 **允许修改**：文档、metrics 产物。〔S4 修订〕即 `doc/`、`docs/metrics/`、`vscode-svg/doc/analysis.md`，以及上述测试注释。
 
