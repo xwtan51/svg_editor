@@ -1,0 +1,24 @@
+{
+  "name": "@svgframe/plugin-shape-box",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/BoxPlugin.ts",
+    "./package.json": "./package.json"
+  },
+  "dependencies": {
+    "@svgframe/kernel": "0.1.0"
+  },
+  "contributes": {
+    "shapes": [
+      "box"
+    ],
+    "attributes": [
+      "box-attributes"
+    ],
+    "decorators": [
+      "box-type-label"
+    ]
+  }
+}
