@@ -6,6 +6,8 @@ import StatsPlugin from "@svgframe/plugin-command-stats";
 import statsManifest from "@svgframe/plugin-command-stats/package.json" with { type: "json" };
 import DirPlugin from "@svgframe/plugin-command-dir";
 import dirManifest from "@svgframe/plugin-command-dir/package.json" with { type: "json" };
+import BoxPlugin from "@svgframe/plugin-shape-box";
+import boxManifest from "@svgframe/plugin-shape-box/package.json" with { type: "json" };
 import { PluginCandidate } from "@svgframe/kernel/host";
 import { PluginOptions } from "@svgframe/kernel";
 
@@ -24,6 +26,7 @@ export class CompositionRoot {
     return [
       new PluginCandidate("@svgframe/plugin-command-stats", StatsPlugin, statsManifest, PluginOptions.EMPTY),
       new PluginCandidate("@svgframe/plugin-command-dir", DirPlugin, dirManifest, PluginOptions.EMPTY),
+      new PluginCandidate("@svgframe/plugin-shape-box", BoxPlugin, boxManifest, PluginOptions.EMPTY),
     ];
   }
 }
