@@ -1,0 +1,11 @@
+{
+  "groups": [
+    {
+      "expected": "cli-1-1b",
+      "runs": [
+        ["--only", "@svgframe/plugin-shape-box"],
+        ["--config", "{transcript}/configs/box.json"]
+      ]
+    }
+  ]
+}

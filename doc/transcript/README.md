@@ -31,6 +31,7 @@ doc/transcript/
 | `cli-1-1a.txt` | Phase 1 §6.1 版本 A；同样由 `spec-6-1.txt` 转换，4 行 `#` 注释保留为注释 | 18 | 无 | `flowchart.svg` |
 | `regression.txt` | 回归补充（规格未要求，见下文） | 165 | `mixed.svg`、`broken.svg` | `out.svg`、`roundtrip.svg` |
 | `cli-2.txt` | 规格 §6“双装配一致性”要求的新增命令会话（S11，设计 §4.7 #5）：`stats`、`dir`、`help`。不含 `tree`、`save`，见下文 | 22（含 5 行 `#` 注释） | `.hidden`、`README.md`、`demo.svg`、`package.json`、`docs/readme.txt`、`plugins/keep.txt` | 无（`files/` 与夹具逐字节相同） |
+| `cli-1-1b.txt` | Phase 1 §6.1 版本 B（`box`，`doc/spec/phase_cli_1.md` 第 476 行起，S12，设计 §8.3）；规格原文中以 `svg> ` 开头的行去掉前缀，1 行 `#` 注释保留为注释，`$ npm run cli` 与空行不要 | 13（含 1 行 `#` 注释） | 无 | `flowchart-box.svg` |
 
 `cli-2` 的说明（S11）：
 
@@ -41,11 +42,26 @@ doc/transcript/
 - **被忽略的文件会进入 `dir` 的输出**：`SessionRunner` 用 `fs.cpSync` 复制的是**工作区**里的 `fixtures/cli-2/`，不是 git 里的内容。macOS 的 `.DS_Store` 之类被 `.gitignore` 忽略的文件 `git status` 看不到，却会被复制进临时目录、出现在 `dir` 的列表里，使本机比对与 CI 不同，用 `--update` 时还会被写进期望输出。比对或生成之前先确认 `git status --ignored --short doc/transcript/fixtures/cli-2` 没有任何输出（`!!` 是被忽略的文件，`??` 是未跟踪的文件，两者都会被复制）。
 - 夹具里没有符号链接（git 与 `cpSync` 在不同平台上处理不一致）；符号链接由插件的真实适配器测试覆盖。
 
-### 预留命名（本步不建文件）
+`cli-1-1b` 的说明（S12）：
 
-| 输入 | 加入步骤 | 内容 |
-|---|---|---|
-| `cli-1-1b.txt` | S12 | Phase 1 §6.1 版本 B（`box`）。`final` 不支持 `box`，它的期望输出不来自 `final`，单独说明 |
+- **运行组**：一组、两次运行，`--only @svgframe/plugin-shape-box`（方式 A：组合根里只加 box）与 `--config {transcript}/configs/box.json`（方式 B：配置里只有 box，`{ "plugins": [ { "module": "@svgframe/plugin-shape-box" } ] }`），两次都不带 `modified-star`，都与 `expected/cli-1-1b/` 比较，并且互相比较（设计 §4.7、§8.3）。`configs/box.json` 必须放在仓库里：配置里的模块名按配置文件所在位置解析，放到仓库外会报 `error: plugin not found: @svgframe/plugin-shape-box`。
+- **期望输出不来自 `final`**：`final` 不支持 `box`。期望输出在 S12 经用户同意生成（2026-11-18）：`npm run baseline -- --update cli-1-1b`（只带 `cli-1-1b` 一个参数，其他会话的基线一个字节都没动），随后逐行对照 Phase 1 规格 §6.1B 与设计 §8.3 第 4 小节的表手工核对。
+- **与规格原文的差异只有树里三处摘要前的空格**：规格写的是 2/1/7 个（`rect#n1-rect`、`text#n1-label`、`line#arrow1` 三类行），实际是 3/2/8 个。原因是 Phase 1 的 V1 规则：摘要从整棵树最宽的名字 + 2 列开始（Phase 1 规格 §5 的示例本身就是 3/2/8）。见设计 N4、偏差 T3。其余各行与规格原文逐字相同，banner 是规格里没写出的第一行。
+
+比对输入与规格原文（与上面的“交叉核对”同样的写法；第二条 `diff` 应只列出那 5 行空格不同的树行，第三条把连续空格压成一个后应完全相同）：
+
+```bash
+S=doc/spec/phase_cli_1.md; E=doc/transcript/expected/cli-1-1b/stdout.txt
+spec() { sed -n '/^\*\*版本 B/,/^版本 A 手工组合/p' "$S" | sed -n '/^```text$/,/^```$/p'; }
+printf 'banner: '; head -n 1 "$E"
+diff <(spec | grep -E '^(svg> |# )' | sed 's/^svg> //') doc/transcript/cli-1-1b.txt && echo "input:  identical"
+diff <(spec | grep -vE '^(svg> |# |\$ |```|$)') <(tail -n +2 "$E")
+diff <(spec | grep -vE '^(svg> |# |\$ |```|$)' | tr -s ' ') <(tail -n +2 "$E" | tr -s ' ') && echo "output: identical up to runs of spaces"
+```
+
+### 预留命名
+
+目前没有预留的会话名（原来预留的 `cli-1-1b` 已在 S12 加入，见上表）。
 
 新会话加入时，用 `--update <会话名>` 只生成该会话的基线（需要事先得到明确同意），不得顺带重写已有会话。
 
