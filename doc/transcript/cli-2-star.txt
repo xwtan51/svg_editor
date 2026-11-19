@@ -1,0 +1,11 @@
+# 规格 §5 的树：保存之后只改 n1 的填充色
+init 800 600
+create box n1 120 100 160 60 "处理数据"
+create line arrow1 280 130 520 130 black
+group flowchart n1 arrow1
+save flowchart-star.svg
+set n1 fill #f5a623
+tree
+# undo 回到保存点：* 全部消失（ADR-3）
+undo
+tree
