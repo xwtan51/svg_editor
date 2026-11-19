@@ -23,7 +23,9 @@
 >
 > **修订记录（2026-11-18，三）**：S11 经 PR #25 合并（`main` = `e287111`；C = `2977cb5`，C′ = `07bb3ea`），`cli-2` 的期望输出已在 S11 经同意生成，设计文档同步了 8.2 的实际文件与测试、4.7、9.2、9.3，以及 G37–G40（夹具只有小写名字钉不住排序；`cpSync` 复制工作区里被忽略的文件；读取失败不能用 `chdir` 再删目录来模拟；“不调用 context”要靠每个方法都抛错的替身）。审查时发现设计里还有几处过时的措辞不在 S11 的修改范围内。受影响的 S12、S14、S15 各节加了 **〔S11 修订〕** 段落。
 >
-> **进度**：S0–S11 已合并；里程碑 ①（`dcd5f37`）、②（`92db60a`）、③（`9e9f786`）完成。
+> **修订记录（2026-11-19）**：S12 经 PR #26 合并（`main` = `2a57579`；P = `3c87ebe`，C_A = `f999fd1`，C_B = `077bd88` 在永久保留的 `demo/box-config` 上，C_A2 = `9997e35`），设计文档同步了 8.3 的实际文件与测试、9.2、9.4，以及 G41（`BoxInEditor` 改为插件测试 + 根 `tests/system/boxInEditor.test.ts`）、G42（配置里的 box 在 S14 之前没有测试管着）。为写 S13 提示词做草稿实测时发现：S8 之前的 `tests/unit/cli/main.test.ts` 有一条不带参数（full）运行 Phase 1 §6 会话的测试，组合根一加 `modified-star`，树行带 `*` 就失败；设计 8.4 的 `StarInEditor` 与 G41 同样做不到；配置里的 `modified-star` 同样没有测试管着，经用户同意在 C′ 加会话 `cli-2-star`。另有 S12 审查遗留一条（box 首次读写不幂等）。受影响的 S13、S14、S15 各节加了 **〔S12 修订〕** 段落。
+>
+> **进度**：S0–S12 已合并；里程碑 ①（`dcd5f37`）、②（`92db60a`）、③（`9e9f786`）、④（`94da628`）完成。
 
 ---
 
@@ -464,6 +466,15 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 
 **〔S7 修订〕**：S7 已在临时 worktree 里照抄 §8.4 草图跑通了状态机第 2–7 行。`SaveBaseline` 草图已经补上私有字段 `fingerprints`、`documentText` 和私有构造函数（G20），照抄即可编译；`TreeStarPlugin` 没有草图，要按 §8.4 的文件清单来写。事件只在命令成功之后、`Editor.executeLine` 的 `try/catch` 之后派发；监听器抛错（包括 `EditorError`）按程序错误处理，所以 `ModifiedStar` 的三个回调都不能抛错。
 
+**〔S12 修订〕**（含写 S13 提示词前的草稿实测）：
+
+- **C 之前先改一个 Phase 1 时代的测试**：`tests/unit/cli/main.test.ts` 的 “plays the whole spec §6 session in a temporary directory and writes demo.svg there” 不带参数启动 CLI（S8 之后不带参数 = full），把 Phase 1 §6 会话的 stdout 与 `tests/transcripts/spec-6.txt` 比较。组合根一加 `modified-star`，`tree` 的 6 行都多出 ` *`，这条测试失败，而接入提交 C 不能碰测试。所以在 C 之前单独一个提交，只给这一处 `runMain` 加 `["--bare"]`（Phase 1 会话的含义本来就是“禁用全部新增插件”）。与 G34 同类，设计从 **G44** 起登记（G43 留给下一条）。
+- **S12 审查遗留（登记为 G43，不在本步处理）**：box 的结构检查报 “2 children with id n1-rect” 只在其中一个是被跳过的元素（如 `<path>`）时才会出现（两个都被读入时整个 `read` 因重复 id 被拒），此时降级为 `g`；但 `save` 之后 `<path>` 没了、`data-kind` 还在，再读就是 box，首次读写不幂等。更一致的写法是只看标签对得上的同 id 子元素。插件目录不在本步改（C_A、C_B 是判据快照），改不改留给 S14/S15 决定。
+- **`StarInEditor` 与 G41 一样做不到**：状态机表要用 `init`、`create`、`save`、`move`、`undo`、`redo`、`delete`、`front`、`canvas`、`read`、`set`、`tree` 等十几条内置命令。拆成两处：插件自己的测试（真实 `SvgDocument` + 本包替身图形 + `TreeRenderer`，直接调三个事件回调；事件管道另用最小编辑器与替身命令验证），以及根 `tests/system/starInEditor.test.ts`（`EditorAssembler` + `OnlyProfile` + `MemoryFileSystem`，按 8.4 的表逐行一条）。
+- **C′ 加会话 `cli-2-star`**（2026-11-19 用户同意 `npm run baseline -- --update cli-2-star`，只此一个会话）：规格 §5 的树（`init` → 两个图形 → `group` → `save` → `set n1 fill #f5a623` → `tree`）再加一次 `undo` 回到保存点、`tree`。运行组同 `cli-2`（不带参数与 `--config {repo}/plugins.config.json`）。实测树的 6 行与规格 §5 逐字节相同；配置漏加 `modified-star` 时基线报 2 处差异，所以这个会话同时管住了配置。C′ 必须把配置改动和会话放在同一个提交里。设计 4.7 加一行。
+- **Phase 1 的 io 屏障**：`save`、`read` 之后 `undo` / `redo` 都报 `undo not allowed after io command`，保存点之前的历史不可达。所以真实编辑器里不会出现“`undo` 越过保存点”，状态机表第 6 行就是 `undo` 能回到的最远处。内置命令的 `undo` 都恢复快照（memento），`move`、`scale`、`set` 新属性、`delete` 撤销后 `*` 都会消失。
+- **允许修改**另加：`tests/unit/cli/main.test.ts`（只限第一条那一处）、`tests/system/`（只新增文件）、`doc/transcript/`（`cli-2-star` 的输入、`.runs.json`、只由 `--update cli-2-star` 生成的期望输出，以及 `README.md`）、`doc/spec/phase2-plan.md`（刷新副本）、`doc/design-phase2.md`（8.4、ADR-3、4.7、9.2、9.4 中与本步有关的行，8.5 的 G43 与新缺口）、`doc/README.md`（扩展点清单中 `TreeDecorator`、`DocumentListener` 两行的“已有实现”）、`doc/process-log.md`。
+
 **验收**：差异检查脚本通过（内核和渲染器差异为 0）；禁用全部新增插件时，`tree` 输出与 `final` 逐字节一致。最后一个提交为 `milestone(5/6): 标签完成`。
 
 **分支**：`feat/plugin-tree-star`。
@@ -502,6 +513,12 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 - G38：`scripts/baseline/SessionRunner.ts` 用 `fs.cpSync` 复制工作区里的夹具，被忽略或未跟踪的文件（macOS 的 `.DS_Store`）会进入 `dir` 的输出。本步决定是否改成只复制 git 跟踪的文件（例如 `git ls-files` 列出后逐个复制），或保留现状、只靠 `doc/transcript/README.md` 的提醒；改的话要有测试（夹具目录里放一个被忽略的文件，输出不变），并同步设计 G38。这一条要改 `scripts/`，所以本步的“允许修改”另加 `scripts/baseline/`。
 - G39：`process.cwd()` 本身抛错时 CLI 以退出码 1 结束，S11 决定不处理，本步不改。
 
+**〔S12 修订〕**：
+
+- G42：组合根与配置一致性的系统测试（插件集合、顺序、options）就是本步第一批要加的；S12 的 box、S13 的 `modified-star` 在此之前只靠 `git show` 检查与 `cli-2-star` 会话管着。
+- G43（S12 审查遗留）：决定是否修正 box 结构检查的 “2 children with id …” 规则（只看标签对得上的同 id 子元素），使首次读写幂等。改的话要动 `plugins/shape-box/`，不是测试，需要单独开修复 PR 并说明 C_A、C_B 是判据快照、不受影响；不改的话在 README 已知局限里记一条（S15）。
+- `cli-1` 的 full 双装配组：S13 之后不带参数的 `cli-1` 输出比 `final` 多 6 处 ` *`（草稿实测，与 `--config plugins.config.json` 逐字节相同），所以这一组只比较 A = B，`expected` 写 `null`。
+
 **允许修改**：测试、会话数据、CI 配置。**不改运行代码**；发现问题时单独开修复 PR。
 
 **验收**：`npm test` 和 CI 全绿。
@@ -537,6 +554,8 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 **〔S9 修订〕**：设计 §1.1 的目录树没有列出 S9 新增的 `scripts/shared/`（§0.4 已登记），README 的一致性自查与目录说明要补上。`npm run metrics -- HEAD` 生成终版之后，用记录的提交号复现一次，`git diff --exit-code docs/metrics` 应为空。
 
 **〔S11 修订〕**：S11 已在 README 写了 `## dir 的适配器（Phase 2，S11）` 一节，第 1 条的“`dir` 的适配器说明”在它的基础上整理，不重写；其中“注册的都是同一个 `DirCommandType`”改为“同一个类”（每次安装各 `new` 一个实例）。已知局限里记一条：`process.cwd()` 本身抛错（进程启动前工作目录就已被删除）时 `dir` 以程序错误终止，退出码 1（设计 G39）。
+
+**〔S12 修订〕**：ADR-3 整理进 README 时以 S13 修订后的设计为准（含 io 屏障让 `undo` 不能越过保存点、`cli-2-star` 复现规格 §5、两种注册顺序的实测结果）。S12 已在 README 写了 `## box 的两种接入（Phase 2，S12）`，第 1 条在它的基础上整理。G43 如果 S14 决定不改，在已知局限里记一条。
 
 **允许修改**：文档、metrics 产物。〔S4 修订〕即 `doc/`、`docs/metrics/`、`vscode-svg/doc/analysis.md`，以及上述测试注释。
 

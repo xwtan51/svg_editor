@@ -32,6 +32,7 @@ doc/transcript/
 | `regression.txt` | 回归补充（规格未要求，见下文） | 165 | `mixed.svg`、`broken.svg` | `out.svg`、`roundtrip.svg` |
 | `cli-2.txt` | 规格 §6“双装配一致性”要求的新增命令会话（S11，设计 §4.7 #5）：`stats`、`dir`、`help`。不含 `tree`、`save`，见下文 | 22（含 5 行 `#` 注释） | `.hidden`、`README.md`、`demo.svg`、`package.json`、`docs/readme.txt`、`plugins/keep.txt` | 无（`files/` 与夹具逐字节相同） |
 | `cli-1-1b.txt` | Phase 1 §6.1 版本 B（`box`，`doc/spec/phase_cli_1.md` 第 476 行起，S12，设计 §8.3）；规格原文中以 `svg> ` 开头的行去掉前缀，1 行 `#` 注释保留为注释，`$ npm run cli` 与空行不要 | 13（含 1 行 `#` 注释） | 无 | `flowchart-box.svg` |
+| `cli-2-star.txt` | 规格 §5 的树（`modified-star` 与 `(box)` 并存，S13，设计 §8.4、§4.7 #6）：`init` → box 与连线 → `group` → `save` → `set n1 fill #f5a623` → `tree`，再 `undo` 回到保存点、`tree` | 11（含 2 行 `#` 注释） | 无 | `flowchart-star.svg` |
 
 `cli-2` 的说明（S11）：
 
@@ -57,6 +58,19 @@ printf 'banner: '; head -n 1 "$E"
 diff <(spec | grep -E '^(svg> |# )' | sed 's/^svg> //') doc/transcript/cli-1-1b.txt && echo "input:  identical"
 diff <(spec | grep -vE '^(svg> |# |\$ |```|$)') <(tail -n +2 "$E")
 diff <(spec | grep -vE '^(svg> |# |\$ |```|$)' | tr -s ' ') <(tail -n +2 "$E" | tr -s ' ') && echo "output: identical up to runs of spaces"
+```
+
+`cli-2-star` 的说明（S13）：
+
+- **运行组**：一组、两次运行，与 `cli-2` 相同：不带参数（方式 A，组合根的全部可选插件）与 `--config {repo}/plugins.config.json`（方式 B），两次都与 `expected/cli-2-star/` 比较，并且互相比较（设计 §4.7 #6）。
+- **期望输出不来自 `final`**：`final` 没有树标签。期望输出在 S13 经用户同意生成（2026-11-19）：`npm run baseline -- --update cli-2-star`（只带 `cli-2-star` 一个参数，其他会话的基线一个字节都没动），随后逐行对照规格 §5、设计 §8.4 与 `cli-1-1b` 的同类回显手工核对。
+- **它同时管住了配置**：box 与 `modified-star` 都不贡献命令，通用装配契约测试对它们等于空检查，`cli-1-1b` 的两次运行又都不含 `modified-star`。这个会话的 `tree` 只有在 `plugins.config.json` 含 `modified-star` 时才带 `*`：配置漏了它，`--config` 那次运行的第 8 行变成 `svg (800x600)`，基线报 2 处差异（与期望输出比、与不带参数的那次比）。所以配置改动和这个会话放在同一个提交里（设计 G46）。组合根与配置的一致性测试在 S14 加（设计 §4.9）。
+- **与规格 §5 的关系**：stdout 第 8–13 行（第一次 `tree`）与规格 §5 的示例树逐字节相同，包括三处摘要前的 3/2/8 个空格（规格 §5 本身就是按 V1 对齐的，没有 `cli-1-1b` 的 T3 问题）。第 15–20 行是 `undo` 回到保存点之后的同一棵树：填充色回到 box 的缺省值 `#4a90d9`，没有任何 `*`（ADR-3：dirty = 内容与保存点不一致）。
+
+比对第一次 `tree` 与规格 §5 的示例（输出应为空）：
+
+```bash
+diff <(awk '/^## 5\./,/^## 6\./' doc/spec/phase_cli_2.md | sed -n '/^```text$/,/^```$/p' | sed '1d;$d') <(sed -n 8,13p doc/transcript/expected/cli-2-star/stdout.txt)
 ```
 
 ### 预留命名

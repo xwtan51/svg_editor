@@ -1672,8 +1672,9 @@ CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文�
 | 3 | 双装配一致：基础 | `cli-1` | 不带参数（full） | `--config {repo}/plugins.config.json` | 内置 + `optional()` 全部（= 配置全部，4.9 的一致性测试保证） | A 的输出 = B 的输出（不存期望输出） | 不要：新插件进组合根和配置，两边同时增加 |
 | 4 | 双装配一致：§6.1B | `cli-1-1b` | 同 #2 | 同 #2 | 同 #2 | 同 #2（期望输出 + A = B） | 不要 |
 | 5 | 双装配一致：新增命令 | `cli-2`（含 `stats`、`dir`） | 不带参数（full） | `--config {repo}/plugins.config.json` | 全部 | `expected/cli-2/`（手工核对）+ A = B | 不要 |
+| 6 | 双装配一致：树标签（S13 修订） | `cli-2-star`（规格 §5 的树，再 `undo` 回到保存点） | 不带参数（full） | `--config {repo}/plugins.config.json` | 全部（含 box 与 `modified-star`） | `expected/cli-2-star/`（逐行对照规格 §5 手工核对）+ A = B | 不要；配置漏了 `modified-star` 时 B 的 `tree` 少 `*`，基线报差异（G46） |
 
-**各行在哪一步加入**：#1 在 S9；#2、#4 在 S12 的配置提交；#5 的双装配组在 S11 的配置提交，期望输出也在 S11 经用户同意用 `--update cli-2` 生成并手工核对（S11 修订：原为“只比较 A = B，期望输出在 S14 补”）；#3 在 **S14**。#3 不能更早：S10–S13 每次接入都是“先改组合根（C）、再改配置（C′）”，在 C 与 C′ 之间方式 A 比方式 B 多一个插件，`cli-1` 的 `tree` 会在 S13 的 C 上多出 `*`。`cli-2` 不含 `tree`、不含 box，所以 S12、S13 的 C 不会让 #5 失配。S14 之后再接入会影响双装配会话的插件时，C 上的基线失配是预期的，C′ 恢复；或者把 C、C′ 合成一个提交（决策 X24 的例外，PR 中说明）。
+**各行在哪一步加入**：#1 在 S9；#2、#4 在 S12 的配置提交；#6 在 S13 的配置提交 C′，期望输出在 S13 经用户同意用 `--update cli-2-star` 生成并逐行核对（S13 修订）；#5 的双装配组在 S11 的配置提交，期望输出也在 S11 经用户同意用 `--update cli-2` 生成并手工核对（S11 修订：原为“只比较 A = B，期望输出在 S14 补”）；#3 在 **S14**。#3 不能更早：S10–S13 每次接入都是“先改组合根（C）、再改配置（C′）”，在 C 与 C′ 之间方式 A 比方式 B 多一个插件，`cli-1` 的 `tree` 会在 S13 的 C 上多出 `*`。`cli-2` 不含 `tree`、不含 box，所以 S12、S13 的 C 不会让 #5 失配。#6 与 S13 的 C′ 同时加入，C 上还没有这个会话，所以 C 不会让它失配（S13 修订）。S14 之后再接入会影响双装配会话的插件时，C 上的基线失配是预期的，C′ 恢复；或者把 C、C′ 合成一个提交（决策 X24 的例外，PR 中说明）。
 
 `dir` 的会话（#5）：`SessionRunner` 已经在新建的临时目录里运行 CLI 并以它为 cwd（`SessionRunner.ts:19-31`），fixtures 复制进去后目录内容是固定的；stdout、stderr 经管道收集，**不写进这个目录**，所以日志不会改变目录列表。`cli-2` 的输入把 `dir` 放在任何 `save` 之前（`save` 产出的文件会出现在列表里）。fixtures 里放 `.hidden`、一个子目录（目录里放一个文件，因为 git 存不了空目录）和几个普通文件。
 
@@ -1872,6 +1873,7 @@ S15 把这些草稿整理进 README。
 - **备选**：dirty 判定——① 发生过编辑命令（`undo` 后 `*` 不消失）；② 内容与上次保存不一致（采纳）。祖先传播——① 子图形改了，所有祖先容器行都标；② 不传播，只标改动的节点和根行（采纳）。拼接顺序——① 按注册顺序（采纳）；② 按标签名字母序；③ 每个标签自带权重。
 - **决定**：`ModifiedStar` 在 `documentReplaced`、`documentSaved` 时记录保存点：每个图形的指纹（`tagName`、全部 `svgAttributes()`、`textContent()`、父 id）与整份文档的序列化文本。渲染时：图形行的指纹与保存点不同、或保存点里没有这个 id → `*`；根行的序列化文本与保存点不同 → `*`。`init` 的保存点是空画布。多个标签按注册顺序拼接，所以是 `g#n1 (box) *`。
 - **后果**：① `undo` 回到保存点时 `*` 全部消失，`redo` 又出现；② 只依赖两个事件，不需要命令上报改了哪些 id；③ 删除节点、调整 z-order 不会让任何图形行带 `*`，只体现在根行上（根行比较的是整份序列化）；④ 父容器不因子节点改动而带 `*`，与规格 §5 示例一致（`rect#n1-rect` 有 `*`，`g#n1` 没有）；⑤ 每次 `tree` 都要序列化一次文档，代价与文档大小成正比，对 CLI 可以忽略；⑥ 两种装配的顺序必须一致，由 4.9 的测试保证。
+- **实测**（S13 修订）：⑦ Phase 1 的 io 屏障使 `undo` 不能越过保存点：`save` / `read` 成功之后 `undo`、`redo` 都被拒绝，之后的编辑最多撤回到保存点（8.4“io 屏障”），所以“越过保存点”“保存后 `redo`”只在插件测试里直接驱动；⑧ 手工改回原值时 `*` 也会消失（例如保存后 `canvas 400 300` 再 `canvas 800 600`，根行的 `*` 消失），这是“比较内容”的直接后果，与是否经过 `undo` 无关；⑨ 配置顺序反过来（`modified-star` 在 box 之前）时同一行是 `g#n1 * (box)`，证明拼接顺序就是注册顺序（插件测试 `TagOrder` 与 S13 的 PR 中用临时配置的实测）；⑩ 会话 `cli-2-star` 的第一次 `tree` 与规格 §5 的示例树逐字节相同，`undo` 回到保存点后的 `tree` 没有任何 `*`。
 
 ### ADR-4 配置清单的校验时机
 
@@ -2835,8 +2837,15 @@ M	plugins.config.json
 | `src/TreeStarPlugin.ts` | 入口：`const star = new ModifiedStar(); context.registerTreeDecorator(star); context.subscribe(star);` |
 | `src/ModifiedStar.ts` | `implements TreeDecorator, DocumentListener`；唯一的状态字段 `private baseline: SaveBaseline \| null = null` |
 | `src/SaveBaseline.ts` | 不可变值对象：`private readonly fingerprints: ReadonlyMap<string, string>`（id → 指纹）、`private readonly documentText: string`（整份序列化）；`static capture(document: DocumentView)`、`isShapeDirty(view)`、`isDocumentDirty(document)` |
-| `tests/ModifiedStar.test.ts` | 状态机：替身 `DocumentView` / `ShapeView` 加真实事件序列 |
-| `tests/StarInEditor.test.ts` | 用 `@svgframe/kernel/host` 组装最小编辑器（替身图形与替身编辑命令），跑 8.4 表中的每一行 |
+| `tests/SaveBaseline.test.ts`（18） | 指纹的组成（各改一项都 dirty；子节点、兄弟顺序不在其中）、未知 id、改了又改回、画布尺寸、空文档（S13 修订） |
+| `tests/ModifiedStar.test.ts`（17） | 状态机：真实 `SvgDocument` + 本包替身图形 + 内核 `TreeRenderer`，直接调三个回调；含真实编辑器里到不了的分支（越过保存点、保存后 `redo`、改回更早的保存点），不抛错、`tagFor` 只答 `"*"` / `null`（S13 修订） |
+| `tests/TagOrder.test.ts`（4） | 替身 `(box)` 标签与 star 两种安装顺序：`g#n1 (box) *` / `g#n1 * (box)`；规格 §5 的树；互不感知（S13 修订） |
+| `tests/EventPipeline.test.ts`（5） | 事件管道：最小编辑器（替身命令 `init`、`add`、`save`、`broken-save`、`undo`、`redo` + 真实 `Editor`），失败的保存不建立保存点（S13 修订） |
+| `tests/TreeStarPlugin.test.ts`（5） | 清单、真实安装器安装、标签与监听器是同一个对象、两个注册表各有自己的 `ModifiedStar`（TR-088）（S13 修订） |
+| `tests/doubles/`（14 个文件） | `FakeRect`、`FakeText`（照抄 box 插件测试的替身，L3 不许 import）、`FakeLeaf`（标签名由测试指定）、`FakeGroup`（`kind` = `"box"` 时充当替身 box）、`FakeBoxTag`（替身 `(box)` 标签）、`StarTestbed`（安装器、文档、树）；事件管道用的 `TestEditor`、`FakeInitCommand`、`AddRectCommand`、`FakeSaveCommand`、`SaveThenFailCommand`、`FakeUndoCommand`、`FakeRedoCommand`、`MemoryFiles`（S13 修订） |
+| 根 `tests/system/starInEditor.test.ts`（37，不在插件目录里，C′ 之后单独提交） | 真实命令下按下表逐行一条，另有 io 屏障、撤销的精确性、与 box 并存、不装 star：`EditorAssembler` + `OnlyProfile` / `BareProfile` + 内存文件，与 CLI 的装配完全相同（缺口 G45）（S13 修订） |
+
+（S13 修订：原清单是 `tests/ModifiedStar.test.ts` 与 `tests/StarInEditor.test.ts`。`StarInEditor` 要用的 `init`、`create`、`save`、`move`、`undo`、`redo`、`delete`、`front`、`canvas`、`read`、`set`、`tree` 都在内置命令插件里，插件测试不能 import（L3），与 G41 同一个原因，所以拆成插件自己的测试与根 `tests/system/starInEditor.test.ts`（缺口 G45）。替身照 S10–S12 的做法放进 `tests/doubles/`。）
 
 **2. 草图**
 
@@ -2886,53 +2895,95 @@ export class SaveBaseline {
 
 **3. 状态机**
 
-保存点 = 最近一次 `init`、`read` 或 `save` 成功时的内容。“行”列只列有变化的行。
+保存点 = 最近一次 `init`、`read` 或 `save` 成功时的内容。“`*`”列只列带 `*` 的行。（S13 修订：按实际输出订正了第 1、11–17、20 行，并加上“测试”一列。`starInEditor` 指根 `tests/system/starInEditor.test.ts`，各行的测试名以 `row <n>:` 开头，在同一个文件里依次重放前面各行（第 8 行是失败的命令，不重放）；`ModifiedStar`、`TagOrder`、`EventPipeline` 指 `plugins/tree-star/tests/<名字>.test.ts`。）
 
-| # | 操作 | 驱动事件 | `baseline` | `tree` 中的 `*` |
-|---|---|---|---|---|
-| 1 | 启动 | — | `null` | 没有文档，`tree` 报 `no document` |
-| 2 | `init 800 600` | `documentReplaced` | 空画布 | 无（N15） |
-| 3 | `create rect r1 0 0 10 10` | `documentEdited`（忽略） | 不变 | 根行 `*`；`rect#r1 … *`（新节点立即标记） |
-| 4 | `save a.svg` | `documentSaved` | 当前内容 | 无 |
-| 5 | `move r1 5 0` | `documentEdited` | 不变 | 根行、`r1` |
-| 6 | `undo`（回到保存点） | `documentEdited` | 不变 | **无**（内容与保存点相同） |
-| 7 | `redo` | `documentEdited` | 不变 | 根行、`r1` |
-| 8 | `save /no/such/dir/x.svg`（失败） | 无（命令失败，事件被丢弃） | 不变 | 根行、`r1`（仍未保存） |
-| 9 | `save b.svg`（另存为新路径） | `documentSaved` | 当前内容 | 无 |
-| 10 | `create g g1`、`create rect r2 0 0 1 1 in g1` | `documentEdited` ×2 | 不变 | 根行、`g#g1 *`、`rect#r2 … *` |
-| 11 | `save` 后 `set r2 fill red` | `documentSaved`、`documentEdited` | 第一次 save 时的内容 | 根行、`r2`；**`g1` 不标**（不向祖先传播） |
-| 12 | `delete r1` | `documentEdited` | 不变 | 根行（`r1` 不在树里了） |
-| 13 | `undo`（`r1` 回到原位） | `documentEdited` | 不变 | 若与保存点相同则无 |
-| 14 | `front r1`（只改 z-order） | `documentEdited` | 不变 | 只有根行（指纹不含兄弟顺序，序列化含） |
-| 15 | `canvas 400 300` | 无（文档类命令，不是编辑） | 不变 | 只有根行（序列化含尺寸） |
-| 16 | `read other.svg` | `documentReplaced` | 读入后的内容 | 无 |
-| 17 | `read missing.svg`（失败） | 无 | 不变 | 不变 |
-| 18 | `tree r2`（子树） | — | — | 没有根行，只看图形行 |
-| 19 | `stats`、`dir`、`show`、`help` | 无 | 不变 | 不变 |
-| 20 | box 与 star 同时装：`set n1 fill red` | `documentEdited` | 不变 | `rect#n1-rect … *`；`g#n1 (box)` 不带 `*`；若 `set n1 stroke red`（设在 `<g>` 上）则 `g#n1 (box) *`——拼接顺序为注册顺序，box 先装 |
+| # | 操作 | 驱动事件 | `baseline` | `tree` 中的 `*` | 测试 |
+|---|---|---|---|---|---|
+| 1 | 启动 | — | `null` | 没有文档：`tree` 报 `error: no document. use 'init' or 'read' first` | `starInEditor` row 1；`ModifiedStar` “before any save point every row is untagged …” |
+| 2 | `init 800 600` | `documentReplaced` | 空画布 | 无（N15） | `starInEditor` row 2；`ModifiedStar` “documentReplaced (init) …”；`EventPipeline` “init: …” |
+| 3 | `create rect r1 0 0 10 10` | `documentEdited`（忽略） | 不变 | 根行 `*`；`rect#r1 … *`（新节点立即标记） | `starInEditor` row 3；`ModifiedStar` “documentSaved records the save point”、“edit → save → edit again → undo …” |
+| 4 | `save a.svg` | `documentSaved` | 当前内容 | 无 | `starInEditor` row 4；`ModifiedStar` 同上 |
+| 5 | `move r1 5 0` | `documentEdited` | 不变 | 根行、`r1` | `starInEditor` row 5；`ModifiedStar` 同上；`EventPipeline` “edit → save → edit → undo …” |
+| 6 | `undo`（回到保存点） | `documentEdited` | 不变 | **无**（内容与保存点相同） | `starInEditor` row 6；`ModifiedStar`、`EventPipeline` 同上 |
+| 7 | `redo` | `documentEdited` | 不变 | 根行、`r1` | `starInEditor` row 7；`ModifiedStar`、`EventPipeline` 同上 |
+| 8 | `save /no/such/dir/x.svg`（失败） | 无（命令失败，事件被丢弃） | 不变 | 根行、`r1`（仍未保存） | `starInEditor` row 8；`EventPipeline` “a save that the file system refuses …”、“a save that called markSaved and then failed …” |
+| 9 | `save b.svg`（另存为新路径） | `documentSaved` | 当前内容 | 无 | `starInEditor` row 9；`EventPipeline` “a save that the file system refuses …” |
+| 10 | `create g g1`、`create rect r2 0 0 1 1 in g1` | `documentEdited` ×2 | 不变 | 根行、`g#g1 *`、`rect#r2 … *`；`r1` 不标 | `starInEditor` row 10；`ModifiedStar` “a new shape is tagged at once …” |
+| 11 | `save`（写回 `b.svg`）后 `set r2 fill red` | `documentSaved`、`documentEdited` | 这次 `save` 时的内容（含 `g1`、`r2`） | 根行、`r2`；**`g1` 不标**（不向祖先传播） | `starInEditor` row 11；`ModifiedStar` “no propagation to ancestors …” |
+| 12 | `delete r1` | `documentEdited` | 不变 | 根行；`r1` 不在树里了；`rect#r2 … *` 照旧（第 11 行的改动）。保存后只做 `delete` 时只有根行 | `starInEditor` row 12；`ModifiedStar` “the root line looks at the whole document …” |
+| 13 | `undo`（`r1` 回到原位） | `documentEdited` | 不变 | `r1` 回来且不标；根行与 `r2` 仍有 `*`（`r2` 的填充色仍与保存点不同） | `starInEditor` row 13 |
+| 14 | `front r1`（只改 z-order） | `documentEdited` | 不变 | `r1`、`g1` 都不因此带 `*`；z-order 的变化只体现在根行（这里根行本来就有 `*`；保存后只做 `front` 时只有根行） | `starInEditor` row 14；`ModifiedStar` “the root line looks at the whole document …” |
+| 15 | `canvas 400 300` | 无（文档类命令，不是编辑） | 不变 | 根行 `svg (400x300) *`（序列化含尺寸）；保存后只改尺寸、再改回原尺寸时根行的 `*` 消失（比较的是内容） | `starInEditor` row 15 |
+| 16 | `read a.svg` | `documentReplaced` | 读入后的内容 | 无 | `starInEditor` row 16；`ModifiedStar` “documentReplaced (read) …”、“a document replaced by another one …” |
+| 17 | `read missing.svg`（失败） | 无 | 不变 | 不变（干净的仍干净，带 `*` 的仍带 `*`） | `starInEditor` row 17 |
+| 18 | `tree g1`、`tree r2`（子树） | — | — | 没有根行，只看图形行 | `starInEditor` row 18；`ModifiedStar` “tree <id> (renderSubtree) has no root line …” |
+| 19 | `stats`、`dir`、`show`、`help` | 无 | 不变 | 不变 | `starInEditor` row 19 |
+| 20 | box 与 star 同时装：保存后 `set n1 fill #f5a623` | `documentEdited` | 不变 | `rect#n1-rect … *`；`g#n1 (box)` 不带 `*`；再 `set n1 stroke red`（设在 `<g>` 上）则 `g#n1 (box) *`——拼接顺序为注册顺序，box 先装 | `starInEditor` row 20；`TagOrder` 全部 |
 
 规格 §5 要求覆盖的分支（编辑 → 保存 → 再编辑 → `undo` 回到保存点）就是第 3–7 行；其余各行同样各有一条测试。
 
+**io 屏障**（S13 修订）：Phase 1 的 `save`、`read` 是 io 命令，成功之后 `undo` 与 `redo` 都报 `error: undo not allowed after io command`；之后再做编辑，`undo` 只能撤回保存之后的编辑，再往前是 `error: nothing to undo`。所以真实编辑器里**不会出现“`undo` 越过保存点”或“保存后 `redo`”**，第 6 行就是 `undo` 能回到的最远处。这两种情形只在插件测试里直接驱动事件覆盖（`ModifiedStar` 的 “undo past the save point …”、“redo after a save …”）；io 屏障本身由 `starInEditor` 的 “the io barrier” 一组覆盖。内置命令的 `undo` 都恢复快照：`move`、`scale`、`set` 原来没有的属性、`delete`、`addto`、`group`、`ungroup`（嵌套的容器）撤销之后 `*` 全部消失，没有浮点残差（`starInEditor` 的 “undo restores the content exactly”）。
+
 **4. 接入提交与判据**
 
+S13 的实际结果（S13 修订：原来这里是预测；P = `0197263`，T = `50011e6`，C = `1ac5f82`，C′ = `b14e07c`，都在 `feat/plugin-tree-star` 上）。C 之前先有一个只改测试的提交 T（缺口 G44，与 G34 同类）：`tests/unit/cli/main.test.ts` 里有一条不带参数（full）运行 Phase 1 §6 会话、与 `tests/transcripts/spec-6.txt` 比较的测试，组合根一加 `modified-star`，`tree` 的 6 行都多出 ` *`，而 C 不能碰测试。T 只给那一处 `runMain` 加 `["--bare"]`（Phase 1 会话的含义就是“禁用全部新增插件”）：
+
 ```text
-$ git diff --name-status C^ C
+$ git diff --name-status P T
+M	tests/unit/cli/main.test.ts
+```
+
+```text
+$ git diff --name-status T C        # C^ = T
 M	package-lock.json
 A	plugins/tree-star/package.json
 A	plugins/tree-star/src/ModifiedStar.ts
 A	plugins/tree-star/src/SaveBaseline.ts
 A	plugins/tree-star/src/TreeStarPlugin.ts
+A	plugins/tree-star/tests/EventPipeline.test.ts
 A	plugins/tree-star/tests/ModifiedStar.test.ts
-A	plugins/tree-star/tests/StarInEditor.test.ts
+A	plugins/tree-star/tests/SaveBaseline.test.ts
+A	plugins/tree-star/tests/TagOrder.test.ts
+A	plugins/tree-star/tests/TreeStarPlugin.test.ts
+A	plugins/tree-star/tests/doubles/AddRectCommand.ts
+A	plugins/tree-star/tests/doubles/FakeBoxTag.ts
+A	plugins/tree-star/tests/doubles/FakeGroup.ts
+A	plugins/tree-star/tests/doubles/FakeInitCommand.ts
+A	plugins/tree-star/tests/doubles/FakeLeaf.ts
+A	plugins/tree-star/tests/doubles/FakeRect.ts
+A	plugins/tree-star/tests/doubles/FakeRedoCommand.ts
+A	plugins/tree-star/tests/doubles/FakeSaveCommand.ts
+A	plugins/tree-star/tests/doubles/FakeText.ts
+A	plugins/tree-star/tests/doubles/FakeUndoCommand.ts
+A	plugins/tree-star/tests/doubles/MemoryFiles.ts
+A	plugins/tree-star/tests/doubles/SaveThenFailCommand.ts
+A	plugins/tree-star/tests/doubles/StarTestbed.ts
+A	plugins/tree-star/tests/doubles/TestEditor.ts
 M	src/assembly/CompositionRoot.ts
 ```
 
 ```bash
-git diff C^ C -- packages/kernel src/loader plugins ':(exclude)plugins/tree-star'   # 推演：空（内核与渲染器 TreeRenderer 都在 packages/kernel 里）
-rg -n "import|require|switch" src/loader                                            # 推演：同本节开头
+git diff C^ C -- packages/kernel src/loader plugins ':(exclude)plugins/tree-star'   # 实际：空（内核与渲染器 TreeRenderer 都在 packages/kernel 里）
+rg -n "import|require|switch" src/loader --sort path                                # 实际：与本节开头逐字相同
 ```
 
-配置提交 C′：`M plugins.config.json`。`cli-1-1b` 的两次运行用 `--only @svgframe/plugin-shape-box` 与 `configs/box.json`，都不含 `modified-star`，不受影响；`cli-2` 不含 `tree`，不受影响（4.7）。禁用全部新增插件时 `tree` 与 `final` 逐字节相同，由基线的 `--bare` 运行保证。
+（S13 修订：`npm run plugin-diff -- C plugins/tree-star --mode A` 为 `plugin-diff: PASS`；`--mode B` 的最后一行为 `plugin-diff: FAIL (way B: run code changed: src/assembly/CompositionRoot.ts; way B: plugins.config.json not changed)`（方式 A 的提交改了组合根、没改配置，正是方式 B 不允许的）。组合根只多两行 import 与 `optional()` 中 box 之后的一项；锁文件由 `npm install` 生成，多 11 行。）
+
+配置提交 C′（S13 修订：实际结果，`git diff --name-status C C′`）：
+
+```text
+M	doc/transcript/README.md
+A	doc/transcript/cli-2-star.runs.json
+A	doc/transcript/cli-2-star.txt
+A	doc/transcript/expected/cli-2-star/exit-code.txt
+A	doc/transcript/expected/cli-2-star/files/flowchart-star.svg
+A	doc/transcript/expected/cli-2-star/stdout.txt
+M	plugins.config.json
+```
+
+`plugins.config.json` 在 box 之后追加 `{ "module": "@svgframe/plugin-tree-star" }`，四个插件的顺序与 `CompositionRoot.optional()` 相同。`cli-1-1b` 的两次运行用 `--only @svgframe/plugin-shape-box` 与 `configs/box.json`，都不含 `modified-star`，不受影响；`cli-2` 不含 `tree`，不受影响（4.7）。禁用全部新增插件时 `tree` 与 `final` 逐字节相同，由基线的 `--bare` 与空配置运行保证（4.7 #1）。
+
+**C′ 另加会话 `cli-2-star`**（S13 修订，4.7 #6）：规格 §5 的树（`init` → box 与连线 → `group` → `save` → `set n1 fill #f5a623` → `tree`），再 `undo` 回到保存点、`tree`；运行组同 `cli-2`（不带参数与 `--config {repo}/plugins.config.json`）。理由有两条：一是它把规格 §5 的示例固定成基线，stdout 第 8–13 行与规格 §5 的树逐字节相同；二是**它管住了配置里的 `modified-star`**（缺口 G46，对照 G42）：box 与 `modified-star` 都不贡献命令，契约测试对它们是空检查，`cli-1-1b` 又不含 `modified-star`，配置漏加它时只有这个会话的 `--config` 运行会少 `*`，基线报 2 处差异（与期望输出比、与不带参数的那次比）。所以会话与配置改动必须在同一个提交里。期望输出经用户同意用 `npm run baseline -- --update cli-2-star` 生成（只带这一个参数，9.4），逐行核对写进了 S13 的 PR。
 
 **5. 内核零改动**
 
@@ -2996,6 +3047,10 @@ rg -n "import|require|switch" src/loader                                        
 | G40 | S11 实现（“不调用 `context`”怎样验证） | 8.2 对照表说 `dir` 不调用 `context` 的任何方法，但经真实 `EditorSession` 运行时，调用 `document()`、`history()` 这类只读方法不留痕迹，状态测试只能发现改动，发现不了读取（例如没有文档时调 `document()` 会抛 `no document`，有文档时却看不出来） | 每个方法都抛错的 `UntouchableContext`，`DirCommand` 的替身测试全部经它运行（8.2 第 1 小节）；S11 补上（S11 修订） |
 | G41 | S12 草稿（照抄 8.3 的测试计划） | 8.3 的 `BoxInEditor` 在插件测试里做不到：它要用的 `create`、`move`、`delete`、`set`、`group`、`ungroup`、`addto`、`front`、`show`、`read`、`save` 都在内置命令插件里，插件测试不能 import（L3），替身命令等于把内置命令重写一遍 | 拆成两处（S12 修订）：插件自己的测试只用替身 rect/text/g 与内核（`BoxTestbed`：经真实 `PluginInstaller` 安装，`registry.shapes().build` 造 box，`SvgImporter` / `SvgSerializer` / `TreeRenderer` / `EditorSession.attributeEdits().plan` 直接驱动）；真实命令下的行为放到根 `tests/system/boxInEditor.test.ts`，用 `EditorAssembler` + `OnlyProfile` / `BareProfile` + `MemoryFileSystem` 组装与 CLI 相同的编辑器。`EditorAssembler` 只交出 `Editor`，拿不到会话，所以“状态不变”用孪生编辑器比较：两个编辑器执行相同的前置命令，只有一个执行失败的那条，然后用同样的方式探查（`undo` 到底、`redo` 到底、`save`），输出与文件都相同即文档、undo 深度、redo 深度都相同（8.3 第 1、3 小节，9.2） |
 | G42 | S12 草稿（C_A2 的检查） | 配置里的 box 在 S14 之前没有测试管着：box 不贡献命令，`cli-1-1b` 用的是 `configs/box.json`，`cli-2` 的两次运行与 box 无关，所以 C_A2 即使忘了改 `plugins.config.json`，测试和基线也全绿 | 组合根与配置一致性的系统测试在 S14 加（4.9，9.2 的 S14 一行）；S12 用 `git show C_A2:plugins.config.json` 与 `git show C_B:plugins.config.json` 相同作检查，结果写进 PR（S12 修订） |
+| G43 | S12 审查（box 读回的结构检查） | box 的结构检查报 “2 children with id n1-rect” 只在其中一个是被跳过的元素（如 `<path>`）时才会出现（两个都被读入时整个 `read` 因重复 id 被拒），此时降级为 `g`；但 `save` 之后 `<path>` 没了、`data-kind` 还在，再读就是 box，首次读写不幂等。更一致的写法是只看标签对得上的同 id 子元素 | 只登记，不在 S13 改：`plugins/shape-box/` 的 C_A、C_B 是判据快照；改不改留给 S14/S15 决定（改则单独开修复 PR，不改则 README 已知局限记一条）（S13 修订） |
+| G44 | S13 草稿（组合根加 `modified-star`） | S8 之前的 `tests/unit/cli/main.test.ts` 有一条不带参数（full）运行 Phase 1 §6 会话、与 `tests/transcripts/spec-6.txt` 比较的测试，组合根一加 `modified-star`，`tree` 的 6 行都多出 ` *`，测试失败，而接入提交 C 不能碰测试（与 G34 同类） | C 之前单独一个提交 T，只给那一处 `runMain` 加 `["--bare"]`（Phase 1 会话 = 禁用全部新增插件），测试名与断言不改；在 C 上撤掉 T 的改动，正是这一条失败（8.4 第 4 小节）（S13 修订） |
+| G45 | S13 草稿（照抄 8.4 的测试计划） | 8.4 的 `StarInEditor` 在插件测试里做不到：状态机表要用的 `init`、`create`、`save`、`move`、`undo`、`redo`、`delete`、`front`、`canvas`、`read`、`set`、`tree` 都在内置命令插件里，插件测试不能 import（L3），替身命令等于把内置命令重写一遍（与 G41 同一个原因） | 拆成两处：插件自己的测试用真实 `SvgDocument` + 本包替身图形 + `TreeRenderer` 直接驱动三个回调，事件管道另用最小编辑器与几条替身命令（`init`、`add`、`save`、`broken-save`、`undo`、`redo`）验证；真实命令下按表逐行的测试放根 `tests/system/starInEditor.test.ts`（`EditorAssembler` + `OnlyProfile` / `BareProfile` + 内存文件）（8.4 第 1、3 小节，9.2）（S13 修订） |
+| G46 | S13 草稿（C′ 的检查，对照 G42） | 配置里的 `modified-star` 与 G42 的 box 一样没有测试管着：它不贡献命令，契约测试是空检查，`cli-1-1b` 不含它，`cli-2` 不含 `tree` | C′ 加会话 `cli-2-star`（4.7 #6）：配置漏加 `modified-star` 时它的 `--config` 运行少 `*`，基线报 2 处差异；会话与配置改动在同一个提交里。box 在配置里仍只靠 G42 的检查与 S14 的一致性测试（这个会话不带 box 时 `create box` 也会失败，所以实际上同时管住了 box）（S13 修订） |
 
 ---
 
@@ -3029,7 +3084,7 @@ rg -n "import|require|switch" src/loader                                        
 | S10 | `stats` 插件自己的测试（8.1）；C 之前改两个 S6 的装配处测试（`CompositionRoot.test.ts` 的可选候选改为“`label()` 等于清单 `name`、互不相同、不与内置同名”，`EditorAssembler.test.ts` 的 full 改为“bare 的命令 + `optional()` 各清单声明的命令，没有启动消息”，缺口 G34）（S10 修订） | 判据脚本通过；装配契约测试覆盖 `stats` |
 | S11 | `dir` 插件自己的测试（8.2），共 42 个（S11 修订：按实际补全）。`DirCommand.test.ts`（14，替身 + 每个方法都抛错的 context）：规格 §2.2 示例原样；目录在前；`(empty directory)`；隐藏项；读取失败 → `EditorError("cannot read directory: <替身给的路径>")`，不带 `error:`，编辑器加前缀后下一行照常；UTF-16 码元而不是 `localeCompare`（大小写、`.`、`_`、`-` 开头）；非 ASCII（码元而不是码点）；打乱 25 次与倒序输出相同；名字都从下标 7 开始；名字原样输出；`dir x` → `usage: dir`；`execute` 不调用 context（成功、空目录、失败）。`NodeDirectoryLister.test.ts`（6，真实临时目录，不 `chdir`）：文件、子目录、隐藏项；只列直接子项；指向目录的符号链接（绝对与相对）→ 目录，指向文件的与断链 → 文件；空目录 → `[]`；不存在的路径、普通文件 → 抛错。`DirOnRealFileSystem.test.ts`（4）：`DirCommandType(new NodeDirectoryLister(), <固定为临时目录的替身>)` 经编辑器运行，输出与预先写好的逐行相同；空目录；真实读取失败（不存在、普通文件）与之后照常执行；`NodeWorkingDirectory.current()` = `process.cwd()`。`DirInEditor.test.ts`（14，经 `TestEditor`）：无文档可用、之后仍无文档（成功与失败）；成功与失败两种情况下各 6 条——undo 与 redo 栈都非空时序列化结果、`undoDepth`、`redoDepth`、`isLocked` 不变，之后 `undo` / `redo` 作用于之前的编辑，io 锁既不加也不解，未加锁时仍未加锁，没有任何文档事件（`EventLog`），下一条命令照常。`DirPlugin.test.ts`（4）：`contributes` 恰为 `{ commands: ["dir"] }`；真实安装器以本包清单安装，注册的是一个 `DirCommandType` 实例（`requiresDocument` 为 `false`、`DISPLAY`）；排在先装的命令之后；两个插件实例各有自己的命令对象。另外契约测试自动多出 `@svgframe/plugin-command-dir` 一行 | 判据脚本通过；`cli-2` 的双装配组两次运行都等于 `expected/cli-2/`（S11 修订） |
 | S12 | box 插件自己的测试（8.3），共 58 个（S12 修订：按实际补全）。`BoxShape.test.ts`（6）：`tagName` 为 `g`、`kindName` 为 `box`、`label` 为 `box#n1`、`treeLabel` 为 `g#n1`；`canUngroup()` 为 `false`；`canRelease` 对两个部件为 `false`，对嵌套 box、其他子元素与嵌套 box 的部件为 `true`；派生 id；`svgAttributes` 中 `data-kind` 紧跟 `id` 且只出现一次（读回带样式与透传属性时也是）。`BoxProvider.test.ts`（11）：经 `registry.shapes().build` 造出，子树的 id 恰为 `claimedIds`；合法 id 的派生 id 也合法；rect 的四个几何值原样、`fill` 为 `#4a90d9`；标题位置按 X3，含 $w \ne 160$ 的三个例子（`(1.25,10)`、`(0.875,8.5)`、负的 x 与 h = 0）；`creationDetail`；`params` 的 usage 记号与键名；非法尺寸由替身 rect 报 `invalid value for width: -1`，非数字报 `invalid number`。`BoxReadBack.test.ts`（20，真实 `SvgImporter` + 内存文件）：序列化结果等于预先写好的文件；读 → 存 → 读 → 存逐字节相同；`matchScore` 为 2、`g` 为 1，其他元素为 0；不装 box 读同一份文本 → 普通 `g`，`data-kind` 原样写回；9 种不完整（缺标题、缺框、框是 `<circle>`、标题是 `<rect>`、无 id、空 id、部件无 id、部件不是直接子元素、同一派生 id 两个子元素但只有一个被导入），每种断言完整的警告列表并写回 `data-kind`；部件顺序调换、多出子元素与嵌套 box 照常读成 box；重复 id 拒绝（另一处 `n1-rect`、box 之前的 `n1-label`、box 内两个 `n1-rect`）与照常读入（被跳过的 `<path>`、被跳过元素里的同名 id）。`BoxAttributeHandler.test.ts`（8）：`handles` 只对 box 的 `fill`、`label` 为真；注册的处理器与优先级；`EditorSession.attributeEdits().plan` 得到的编辑：计划时文档不变，`redo()` / `undo()` 后的序列化结果与两条回显（`fill` 只改框、box 自身没有样式；`label` 的撤销回显是旧文本；空标签）；`fill ""` 被拒绝且文档不变；`stroke` 不归它管（答 `null`）；两个 `AttributeChange` 的文案。`BoxTypeLabel.test.ts`（4）：只对 box 行答 `(box)`；注册的标签；整棵树（含嵌套 box）；不装 box 时没有标签。`BoxPlugin.test.ts`（9）：`contributes` 恰为三类各一项；以本包清单安装成功，注册的恰是三个对象、没有命令与监听器；只要 rect、text；没有任何图形、缺 rect、缺 text 三种 → `plugin failed to activate: @svgframe/plugin-shape-box (requires shape types: rect, text)`，注册表没有残留；补装图形后可以安装；两次安装各有自己的对象；候选用的是本包的入口与清单。根 `tests/system/boxInEditor.test.ts`（25，G41）：创建回显（含 `in box#n1`、undo / redo）；三个 id 各被占用时整个拒绝、什么都不留下；非法尺寸、缺标签、非法 id；`create … in`、`addto`、嵌套 box；`move`、`scale`、`delete` 及其 undo；`group`、拒绝 `ungroup`、box 里普通 `g` 的 `ungroup` 照常；`delete` / `addto` / `group` 移走部件被拒绝、状态不变（孪生编辑器）；`front`、移走非部件子元素允许；`set fill`、`set label` 各是一个 undo 单元，`undo`、`redo` 各一次；`fill ""` 失败后不变；其他属性走白名单；`tree`、`tree n1`、`show`；`stats` 把 box 计入 containers；`save` / `read` 往返逐字节相同；不完整的 box 读成 `g`；两种重复 id 的 `read` 被拒绝、原文档与历史不变；`BareProfile` 读写同一份文本逐字节相同、树里没有 `(box)`、`show` 有 `data-kind=box`、`set label` 报 `unknown attribute`，再用 `OnlyProfile` 读回是 box。另外契约测试自动多出 `@svgframe/plugin-shape-box` 一行（box 不声明命令，这一行等于空检查） | 判据脚本对 C_A、C_B 都通过；`git diff C_A C_B -- plugins/shape-box` 为空；`cli-1-1b` 两次运行都等于期望输出 |
-| S13 | `modified-star` 插件自己的测试：8.4 状态机表的每一行一条；与 box 并存时的拼接顺序（替身 `(box)` 标签） | 判据脚本通过；`--bare` 下 `tree` 与 `final` 逐字节相同 |
+| S13 | `modified-star` 插件自己的测试（8.4），共 49 个（S13 修订：按实际补全）。`SaveBaseline.test.ts`（18）：刚记录时什么都不 dirty；`tagName`、几何属性、原来没有的样式属性、透传属性、id、文本、父 id 各改一项都 dirty（只改那一个图形与文档）；只改子节点、删子节点、只调兄弟顺序时容器与兄弟都不 dirty、文档 dirty；未知 id dirty；改了又改回、`snapshot` / `restore` 之后不 dirty；画布尺寸只影响文档，改回后不 dirty；删除只体现在文档；空文档；记录之后文档再变不影响已记录的保存点。`ModifiedStar.test.ts`（17）：真实 `SvgDocument` + 替身图形 + 内核 `TreeRenderer`，直接调三个回调——还没有保存点时一律无 `*`；`documentReplaced`（`init` 与 `read`）、`documentSaved` 各自建立保存点；`documentEdited` 不改变任何答案；编辑 → 保存 → 再编辑 → 回到保存点 → `redo`；越过保存点、保存后 `redo`、改回更早的保存点（真实编辑器里到不了，io 屏障）；新节点立即标；深层嵌套不向祖先传播；删除与 z-order 只在根行；`renderSubtree` 没有根行；换了文档按新文档比较；`tagFor` 只答 `"*"` 与 `null`；空文档、200 层嵌套、没见过的文档都不抛错；注册名。`TagOrder.test.ts`（4，替身 `(box)` 标签 `FakeBoxTag` 认 `kindName() = "box"` 的替身容器）：替身先装 → `g#n1 (box) *`，star 先装 → `g#n1 * (box)`（整棵树与 `tree n1` 的第一行）；规格 §5 的树；互不感知。`EventPipeline.test.ts`（5，`TestEditor`：替身命令 + 真实 `Editor`）：`init` 之后无 `*`；编辑 → 保存 → 编辑 → `undo` → `redo`；文件系统拒绝的保存、先 `markSaved` 再失败的保存都不建立保存点；失败的编辑与 `init` 不改变什么。`TreeStarPlugin.test.ts`（5）：`contributes` 恰为 `{ decorators: ["modified-star"] }`；以本包清单安装成功，注册的标签与订阅的监听器是同一个 `ModifiedStar`，没有命令、图形、处理器；排在先装的标签之后；两个注册表各有自己的 `ModifiedStar`，一边的保存点不影响另一边（TR-088）；候选用的是本包的入口与清单。根 `tests/system/starInEditor.test.ts`（37，G45）：8.4 的表每行一条（20），完整断言 `tree` 的输出；io 屏障（3）；`scale`、`set` 新属性（rect 的 `stroke`、circle 的 `stroke-width`）、`delete`、`addto`、`group`、`ungroup` 嵌套容器各自 `undo` 后没有 `*`（7），`addto gb ra` 只标根行与 `ra`（1）；与 box 并存：新建 box、`set label` 与 `tree n1`、规格 §5 的树逐行、只装 star 时 `create box` 报未知类型（4）；不装 star：`--bare` 与 `--only box` 下没有 `*`（2）。另外契约测试自动多出 `@svgframe/plugin-tree-star` 一行（不声明命令，等于空检查）。C 之前的 T 改 `tests/unit/cli/main.test.ts` 的一处（G44） | 判据脚本通过；`--bare` 与空配置下 `tree` 与 `final` 逐字节相同（`cli-1`、`cli-1-1a`、`regression`）；`cli-2-star` 两次运行都等于期望输出 |
 | S14 | 系统测试：组合根与配置的插件集合、顺序、options 相同（4.9）；双装配会话（4.7 #3–#5）；基线兼容 | `npm test`、`npm run baseline`、CI 全绿 |
 | S15 | 无新增测试；README 的一致性自查用脚本输出作证据 | — |
 
@@ -3071,6 +3126,7 @@ rg -n "import|require|switch" src/loader                                        
 | 步骤 | 事项 |
 |---|---|
 | S12 | `cli-1-1b` 的期望输出**必须逐行手工对照 P1 规格 §6.1B**（8.3 第 4 小节的表就是对照表），不能只靠 `--update` 生成。树的对齐与规格原文差一位：原文三处摘要前分别是 2/1/7 个空格，按 V1（最宽 + 2）是 3/2/8；规格 §5 的示例恰好是 3/2/8。期望输出沿用 V1，并在 `doc/transcript/README.md` 中加注（约定补充 N4、偏差 T3）。`--update cli-1-1b` 仍然需要用户事先明确同意（S12 修订：已在 S12 经用户同意执行，只带 `cli-1-1b` 一个参数，逐行核对的结果写进了 PR） |
+| S13 | 会话 `cli-2-star` 的期望输出经用户同意生成（S13 修订）：已在 S13 执行 `npm run baseline -- --update cli-2-star`（只带 `cli-2-star` 一个参数），输出 `wrote doc/transcript/expected/cli-2-star: stdout 20 lines, exit 0, files flowchart-star.svg`，只新增了 `expected/cli-2-star/`；逐行核对的结果写进了 PR |
 | S9 | 圈复杂度脚本按决策 X18（5.3）实现：`typescript/unstable/sync`，启动自检，口径与输出格式按 5.3 |
 | S14 | CI 统一处理：`typecheck:scripts` 与 `baseline` 进 CI；`actions/checkout@v4`、`actions/setup-node@v4` 的 Node 20 弃用提示；`cli-2` 的期望输出已在 S11 经用户同意生成（S11 审查遗留） |
 | S5–S15 | `npm run baseline -- --update` 未经用户明确同意一律不用（`CLAUDE.md`） |

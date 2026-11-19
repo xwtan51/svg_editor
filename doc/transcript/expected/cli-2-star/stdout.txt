@@ -1,0 +1,20 @@
+svg-editor 0.1 — type 'help' for commands
+canvas 800x600 created
+box#n1 created (g#n1 + rect#n1-rect + text#n1-label)
+line#arrow1 created
+g#flowchart created with 2 children
+saved to flowchart-star.svg (5 elements)
+box#n1 fill propagated to n1-rect
+svg (800x600) *
+└── g#flowchart
+    ├── g#n1 (box)
+    │   ├── rect#n1-rect   x=120 y=100 w=160 h=60 fill=#f5a623 *
+    │   └── text#n1-label  (140,135) "处理数据"
+    └── line#arrow1        (280,130) -> (520,130)
+box#n1 fill restored on n1-rect
+svg (800x600)
+└── g#flowchart
+    ├── g#n1 (box)
+    │   ├── rect#n1-rect   x=120 y=100 w=160 h=60 fill=#4a90d9
+    │   └── text#n1-label  (140,135) "处理数据"
+    └── line#arrow1        (280,130) -> (520,130)

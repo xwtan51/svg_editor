@@ -1,0 +1,11 @@
+{
+  "groups": [
+    {
+      "expected": "cli-2-star",
+      "runs": [
+        [],
+        ["--config", "{repo}/plugins.config.json"]
+      ]
+    }
+  ]
+}
