@@ -30,13 +30,22 @@ doc/transcript/
 | `cli-1.txt` | Phase 1 §6 基础会话；`tests/transcripts/spec-6.txt` 中以 `svg> ` 开头的行去掉前缀。文件名由规格 §6 指定 | 19 | `other.svg`（与 `tests/transcripts/fixtures/other.svg` 逐字节相同） | `demo.svg` |
 | `cli-1-1a.txt` | Phase 1 §6.1 版本 A；同样由 `spec-6-1.txt` 转换，4 行 `#` 注释保留为注释 | 18 | 无 | `flowchart.svg` |
 | `regression.txt` | 回归补充（规格未要求，见下文） | 165 | `mixed.svg`、`broken.svg` | `out.svg`、`roundtrip.svg` |
+| `cli-2.txt` | 规格 §6“双装配一致性”要求的新增命令会话（S11，设计 §4.7 #5）：`stats`、`dir`、`help`。不含 `tree`、`save`，见下文 | 22（含 5 行 `#` 注释） | `.hidden`、`README.md`、`demo.svg`、`package.json`、`docs/readme.txt`、`plugins/keep.txt` | 无（`files/` 与夹具逐字节相同） |
+
+`cli-2` 的说明（S11）：
+
+- **运行组**：一组、两次运行，不带参数（方式 A，组合根的全部可选插件）与 `--config {repo}/plugins.config.json`（方式 B），两次都与 `expected/cli-2/` 比较，并且互相比较（设计 §4.7 #5）。所以组合根与 `plugins.config.json` 必须同时含有 `stats`、`dir`：只改一边时，不带参数的那次多出或少了一个命令，基线报差异。
+- **期望输出在 S11 经用户同意生成**（2026-11-18）：`npm run baseline -- --update cli-2`（只带 `cli-2` 一个参数，其他会话的基线一个字节都没动），随后逐行对照规格 §2.1、§2.2 与设计 §8.2 手工核对。
+- **不含 `tree`、`save`**：`save` 会在工作目录里留下文件，改变之后 `dir` 的列表；`tree` 会在 S13 接入 `modified-star` 后多出 `*`。所以 S12、S13 的接入提交不会让它失配。
+- **排序**：`dir` 按 UTF-16 码元排序。夹具特意放了大写开头的 `README.md`：码元顺序是 `.hidden`、`README.md`、`demo.svg`、`package.json`，`localeCompare` 会把 `README.md` 排到最后。夹具里只有小写名字时两种排序结果相同，会话就钉不住排序规则。
+- **被忽略的文件会进入 `dir` 的输出**：`SessionRunner` 用 `fs.cpSync` 复制的是**工作区**里的 `fixtures/cli-2/`，不是 git 里的内容。macOS 的 `.DS_Store` 之类被 `.gitignore` 忽略的文件 `git status` 看不到，却会被复制进临时目录、出现在 `dir` 的列表里，使本机比对与 CI 不同，用 `--update` 时还会被写进期望输出。比对或生成之前先确认 `git status --ignored --short doc/transcript/fixtures/cli-2` 没有任何输出（`!!` 是被忽略的文件，`??` 是未跟踪的文件，两者都会被复制）。
+- 夹具里没有符号链接（git 与 `cpSync` 在不同平台上处理不一致）；符号链接由插件的真实适配器测试覆盖。
 
 ### 预留命名（本步不建文件）
 
 | 输入 | 加入步骤 | 内容 |
 |---|---|---|
 | `cli-1-1b.txt` | S12 | Phase 1 §6.1 版本 B（`box`）。`final` 不支持 `box`，它的期望输出不来自 `final`，单独说明 |
-| `cli-2.txt` | S11 | 含 `stats`、`dir` 的新增命令会话；`dir` 用内容固定的夹具目录。S11 的配置提交只加双装配组（`expected: null`，只比较两次运行），期望输出在 S14 补（设计 §4.7） |
 
 新会话加入时，用 `--update <会话名>` 只生成该会话的基线（需要事先得到明确同意），不得顺带重写已有会话。
 

@@ -1,0 +1,22 @@
+# 没有文档：dir 照常列出启动目录，stats 报 no document
+dir
+stats
+# help 的 Display 组依次是 tree、show、help、stats、dir
+help
+# dir 不接收参数
+dir extra
+init 400 300
+create rect r1 10 10 100 50 #3366ff
+create g g1
+create circle c1 200 100 20 red in g1
+create text t1 20 280 "hello" in g1
+stats
+# dir 不改文档、不进 undo 栈：随后的 undo 撤销的是 dir 之前的 create text
+dir
+undo
+stats
+# read 不改变工作目录，所以 dir 的输出与上面相同；read 加的 io 锁 dir 也不解除
+read demo.svg
+stats
+dir
+undo

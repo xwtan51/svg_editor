@@ -1673,7 +1673,7 @@ CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文�
 | 4 | 双装配一致：§6.1B | `cli-1-1b` | 同 #2 | 同 #2 | 同 #2 | 同 #2（期望输出 + A = B） | 不要 |
 | 5 | 双装配一致：新增命令 | `cli-2`（含 `stats`、`dir`） | 不带参数（full） | `--config {repo}/plugins.config.json` | 全部 | `expected/cli-2/`（手工核对）+ A = B | 不要 |
 
-**各行在哪一步加入**：#1 在 S9；#2、#4 在 S12 的配置提交；#5 的双装配组（只比较 A = B）在 S11 的配置提交，期望输出在 S14 补；#3 在 **S14**。#3 不能更早：S10–S13 每次接入都是“先改组合根（C）、再改配置（C′）”，在 C 与 C′ 之间方式 A 比方式 B 多一个插件，`cli-1` 的 `tree` 会在 S13 的 C 上多出 `*`。`cli-2` 不含 `tree`、不含 box，所以 S12、S13 的 C 不会让 #5 失配。S14 之后再接入会影响双装配会话的插件时，C 上的基线失配是预期的，C′ 恢复；或者把 C、C′ 合成一个提交（决策 X24 的例外，PR 中说明）。
+**各行在哪一步加入**：#1 在 S9；#2、#4 在 S12 的配置提交；#5 的双装配组在 S11 的配置提交，期望输出也在 S11 经用户同意用 `--update cli-2` 生成并手工核对（S11 修订：原为“只比较 A = B，期望输出在 S14 补”）；#3 在 **S14**。#3 不能更早：S10–S13 每次接入都是“先改组合根（C）、再改配置（C′）”，在 C 与 C′ 之间方式 A 比方式 B 多一个插件，`cli-1` 的 `tree` 会在 S13 的 C 上多出 `*`。`cli-2` 不含 `tree`、不含 box，所以 S12、S13 的 C 不会让 #5 失配。S14 之后再接入会影响双装配会话的插件时，C 上的基线失配是预期的，C′ 恢复；或者把 C、C′ 合成一个提交（决策 X24 的例外，PR 中说明）。
 
 `dir` 的会话（#5）：`SessionRunner` 已经在新建的临时目录里运行 CLI 并以它为 cwd（`SessionRunner.ts:19-31`），fixtures 复制进去后目录内容是固定的；stdout、stderr 经管道收集，**不写进这个目录**，所以日志不会改变目录列表。`cli-2` 的输入把 `dir` 放在任何 `save` 之前（`save` 产出的文件会出现在列表里）。fixtures 里放 `.hidden`、一个子目录（目录里放一个文件，因为 git 存不了空目录）和几个普通文件。
 
@@ -2311,10 +2311,18 @@ rg -n "import|require|switch" src/loader                                        
 | （Node 的 `node:fs`：`readdirSync`、`Dirent`、`statSync`） | **Adaptee** | 被适配者 |
 | `src/WorkingDirectory.ts` | Target（第二个端口） | 接口：`current(): string` |
 | `src/NodeWorkingDirectory.ts` | Adapter | `process.cwd()` |
-| `tests/FakeDirectoryLister.ts`、`tests/FakeWorkingDirectory.ts` | **测试替身** | 内存列表 / 抛错；固定路径 |
-| `tests/DirCommand.test.ts` | — | 替身测试 |
+| `tests/doubles/FakeDirectoryLister.ts`、`tests/doubles/FakeWorkingDirectory.ts` | **测试替身** | 按给定顺序返回的内存列表，或像读不了的目录那样抛普通 `Error`（并记下被问到的路径）；固定路径 |
+| `tests/doubles/UntouchableContext.ts` | 测试替身 | 每个方法都抛错的 `CommandContext`：`execute` 跑完就证明它没有调用 context |
+| `tests/doubles/TestEditor.ts` | 测试替身 | 最小编辑器（照 8.1 的 `TestEditor` 另写一份，L3、G36）：真实 `PluginInstaller` 依次安装测试插件（下面四条替身命令 + 订阅 `EventLog`）与注册 `new DirCommandType(<测试给的 lister>, <测试给的 cwd>)` 的插件（以本包 `package.json` 为清单）；`dir()` 另给出真实 `DirPlugin` 的候选 |
+| `tests/doubles/AddLeafCommand.ts`、`BarrierCommand.ts`、`FakeUndoCommand.ts`、`FakeRedoCommand.ts`、`FakeLeaf.ts`、`NoFileSystem.ts` | 测试替身 | 与 8.1 的同名替身相同（复制，不 import） |
+| `tests/doubles/EventLog.ts` | 测试替身 | 记录收到的文档事件的 `DocumentListener`（3.4） |
+| `tests/DirCommand.test.ts` | — | 替身测试（Client + 两个 Target 的替身） |
 | `tests/NodeDirectoryLister.test.ts` | — | 真实适配器：临时目录 |
-| `tests/DirInEditor.test.ts` | — | 用 `@svgframe/kernel/host` 组装只含 `DirPlugin` 与测试替身插件的编辑器，验证状态不变（9.1） |
+| `tests/DirOnRealFileSystem.test.ts` | — | 命令与真实 `NodeDirectoryLister` 组合，经编辑器在临时目录上运行；`NodeWorkingDirectory` |
+| `tests/DirInEditor.test.ts` | — | 经 `TestEditor` 验证状态不变（9.1） |
+| `tests/DirPlugin.test.ts` | — | 清单、真实安装器注册的是 `DirCommandType` 实例、两个插件实例各有自己的命令对象 |
+
+（S11 修订：原清单把两个替身放在 `tests/` 下，没有状态测试用的最小编辑器与替身命令，也没有 context 替身、组合测试与插件测试。替身照 8.1 放进 `tests/doubles/`；“`DirInEditor` 组装只含 `DirPlugin` 的编辑器”改为注册 `new DirCommandType(<替身>)` 的测试插件：真实 `DirPlugin` 固定用 Node 适配器，状态测试要替身才能制造读取失败，`DirPlugin` 本身由 `DirPlugin.test.ts` 测。）
 
 **2. 草图**
 
@@ -2372,6 +2380,8 @@ export class NodeDirectoryLister implements DirectoryLister {
 }
 ```
 
+（S11 修订：草图里 `constructor(private readonly lister: …, private readonly cwd: …)` 这种参数属性能编译、也过 architecture test，但仓库里没有一个类这样写；实现照现有代码写成显式的私有字段加构造函数赋值（`DirCommandType`、`DirCommand`、`DirPlugin`），`cwd` 字段名为 `workingDirectory`。`DirCommand` 的两个标记与空目录文案是私有静态常量，`line`、`byCodeUnit` 都是私有静态方法。）
+
 | 规格要求 | 设计 |
 |---|---|
 | 同步还是异步 | 同步（决策 X19，与 2.2.4 一致） |
@@ -2388,6 +2398,8 @@ export class NodeDirectoryLister implements DirectoryLister {
 
 **3. 接入提交 C 与判据**
 
+S11 的实际结果（S11 修订：原来这里是预测，`tests/` 下的文件按第 1 小节的修订变了；C = `2977cb5`）：
+
 ```text
 $ git diff --name-status C^ C
 M	package-lock.json
@@ -2402,34 +2414,56 @@ A	plugins/command-dir/src/NodeWorkingDirectory.ts
 A	plugins/command-dir/src/WorkingDirectory.ts
 A	plugins/command-dir/tests/DirCommand.test.ts
 A	plugins/command-dir/tests/DirInEditor.test.ts
-A	plugins/command-dir/tests/FakeDirectoryLister.ts
-A	plugins/command-dir/tests/FakeWorkingDirectory.ts
+A	plugins/command-dir/tests/DirOnRealFileSystem.test.ts
+A	plugins/command-dir/tests/DirPlugin.test.ts
 A	plugins/command-dir/tests/NodeDirectoryLister.test.ts
+A	plugins/command-dir/tests/doubles/AddLeafCommand.ts
+A	plugins/command-dir/tests/doubles/BarrierCommand.ts
+A	plugins/command-dir/tests/doubles/EventLog.ts
+A	plugins/command-dir/tests/doubles/FakeDirectoryLister.ts
+A	plugins/command-dir/tests/doubles/FakeLeaf.ts
+A	plugins/command-dir/tests/doubles/FakeRedoCommand.ts
+A	plugins/command-dir/tests/doubles/FakeUndoCommand.ts
+A	plugins/command-dir/tests/doubles/FakeWorkingDirectory.ts
+A	plugins/command-dir/tests/doubles/NoFileSystem.ts
+A	plugins/command-dir/tests/doubles/TestEditor.ts
+A	plugins/command-dir/tests/doubles/UntouchableContext.ts
 M	src/assembly/CompositionRoot.ts
 ```
 
-插件目录以外：`package-lock.json`、`CompositionRoot.ts`，理由同 8.1。
+插件目录以外：`package-lock.json`、`CompositionRoot.ts`，理由同 8.1（锁文件多 11 行：`node_modules/@svgframe/plugin-command-dir` 的 `link` 与 `plugins/command-dir` 的条目；组合根两行 import，`optional()` 中 `stats` 之后一项）。`npm run plugin-diff -- 2977cb5 plugins/command-dir --mode A` 为 PASS。S10 改过的两个装配处测试（G34）不用再改，契约测试自动多出 `@svgframe/plugin-command-dir` 一行。
 
 ```bash
 git diff C^ C -- packages/kernel src/loader plugins ':(exclude)plugins/command-dir'   # 推演：空
 rg -n "import|require|switch" src/loader                                              # 推演：同本节开头
 ```
 
-配置提交 C′：
+配置提交 C′（S11 修订：实际结果，C′ = `07bb3ea`；`git diff --name-status C C′`）：
 
 ```text
-M	plugins.config.json
-A	doc/transcript/cli-2.txt
-A	doc/transcript/cli-2.runs.json                 { "groups": [ { "expected": null, "runs": [[], ["--config", "{repo}/plugins.config.json"]] } ] }
-A	doc/transcript/fixtures/cli-2/.hidden
-A	doc/transcript/fixtures/cli-2/docs/readme.txt
-A	doc/transcript/fixtures/cli-2/plugins/keep.txt
-A	doc/transcript/fixtures/cli-2/demo.svg
-A	doc/transcript/fixtures/cli-2/package.json
 M	doc/transcript/README.md
+A	doc/transcript/cli-2.runs.json                 { "groups": [ { "expected": "cli-2", "runs": [[], ["--config", "{repo}/plugins.config.json"]] } ] }
+A	doc/transcript/cli-2.txt
+A	doc/transcript/expected/cli-2/exit-code.txt
+A	doc/transcript/expected/cli-2/files/.hidden
+A	doc/transcript/expected/cli-2/files/README.md
+A	doc/transcript/expected/cli-2/files/demo.svg
+A	doc/transcript/expected/cli-2/files/docs/readme.txt
+A	doc/transcript/expected/cli-2/files/package.json
+A	doc/transcript/expected/cli-2/files/plugins/keep.txt
+A	doc/transcript/expected/cli-2/stdout.txt
+A	doc/transcript/fixtures/cli-2/.hidden
+A	doc/transcript/fixtures/cli-2/README.md
+A	doc/transcript/fixtures/cli-2/demo.svg
+A	doc/transcript/fixtures/cli-2/docs/readme.txt
+A	doc/transcript/fixtures/cli-2/package.json
+A	doc/transcript/fixtures/cli-2/plugins/keep.txt
+M	plugins.config.json
 ```
 
-`cli-2.txt` 在 S11 只含 `dir`（无文档时与有文档时各一次）、`stats`、`init`、几条 `create`，不含 `tree`、`save`（4.7）；期望输出在 S14 补。
+配置改动与 `cli-2` 必须在同一个提交里：只加 `cli-2` 而配置里还只有 `stats` 时，不带参数的那次运行比 `--config` 的多一个 `dir`，基线报差异。夹具多了大写开头的 `README.md`（缺口 G37）。
+
+`cli-2.txt`（22 行，含 5 行注释）依次是：没有文档时的 `dir`、`stats`；`help`；`dir extra`；`init`；四条 `create`（`g1` 里嵌套 `circle`、`text`）；`stats`；`dir`；`undo`；`stats`；`read demo.svg`；`stats`；`dir`；`undo`。不含 `tree`、`save`（4.7）。期望输出在 S11 经用户同意用 `npm run baseline -- --update cli-2` 生成并逐行手工核对（S11 修订：原为“在 S14 补”）。
 
 **4. 内核零改动**
 
@@ -2933,6 +2967,10 @@ rg -n "import|require|switch" src/loader                                        
 | G34 | S10 草稿（组合根加第一个可选插件） | S6 的两个装配处测试把“`optional()` 为空”钉死：`CompositionRoot.test.ts` 断言 `optional()` 等于 `[]`，`EditorAssembler.test.ts` 断言 full 的 `help` 与 bare 逐行相同。组合根一加插件两者就失败，而接入提交 C 只能有插件目录、组合根和锁文件（1.6） | C 之前单独一个只改这两个测试的提交，改成不写插件名、不依赖 `optional()` 长度的写法（8.1 第 3 小节）；S10 补上（S10 修订） |
 | G35 | S10 草稿（照抄 8.1 的测试计划） | 8.1 的“替身 `History`”在类型上不可能：`History` 是带私有字段的类，`api.ts` 只以 `export type` 导出它，结构相同的对象传给 `recordIn` 时 `tsc` 报 TS2739；插件测试也不能 `new History()`（两个入口都不导出它的值）。`FakeCommandContext` 的 `history()` 同理 | 经 `@svgframe/kernel/host` 的真实 `EditorSession` + `Editor` 运行 `stats`，比较前后的 `undoDepth`、`redoDepth`、`isLocked` 与序列化结果（8.1 第 1 小节与“测试”）；S10 补上（S10 修订） |
 | G36 | S10 实现（插件测试的最小编辑器） | 插件测试只装本插件与替身插件（9.1），而 `undo`、`redo`、`help` 都在内置命令插件里，L3 不许 import：“`stats` 之后 `undo`”与“`help` 里有 `stats`”在插件测试里没有现成的命令可用 | `undo` / `redo` 在测试插件里用 `HistoryCommand` 的替身（经 `UndoStack`，与内置的写法相同）；`help` 的分组依据是命令目录与 `category`，插件测试断言 `stats` 在目录末尾、类别为 `DISPLAY`，`help` 中的那一行由通用装配契约测试覆盖（8.1“测试”）；S10 补上（S10 修订） |
+| G37 | S11 草稿（`cli-2` 的夹具） | 8.2 原来的夹具（`.hidden`、`demo.svg`、`package.json`、`docs/`、`plugins/`）只有小写名字，UTF-16 码元顺序与 `localeCompare` 的结果相同，会话钉不住排序规则（X12 的“按码元”只剩替身测试在管） | 夹具加大写开头的 `README.md`：码元顺序是 `.hidden`、`README.md`、`demo.svg`、`package.json`，`localeCompare` 会把 `README.md` 排到最后（8.2 第 3 小节、`doc/transcript/README.md`）；S11 补上（S11 修订） |
+| G38 | S11 草稿（在 macOS 上生成期望输出） | `SessionRunner` 用 `fs.cpSync` 复制的是**工作区**里的 `fixtures/<会话>/`，不是 git 里的内容。被 `.gitignore` 忽略的文件（如 macOS 的 `.DS_Store`）与未跟踪的文件 `git status` 不显眼，却会被复制进临时目录、出现在 `dir` 的输出里，使本机比对与 CI 不同，`--update` 时还会被写进期望输出 | `doc/transcript/README.md` 写明：比对或生成之前确认 `git status --ignored --short doc/transcript/fixtures/cli-2` 没有输出；S11 在全新 clone 上跑四项检查，证明 `expected/cli-2/` 不依赖本机工作区。让 `SessionRunner` 只复制 git 跟踪的文件要改 `scripts/`，不在 S11 范围内，留给 S14 决定（S11 修订） |
+| G39 | S11 草稿（读取失败怎样测） | “`chdir` 进临时目录再删掉”模拟不了读取失败：`readdirSync(".")` 在已删除的目录上返回 `[]`；在还没调用过 `process.cwd()` 的进程里删掉目录后，`process.cwd()` 直接抛 `ENOENT`。而运行中的 CLI 里 `process.cwd()` 返回缓存的路径，`readdirSync(<绝对路径>)` 抛 `ENOENT`，输出正确（N7）。另外 macOS 的 `os.tmpdir()` 是符号链接，`mkdtemp` 返回的路径与 `process.cwd()` 不同 | 插件测试一律不 `chdir`：读取失败用替身抛错，真实适配器读不存在的路径与普通文件（9.2 的 S11 行）；真实 CLI 中删掉工作目录的情形在 S11 的 PR 中用一次性脚本手工验证。`process.cwd()` 本身抛错（`NodeWorkingDirectory.current()` 抛出非 `EditorError`，CLI 以退出码 1 结束）的情形不处理，记在 S11 的 PR 中（S11 修订） |
+| G40 | S11 实现（“不调用 `context`”怎样验证） | 8.2 对照表说 `dir` 不调用 `context` 的任何方法，但经真实 `EditorSession` 运行时，调用 `document()`、`history()` 这类只读方法不留痕迹，状态测试只能发现改动，发现不了读取（例如没有文档时调 `document()` 会抛 `no document`，有文档时却看不出来） | 每个方法都抛错的 `UntouchableContext`，`DirCommand` 的替身测试全部经它运行（8.2 第 1 小节）；S11 补上（S11 修订） |
 
 ---
 
@@ -2964,7 +3002,7 @@ rg -n "import|require|switch" src/loader                                        
 | S8 | 装配处：`CliArguments`（四种配置、互斥、未知参数、`--only` 未知包名、退出码 2）；`PluginConfig`（合法、语法错误、顶层多键、项缺 `module`、`enabled` 非布尔、`options` 非对象、文件不存在）；`ModuleLocator`（相对路径以配置目录为基准、包名经 `node_modules`、目录无 `package.json`、`exports` 缺 `./package.json`、入口文件不存在）；`PluginLoader`：**四条规格失败路径**（`not found`、`no default export`、`manifest mismatch`、`failed to activate`）+ 重复注册 + 求值失败 + 依赖缺失（报 `failed to load` 而非 `not found`）+ 默认导出不是类 + 回滚后后续插件照常加载 + `enabled: false` 完全跳过 + 数组顺序 + options 传递 + 同一插件装进两个 `Editor` 状态独立；`Repl` 的启动消息位置。architecture test：L5、L9 的 loader 部分 | 手工验证：`--bare` 与 `--config <空配置>` 两种方式下基线三个会话与 `final` 逐字节一致（S9 固定成 `.runs.json`） |
 | S9 | `SessionPlan` / `RunGroup`（缺省组、占位符替换、组内比对、`--update` 拒绝组内不一致）；`ComplexityCounter`（内置样本自检：`readQuoted` 的 M = 8）；`PluginDiffCheck`（对人为构造的“改了内核”的提交报失败、对路径不存在报失败）；architecture test：每个源文件有类注释（metrics 的职责来源）；**通用装配契约测试**：对 `CompositionRoot.optional()` 中每个候选，读其清单的 `commands`，断言 bare 下执行报 `unknown command: <name>`、`--only <包名>` 下 `help` 含以 `  <name>` 开头的一行（S10、S11 接入时自动覆盖，不改测试） | 三个已有会话的 `.runs.json`（`--bare` + 空配置）0 差异；metrics 可由脚本复现 |
 | S10 | `stats` 插件自己的测试（8.1）；C 之前改两个 S6 的装配处测试（`CompositionRoot.test.ts` 的可选候选改为“`label()` 等于清单 `name`、互不相同、不与内置同名”，`EditorAssembler.test.ts` 的 full 改为“bare 的命令 + `optional()` 各清单声明的命令，没有启动消息”，缺口 G34）（S10 修订） | 判据脚本通过；装配契约测试覆盖 `stats` |
-| S11 | `dir` 插件自己的测试（8.2）：替身（混合、空目录、隐藏项、读取失败、稳定排序、多余参数）、真实临时目录（含符号链接与断链）、状态（无文档可用；有文档时成功与失败都不改文档、undo/redo 深度、io 锁） | 判据脚本通过；`cli-2` 的双装配组 A = B |
+| S11 | `dir` 插件自己的测试（8.2），共 42 个（S11 修订：按实际补全）。`DirCommand.test.ts`（14，替身 + 每个方法都抛错的 context）：规格 §2.2 示例原样；目录在前；`(empty directory)`；隐藏项；读取失败 → `EditorError("cannot read directory: <替身给的路径>")`，不带 `error:`，编辑器加前缀后下一行照常；UTF-16 码元而不是 `localeCompare`（大小写、`.`、`_`、`-` 开头）；非 ASCII（码元而不是码点）；打乱 25 次与倒序输出相同；名字都从下标 7 开始；名字原样输出；`dir x` → `usage: dir`；`execute` 不调用 context（成功、空目录、失败）。`NodeDirectoryLister.test.ts`（6，真实临时目录，不 `chdir`）：文件、子目录、隐藏项；只列直接子项；指向目录的符号链接（绝对与相对）→ 目录，指向文件的与断链 → 文件；空目录 → `[]`；不存在的路径、普通文件 → 抛错。`DirOnRealFileSystem.test.ts`（4）：`DirCommandType(new NodeDirectoryLister(), <固定为临时目录的替身>)` 经编辑器运行，输出与预先写好的逐行相同；空目录；真实读取失败（不存在、普通文件）与之后照常执行；`NodeWorkingDirectory.current()` = `process.cwd()`。`DirInEditor.test.ts`（14，经 `TestEditor`）：无文档可用、之后仍无文档（成功与失败）；成功与失败两种情况下各 6 条——undo 与 redo 栈都非空时序列化结果、`undoDepth`、`redoDepth`、`isLocked` 不变，之后 `undo` / `redo` 作用于之前的编辑，io 锁既不加也不解，未加锁时仍未加锁，没有任何文档事件（`EventLog`），下一条命令照常。`DirPlugin.test.ts`（4）：`contributes` 恰为 `{ commands: ["dir"] }`；真实安装器以本包清单安装，注册的是一个 `DirCommandType` 实例（`requiresDocument` 为 `false`、`DISPLAY`）；排在先装的命令之后；两个插件实例各有自己的命令对象。另外契约测试自动多出 `@svgframe/plugin-command-dir` 一行 | 判据脚本通过；`cli-2` 的双装配组两次运行都等于 `expected/cli-2/`（S11 修订） |
 | S12 | box 插件自己的测试（8.3）；根 `tests/system/` 加一条“未装插件时降级并原样写回 `data-kind`”的测试（bare 读写） | 判据脚本对 C_A、C_B 都通过；`git diff C_A C_B -- plugins/shape-box` 为空；`cli-1-1b` 两次运行都等于期望输出 |
 | S13 | `modified-star` 插件自己的测试：8.4 状态机表的每一行一条；与 box 并存时的拼接顺序（替身 `(box)` 标签） | 判据脚本通过；`--bare` 下 `tree` 与 `final` 逐字节相同 |
 | S14 | 系统测试：组合根与配置的插件集合、顺序、options 相同（4.9）；双装配会话（4.7 #3–#5）；基线兼容 | `npm test`、`npm run baseline`、CI 全绿 |
@@ -2982,9 +3020,9 @@ rg -n "import|require|switch" src/loader                                        
 | S8 | 加载器 + 配置 + 失败路径；“允许修改”含 `package.json`（如需要 workspaces） | workspaces 已在 S5 完成；S8 加 `CliArguments`（`--bare`、`--only`、`--config`）、`Repl` 的启动消息、`plugins.config.json`（空列表）、`tests/fixtures/plugins/`、L5、L9 的 loader 部分。**S8 不改 `scripts/`**：基线的按会话参数放在 S9 | 4.3、4.8；S8 的“允许修改”不含 `scripts/`，而 S10 之前不带参数启动等于 bare，基线不受影响 |
 | S9 | metrics、差异检查脚本、双装配运行器、扩展点清单草稿 | 明确：双装配运行器 = 基线工具的 `.runs.json` 运行组（4.8），不另写 runner；三个已有会话加 `.runs.json` 与 `doc/transcript/configs/empty.json`；通用装配契约测试；类注释的 architecture test；**“允许修改”加上根 `package.json`**（新增 `metrics`、`plugin-diff` 两个 npm 脚本）与 `doc/transcript/` | 4.8、9.2 |
 | S10–S13 | 一个干净提交：插件 + 装配处的一处修改；S10“装配方式按设计文档选 A 或 B” | 每个插件两个提交：C（插件 + `CompositionRoot.ts` + 锁文件，满足方式 A）与 C′（`plugins.config.json` + 会话数据）；文档另起提交。S10、S11 两种装配都支持 | 决策 X24；规格 §2“两者均须按第 6 节支持代码装配和配置装配” |
-| S11 | `dir` 的双装配一致性“使用 S9 的运行器” | C′ 加 `cli-2.txt`、fixtures、`cli-2.runs.json`（只有 A = B 组，无期望输出）；`cli-2` 不含 `tree`、`save` | 4.7：避免 S12、S13 的 C 让它失配；期望输出要用 `--update`，留到 S14 一并申请 |
+| S11 | `dir` 的双装配一致性“使用 S9 的运行器” | C′ 加 `cli-2.txt`、fixtures、`cli-2.runs.json`（一组：A、B 两次运行，`expected: "cli-2"`）与 S11 经用户同意生成的期望输出（S11 修订：原为“只有 A = B 组，无期望输出”）；`cli-2` 不含 `tree`、`save` | 4.7：避免 S12、S13 的 C 让它失配 |
 | S12 | 主线方式 A + 演示分支方式 B；主线随后把 box 加进配置；§6.1B 会话 | 主线随后的提交 C_A2 = 配置 + `cli-1-1b` 的输入、`.runs.json`、`configs/box.json`、期望输出、`doc/transcript/README.md` 加注；方式 A 的运行用 `--only @svgframe/plugin-shape-box` | 8.3；4.7 #2 |
-| S14 | 三组会话双装配、基础兼容、接入 CI | 另加：`cli-1` 的 full 双装配组；`cli-2` 的期望输出（需同意 `--update cli-2`）；组合根与配置一致性测试；CI 加 `npm run typecheck:scripts`、`npm run baseline`，处理 `actions/checkout@v4`、`actions/setup-node@v4` 的 Node 20 弃用提示 | 4.7、4.9 |
+| S14 | 三组会话双装配、基础兼容、接入 CI | 另加：`cli-1` 的 full 双装配组；组合根与配置一致性测试（`cli-2` 的期望输出已在 S11 经用户同意生成，S11 修订）；CI 加 `npm run typecheck:scripts`、`npm run baseline`，处理 `actions/checkout@v4`、`actions/setup-node@v4` 的 Node 20 弃用提示 | 4.7、4.9 |
 | S15 | 文档收尾 | 另加：`vscode-svg/doc/analysis.md` §1.4 中“设计文档尚未编写”的说法改为指向 README；README §3 合并 L 规则、P5a/P5b/P10；README §5 记录 K1、K2 的消除；README 与测试注释中 `tree n1` “第 18 列”的笔误（2.3.3） | 本步发现，留给 S15 |
 
 修订后的步骤表（只列与原计划不同的列）：
