@@ -1,0 +1,57 @@
+svg-editor 0.1 — type 'help' for commands
+[DIR]  docs
+[DIR]  plugins
+[FILE] .hidden
+[FILE] README.md
+[FILE] demo.svg
+[FILE] package.json
+error: no document. use 'init' or 'read' first
+Document:
+  init [w] [h]                                     create an empty canvas (default 800x600)
+  read <file.svg>                                  read an SVG file as the current document
+  save [file.svg]                                  save the current document (default: the path it was read from)
+  canvas [w] [h]                                   show the canvas size, or change it
+Shape editing:
+  create <type> <id> [params…] [in <containerId>]  create a shape, at the root or inside a container
+  delete <id>                                      delete a shape (a container with all its descendants)
+  move <id> <dx> <dy>                              translate a shape by (dx, dy)
+  scale <id> <factor>                              scale all geometry of a shape by factor
+  set <id> <attr> <value>                          set fill, stroke, stroke-width, a geometry attribute or the text
+  group <newGid> <id1> <id2>…                      make a new container holding the given shapes
+  ungroup <gid>                                    dissolve a container; its children take its place
+  addto <gid> <id>                                 move a shape into a container, as its last child
+  front <id>                                       bring a shape to the front of its siblings
+  back <id>                                        send a shape to the back of its siblings
+Display:
+  tree [id]                                        show the structure tree (of the document, or of one shape)
+  show <id>                                        show all attributes of one shape
+  help                                             list all commands and their syntax
+  stats                                            count the shapes of the document by type
+  dir                                              list the files and directories of the working directory
+Undo / redo:
+  undo                                             undo the latest edit command
+  redo                                             redo the latest undone edit command
+error: usage: dir
+canvas 400x300 created
+rect#r1 created
+g#g1 created
+circle#c1 created in g#g1
+text#t1 created in g#g1
+rect: 1  circle: 1  text: 1  (total 3, containers 1)
+[DIR]  docs
+[DIR]  plugins
+[FILE] .hidden
+[FILE] README.md
+[FILE] demo.svg
+[FILE] package.json
+text#t1 removed
+rect: 1  circle: 1  (total 2, containers 1)
+read demo.svg (4 elements)
+rect: 1  circle: 1  text: 1  (total 3, containers 1)
+[DIR]  docs
+[DIR]  plugins
+[FILE] .hidden
+[FILE] README.md
+[FILE] demo.svg
+[FILE] package.json
+error: undo not allowed after io command

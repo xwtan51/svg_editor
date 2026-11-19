@@ -1,0 +1,1 @@
+git cannot store an empty directory; this file keeps plugins/ in the fixture.
