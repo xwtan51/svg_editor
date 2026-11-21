@@ -6,7 +6,7 @@ import BuiltinShapesPlugin from "@svgframe/plugin-builtin-shapes";
 import { PluginOptions } from "../../../packages/kernel/src/extension/PluginOptions.js";
 import { CompositionRoot } from "../../../src/assembly/CompositionRoot.js";
 
-/** Way A's table (design §4.2): built-ins first, shapes before commands; no optional plugin yet. */
+/** Way A's table (design §4.2): built-ins first, shapes before commands; then the optional plugins. */
 describe("CompositionRoot", () => {
   it("lists the two built-in plugins, shapes first, with their package names as labels", () => {
     const builtins = new CompositionRoot().builtins();

@@ -46,7 +46,7 @@ async function checkContract(root: CompositionRoot, candidate: PluginCandidate):
 describe("assembly contract: the real composition root", () => {
   const optional = new CompositionRoot().optional();
 
-  it("optional() is an array of plugin candidates (empty until S10 adds the first optional plugin)", () => {
+  it("optional() is an array of plugin candidates", () => {
     expect(Array.isArray(optional)).toBe(true);
     for (const candidate of optional) {
       expect(candidate).toBeInstanceOf(PluginCandidate);
