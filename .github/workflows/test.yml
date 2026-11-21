@@ -8,14 +8,21 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run typecheck:scripts
+      - name: npm run typecheck (through a symlinked path)
+        run: |
+          ln -s "$GITHUB_WORKSPACE" "$RUNNER_TEMP/repo-link"
+          cd "$RUNNER_TEMP/repo-link"
+          npm run typecheck
       - run: npm test
+      - run: npm run baseline
 
   vscode-svg:
     runs-on: ubuntu-latest
@@ -23,8 +30,8 @@ jobs:
       run:
         working-directory: vscode-svg
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
@@ -33,7 +40,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: vscode-svg/.vscode-test
           key: vscode-test-${{ runner.os }}-1.146.0
