@@ -3,15 +3,17 @@ import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from "nod
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import { TempWorkspace } from "../../support/TempWorkspace.js";
 import { TranscriptRunner } from "../../system/TranscriptRunner.js";
 
 // The real entry point in a child process, fed through a pipe (not a TTY).
-// tsx is resolved from this project's node_modules and launched with the
-// current Node binary, as in smoke.test.ts.
+// tsx is resolved from this project's node_modules and run with the current
+// Node binary: its CLI (`tsx/cli`, as in smoke.test.ts) for most cases, its
+// loader (`node --import tsx`, one process) for the SIGINT case.
 const tsxCli = createRequire(import.meta.url).resolve("tsx/cli");
+const tsxLoader = pathToFileURL(createRequire(import.meta.url).resolve("tsx")).href;
 const mainTs = fileURLToPath(new URL("../../../src/cli/main.ts", import.meta.url));
 const TIMEOUT_MS = 10_000;
 
@@ -53,10 +55,12 @@ describe("cli/main.ts over a pipe", () => {
     TIMEOUT_MS + 2_000,
   );
 
+  // Not through `tsx/cli`: it runs the script in a second process, and on SIGINT waits only 30 ms for that
+  // child to report back before SIGKILLing it and exiting with 130 — a busy machine misses that (design G48).
   it(
     "Ctrl-C (SIGINT) ends the session with exit code 0 (R13)",
     async () => {
-      const child = spawn(process.execPath, [tsxCli, mainTs], { stdio: ["pipe", "pipe", "pipe"] });
+      const child = spawn(process.execPath, ["--import", tsxLoader, mainTs], { stdio: ["pipe", "pipe", "pipe"] });
       let stdout = "";
       let stderr = "";
       child.stderr.on("data", (chunk: Buffer) => {

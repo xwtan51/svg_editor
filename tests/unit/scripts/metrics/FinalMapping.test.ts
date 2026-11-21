@@ -21,11 +21,13 @@ beforeAll(() => {
     "src/b/Taken.ts": body("takenB"),
     "src/x/Moved.ts": body("moved"),
     "src/cli/main.ts": body("main"),
+    "src/c/Twin.ts": body("twinC"),
+    "src/d/Twin.ts": body("twinD"),
   };
   repo.write(finalFiles);
   repo.commit("final");
   repo.git("tag", "final");
-  repo.remove("src/model", "src/app", "src/commands", "src/a", "src/b", "src/x");
+  repo.remove("src/model", "src/app", "src/commands", "src/a", "src/b", "src/x", "src/c", "src/d");
   repo.write({
     // pure rename, with a file of the same name elsewhere (so only rename detection finds it)
     "packages/kernel/src/model/Pure.ts": body("pure"),
@@ -41,6 +43,8 @@ beforeAll(() => {
     "tests/Moved.ts": body("moved"),
     // modified in place
     "src/cli/main.ts": body("main", 19) + "export const extra = 1;\n",
+    // two deleted files of final share this name; the only one in R is rewritten beyond both
+    "packages/kernel/src/Twin.ts": body("twinKernel"),
   });
   repo.commit("R");
   const git = repo.repository();
@@ -86,5 +90,12 @@ describe("FinalMapping (design §5.3)", () => {
 
   it("why there is no pathspec: limited to final's files, git sees no rename at all", () => {
     expect(mappedWithPathspec).toEqual([]);
+  });
+
+  it("two deleted files of final with the same name → both deleted, even with a unique file of that name in R", () => {
+    expect(mapping.targetOf("src/c/Twin.ts")).toBeNull();
+    expect(mapping.how("src/c/Twin.ts")).toBe(FinalMapping.DELETED);
+    expect(mapping.targetOf("src/d/Twin.ts")).toBeNull();
+    expect(mapping.how("src/d/Twin.ts")).toBe(FinalMapping.DELETED);
   });
 });

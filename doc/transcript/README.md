@@ -40,7 +40,7 @@ doc/transcript/
 - **期望输出在 S11 经用户同意生成**（2026-11-18）：`npm run baseline -- --update cli-2`（只带 `cli-2` 一个参数，其他会话的基线一个字节都没动），随后逐行对照规格 §2.1、§2.2 与设计 §8.2 手工核对。
 - **不含 `tree`、`save`**：`save` 会在工作目录里留下文件，改变之后 `dir` 的列表；`tree` 会在 S13 接入 `modified-star` 后多出 `*`。所以 S12、S13 的接入提交不会让它失配。
 - **排序**：`dir` 按 UTF-16 码元排序。夹具特意放了大写开头的 `README.md`：码元顺序是 `.hidden`、`README.md`、`demo.svg`、`package.json`，`localeCompare` 会把 `README.md` 排到最后。夹具里只有小写名字时两种排序结果相同，会话就钉不住排序规则。
-- **被忽略的文件会进入 `dir` 的输出**：`SessionRunner` 用 `fs.cpSync` 复制的是**工作区**里的 `fixtures/cli-2/`，不是 git 里的内容。macOS 的 `.DS_Store` 之类被 `.gitignore` 忽略的文件 `git status` 看不到，却会被复制进临时目录、出现在 `dir` 的列表里，使本机比对与 CI 不同，用 `--update` 时还会被写进期望输出。比对或生成之前先确认 `git status --ignored --short doc/transcript/fixtures/cli-2` 没有任何输出（`!!` 是被忽略的文件，`??` 是未跟踪的文件，两者都会被复制）。
+- **只复制 git 跟踪的夹具**（S14 起，设计 G38）：`SessionRunner` 用 `git ls-files` 列出 `fixtures/cli-2/` 中被跟踪的文件，逐个复制，内容取**工作区**（改了还没提交的夹具照样生效）。macOS 的 `.DS_Store` 之类被 `.gitignore` 忽略的文件、未跟踪的文件都不再复制，不会出现在 `dir` 的列表里，本机比对与 CI 相同。反过来，**新加的夹具要先 `git add` 才会生效**，用 `--update` 生成期望输出之前尤其要注意：`git status --short doc/transcript/fixtures/cli-2` 里的 `??`（未跟踪）不会被复制。被跟踪、但工作区里已经删掉的夹具会让基线以 `cannot run session <会话>: the fixture fixtures/<会话>/<路径> is tracked by git but missing from the working tree` 结束。
 - 夹具里没有符号链接（git 与 `cpSync` 在不同平台上处理不一致）；符号链接由插件的真实适配器测试覆盖。
 
 `cli-1-1b` 的说明（S12）：
@@ -88,7 +88,7 @@ npm run baseline -- --update  # 生成模式：重写全部基线 —— 未经�
 
 脚本在 `scripts/baseline/`（TypeScript，经 tsx 运行；类型检查用 `npm run typecheck:scripts`）。两种模式共用 `SessionRunner`，运行方式完全相同：
 
-1. 在系统临时目录下新建空目录，把 `fixtures/<会话>/` 复制进去；
+1. 在系统临时目录下新建空目录，把 `fixtures/<会话>/` 中 git 跟踪的文件复制进去（`git ls-files`，内容取工作区；S14，设计 G38）；
 2. 以该目录为 cwd，直接运行仓库内的 `node_modules/.bin/tsx <CLI 入口的绝对路径> <这次运行的参数…>`，stdin 重定向自输入文件（非 TTY：打印 banner，不打印提示符）。不用 `npm run cli`：npm 会往 stdout 多打 `> svg-editor@0.1.0 cli` 等行，并把 cwd 改回仓库根；
 3. 收集 stdout、stderr、退出码，以及目录里剩下的每个文件，然后删除临时目录。
 
@@ -137,6 +137,8 @@ CLI 入口路径只在 `scripts/baseline/BaselinePaths.ts` 的 `CLI_ENTRY` 定�
 - **孤儿运行组**：有 `<名字>.runs.json` 却没有 `<名字>.txt`。
 
 三个已有会话的 `.runs.json` 都是一组、两次运行：`["--bare"]` 与 `["--config", "{transcript}/configs/empty.json"]`（`configs/empty.json` 的内容为 `{ "plugins": [] }`），都与 `final` 的输出比较（设计 §4.7 #1：基础兼容性比较时禁用全部可选插件）。从此不带参数的 full 装配怎样增长都不影响这三个会话。
+
+`cli-1` 另有第二组（S14，设计 §4.7 #3）：`"expected": null`，两次运行 `[]`（不带参数，方式 A 的 full：组合根的全部可选插件）与 `["--config", "{repo}/plugins.config.json"]`（方式 B），只互相比较。这就是规格 §6 给出的两条示例命令 `<启动入口> < doc/transcript/cli-1.txt` 与 `<启动入口> --config plugins.config.json < doc/transcript/cli-1.txt`。这一组没有期望输出：S13 接入 `modified-star` 之后，full 的 `tree` 比 `final` 多 6 处行尾 ` *`，而 `expected/` 里的期望输出只能来自 `final`（`expected/cli-1/` 是第一组的基线）。`cli-1` 没有 box，所以这一组看不出配置里插件的先后；顺序由 `tests/system/assemblyConsistency.test.ts` 管（设计 §4.9）。
 
 ## 基线生成记录
 
