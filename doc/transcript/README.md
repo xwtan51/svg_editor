@@ -138,6 +138,8 @@ CLI 入口路径只在 `scripts/baseline/BaselinePaths.ts` 的 `CLI_ENTRY` 定�
 
 三个已有会话的 `.runs.json` 都是一组、两次运行：`["--bare"]` 与 `["--config", "{transcript}/configs/empty.json"]`（`configs/empty.json` 的内容为 `{ "plugins": [] }`），都与 `final` 的输出比较（设计 §4.7 #1：基础兼容性比较时禁用全部可选插件）。从此不带参数的 full 装配怎样增长都不影响这三个会话。
 
+`cli-1` 另有第二组（S14，设计 §4.7 #3）：`"expected": null`，两次运行 `[]`（不带参数，方式 A 的 full：组合根的全部可选插件）与 `["--config", "{repo}/plugins.config.json"]`（方式 B），只互相比较。这就是规格 §6 给出的两条示例命令 `<启动入口> < doc/transcript/cli-1.txt` 与 `<启动入口> --config plugins.config.json < doc/transcript/cli-1.txt`。这一组没有期望输出：S13 接入 `modified-star` 之后，full 的 `tree` 比 `final` 多 6 处行尾 ` *`，而 `expected/` 里的期望输出只能来自 `final`（`expected/cli-1/` 是第一组的基线）。`cli-1` 没有 box，所以这一组看不出配置里插件的先后；顺序由 `tests/system/assemblyConsistency.test.ts` 管（设计 §4.9）。
+
 ## 基线生成记录
 
 | 项 | 值 |
