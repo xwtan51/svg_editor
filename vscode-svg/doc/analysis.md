@@ -7,7 +7,7 @@
 - **代码**：`src/host/SvgFileDecorationProvider.ts` 的 `provideFileDecoration`，或 `package.json` 的 `activationEvents`。路径相对于 `vscode-svg/`；Phase 1 的代码写作仓库根目录下的 `src/io/…`，并注明“Phase 1”。
 - **测试**：文件加用例名，例如 `tests/unit/SvgBadgeRule.test.ts`「a directory named *.svg gets nothing」。集成测试在 `tests/integration/suite/outline.ts`，用例名同样照抄。
 - **观察**：[`observations.md`](observations.md) 第 2 节是不装扩展时的原生行为，写作“观察表第 n 项”；第 3 节是 S2 的界面验收，写作“观察表 §3 的 O2 行”。README 的手动步骤写作 R1–R5、O1–O9。
-- **编号**：VA1–VA22 是本扩展 README“决定”一节的编号；F、V、D、P 开头的编号（例如 F13、V8、P1）是 Phase 1 `doc/README.md`（仓库根目录）的约定补充和依赖规则。
+- **编号**：VA1–VA22 是本扩展 README“决定”一节的编号；F、V、D、P 开头的编号（例如 F13、V8、P1）是 Phase 1 `doc/phase1-architecture.md`（仓库根目录）的约定补充和依赖规则。
 - **独立验收**：S1、S2 各有一份仓库外的独立验收报告，引用时写“S1/S2 独立验收实测”，并给出对应的 R/O 步骤，读者可以按步骤复现。
 - **VSCode 内部**：一律引用 `microsoft/vscode` 的源码，版本标签为 **1.146.0**（本机版本，集成测试默认版本），只在明确写出时才是 1.85.0。为了不在正文里反复写长路径，下表给出简称：
 
@@ -243,7 +243,7 @@ note right of DSO : versionId 变了，缓存不命中，\n从“需要大纲”
 
 ### 1.4 与第二部分的关系
 
-“宿主定义接口、插件实现并注册、宿主在需要时回调；插件通过事件通知宿主、通过 `Disposable` 交出生命周期”，正是第二部分 CLI 四个扩展点（`ShapeProvider`、`Command`、`TreeDecorator`、`AttributeHandler`）要模仿的结构。CLI 里的对应物（注册表、插件上下文、注册的撤销与回滚）在 S4 的设计文档 `doc/design-phase2.md`（尚未编写）中给出，这里不展开。
+“宿主定义接口、插件实现并注册、宿主在需要时回调；插件通过事件通知宿主、通过 `Disposable` 交出生命周期”，正是第二部分 CLI 四个扩展点（`ShapeProvider`、`Command`、`TreeDecorator`、`AttributeHandler`）要模仿的结构。CLI 里的对应物（注册表、插件上下文、注册的撤销与回滚）在 S4 的设计文档 `doc/design-phase2.md` 中给出，定稿的扩展点清单见 `doc/README.md`（仓库根目录）的“扩展点清单”一节，这里不展开。
 
 ## 2 文件装饰与 Decorator、Adapter
 
@@ -711,7 +711,7 @@ node -e 'console.log(require("/tmp/s3exp/bundle.cjs").probe("<svg><g/></svg>"))'
 | | 内容 | 在本扩展中的体现 |
 |---|---|---|
 | **复用的代码** | **无** | `vscode-svg/` 不导入根目录 `src/` 的任何文件，`package.json` 的依赖中没有 `@xmldom/xmldom`（只有 devDependencies） |
-| **借鉴：Adapter 隔离外部 API** | Phase 1 用 `XmlDomAdapter` 把 xmldom 隔离在一个文件里，其余代码只认自己的 `XmlElement`（Phase 1 `doc/README.md` §2.8） | `host/` 把 `vscode` 隔离在 5 个类里，core 只认自己的 `OutlineNode`、`ResourceKind`（第 2.3 节） |
+| **借鉴：Adapter 隔离外部 API** | Phase 1 用 `XmlDomAdapter` 把 xmldom 隔离在一个文件里，其余代码只认自己的 `XmlElement`（Phase 1 `doc/phase1-architecture.md` §2.8） | `host/` 把 `vscode` 隔离在 5 个类里，core 只认自己的 `OutlineNode`、`ResourceKind`（第 2.3 节） |
 | **借鉴：端口与测试替身** | Phase 1 的 `src/io/FileSystem.ts` 是文件系统端口，测试注入内存实现 | `VscodeResourceKindReader` 依赖 `Pick<FileSystem, "stat">`，测试注入假对象（`tests/unit/VscodeResourceKindReader.test.ts`） |
 | **借鉴：用测试守架构规则** | Phase 1 的 `tests/unit/architecture.test.ts` 逐条断言 D1–D8、P1–P5，并用合成的违规代码验证检测器 | `vscode-svg/tests/unit/architecture.test.ts`：一类一文件、core 不依赖 `vscode`、只做类型导入、不导入 Node 内置模块，以及「the detectors themselves work」 |
 | **借鉴：范式约束** | 一类一文件、文件名 = 类名、不用 default export、不按名字 `switch`、不用 `instanceof` 判断类型（P3、P5） | `XmlStartTag`、`XmlEndTag` 用 `applyTo(builder)` 双重分派代替 `instanceof`；`OutlineSymbolAdapter` 用静态表把角色映射到 `SymbolKind`；`extension.ts` 是与 Phase 1 `cli/main.ts` 同类的入口例外（VA9） |

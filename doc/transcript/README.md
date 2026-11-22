@@ -41,7 +41,7 @@ doc/transcript/
 - **不含 `tree`、`save`**：`save` 会在工作目录里留下文件，改变之后 `dir` 的列表；`tree` 会在 S13 接入 `modified-star` 后多出 `*`。所以 S12、S13 的接入提交不会让它失配。
 - **排序**：`dir` 按 UTF-16 码元排序。夹具特意放了大写开头的 `README.md`：码元顺序是 `.hidden`、`README.md`、`demo.svg`、`package.json`，`localeCompare` 会把 `README.md` 排到最后。夹具里只有小写名字时两种排序结果相同，会话就钉不住排序规则。
 - **只复制 git 跟踪的夹具**（S14 起，设计 G38）：`SessionRunner` 用 `git ls-files` 列出 `fixtures/cli-2/` 中被跟踪的文件，逐个复制，内容取**工作区**（改了还没提交的夹具照样生效）。macOS 的 `.DS_Store` 之类被 `.gitignore` 忽略的文件、未跟踪的文件都不再复制，不会出现在 `dir` 的列表里，本机比对与 CI 相同。反过来，**新加的夹具要先 `git add` 才会生效**，用 `--update` 生成期望输出之前尤其要注意：`git status --short doc/transcript/fixtures/cli-2` 里的 `??`（未跟踪）不会被复制。被跟踪、但工作区里已经删掉的夹具会让基线以 `cannot run session <会话>: the fixture fixtures/<会话>/<路径> is tracked by git but missing from the working tree` 结束。
-- 夹具里没有符号链接（git 与 `cpSync` 在不同平台上处理不一致）；符号链接由插件的真实适配器测试覆盖。
+- 夹具里没有符号链接：`SessionRunner` 用 `copyFileSync` 逐个复制跟踪的文件，符号链接会变成它所指文件的一份副本，断链会按“被跟踪而工作区里缺失”报错；git 在不同平台上检出符号链接的方式也不同（Windows 上未开启 `core.symlinks` 时是一个普通文本文件）。符号链接由插件的真实适配器测试覆盖。
 
 `cli-1-1b` 的说明（S12）：
 
