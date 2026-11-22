@@ -129,10 +129,10 @@ describe("TreeRenderer: the examples of the spec", () => {
     }
   });
 
-  it("§4.4 `tree n1` with n1 as a plain g: V1 puts both summaries in column 18", () => {
+  it("§4.4 `tree n1` with n1 as a plain g: V1 puts both summaries in column 19", () => {
     // box is not part of this phase, so the line reads `g#n1` without "(box)".
     // The spec separates rect#n1-rect by 2 spaces and text#n1-label by 1
-    // (both at column 17); by V1 the widest head "└── text#n1-label" (16) + 2 = 18.
+    // (both at column 18); by V1 the widest head "└── text#n1-label" (17) + 2 = 19.
     const n1 = group("n1", rect("n1-rect", "120", "100", "160", "60", "#4a90d9"), text("n1-label", "140", "135", "开始"));
     const doc = new SvgDocument();
     append(doc, n1);
