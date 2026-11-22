@@ -2,8 +2,8 @@
   "generator": "npm run metrics (scripts/metrics, design §5.3)",
   "revisions": {
     "R": {
-      "commit": "c52893a3c7af67d5e947631d93e2cdfcc0c133b9",
-      "subject": "docs(design): record the S9 decisions"
+      "commit": "ed741da712b76fc8d7e458ec15de8d7dbfd396da",
+      "subject": "chore: fix the column in a TreeRenderer test name and comments; GitRepository class comment"
     },
     "final": {
       "commit": "73117232dc8f66457518bf61f388e2a4b82f2267"
@@ -24,8 +24,8 @@
     {
       "category": "host",
       "files": 21,
-      "lines": 861,
-      "codeLines": 572,
+      "lines": 874,
+      "codeLines": 585,
       "functions": 77,
       "complexity": 147,
       "finalFiles": 3,
@@ -45,14 +45,14 @@
     },
     {
       "category": "plugins: optional",
-      "files": 0,
-      "lines": 0,
-      "codeLines": 0,
-      "functions": 0,
-      "complexity": 0,
+      "files": 21,
+      "lines": 692,
+      "codeLines": 429,
+      "functions": 66,
+      "complexity": 105,
       "finalFiles": 0,
       "finalComplexity": 0,
-      "delta": 0
+      "delta": 105
     },
     {
       "category": "deleted since final",
@@ -67,14 +67,14 @@
     },
     {
       "category": "total",
-      "files": 141,
-      "lines": 7122,
-      "codeLines": 4587,
-      "functions": 717,
-      "complexity": 1161,
+      "files": 162,
+      "lines": 7827,
+      "codeLines": 5029,
+      "functions": 783,
+      "complexity": 1266,
       "finalFiles": 82,
       "finalComplexity": 671,
-      "delta": 490
+      "delta": 595
     }
   ],
   "areas": [
@@ -89,8 +89,8 @@
     {
       "area": "host `src/`",
       "files": 21,
-      "lines": 861,
-      "codeLines": 572,
+      "lines": 874,
+      "codeLines": 585,
       "functions": 77,
       "complexity": 147
     },
@@ -119,20 +119,52 @@
       "complexity": 222
     },
     {
+      "area": "plugin `plugins/command-dir/src/`",
+      "files": 8,
+      "lines": 224,
+      "codeLines": 130,
+      "functions": 19,
+      "complexity": 25
+    },
+    {
+      "area": "plugin `plugins/command-stats/src/`",
+      "files": 3,
+      "lines": 82,
+      "codeLines": 52,
+      "functions": 6,
+      "complexity": 10
+    },
+    {
+      "area": "plugin `plugins/shape-box/src/`",
+      "files": 7,
+      "lines": 294,
+      "codeLines": 192,
+      "functions": 29,
+      "complexity": 55
+    },
+    {
+      "area": "plugin `plugins/tree-star/src/`",
+      "files": 3,
+      "lines": 92,
+      "codeLines": 55,
+      "functions": 12,
+      "complexity": 15
+    },
+    {
       "area": "plugins: optional: subtotal",
-      "files": 0,
-      "lines": 0,
-      "codeLines": 0,
-      "functions": 0,
-      "complexity": 0
+      "files": 21,
+      "lines": 692,
+      "codeLines": 429,
+      "functions": 66,
+      "complexity": 105
     },
     {
       "area": "**run code: total**",
-      "files": 141,
-      "lines": 7122,
-      "codeLines": 4587,
-      "functions": 717,
-      "complexity": 1161
+      "files": 162,
+      "lines": 7827,
+      "codeLines": 5029,
+      "functions": 783,
+      "complexity": 1266
     },
     {
       "area": "tests `packages/kernel/tests/`",
@@ -159,34 +191,66 @@
       "complexity": null
     },
     {
+      "area": "tests `plugins/command-dir/tests/`",
+      "files": 16,
+      "lines": 874,
+      "codeLines": 674,
+      "functions": null,
+      "complexity": null
+    },
+    {
+      "area": "tests `plugins/command-stats/tests/`",
+      "files": 11,
+      "lines": 431,
+      "codeLines": 329,
+      "functions": null,
+      "complexity": null
+    },
+    {
+      "area": "tests `plugins/shape-box/tests/`",
+      "files": 14,
+      "lines": 957,
+      "codeLines": 772,
+      "functions": null,
+      "complexity": null
+    },
+    {
+      "area": "tests `plugins/tree-star/tests/`",
+      "files": 19,
+      "lines": 1131,
+      "codeLines": 888,
+      "functions": null,
+      "complexity": null
+    },
+    {
       "area": "tests `tests/`",
-      "files": 98,
-      "lines": 11137,
-      "codeLines": 9332,
+      "files": 103,
+      "lines": 12151,
+      "codeLines": 10168,
       "functions": null,
       "complexity": null
     },
     {
       "area": "tests: subtotal",
-      "files": 146,
-      "lines": 15246,
-      "codeLines": 12784,
+      "files": 211,
+      "lines": 19653,
+      "codeLines": 16283,
       "functions": null,
       "complexity": null
     },
     {
       "area": "scripts `scripts/`",
       "files": 25,
-      "lines": 2151,
-      "codeLines": 1619,
+      "lines": 2189,
+      "codeLines": 1641,
       "functions": null,
       "complexity": null
     },
     {
       "area": "**CLI total** (run code, tests, scripts)",
-      "files": 312,
-      "lines": 24519,
-      "codeLines": 18990,
+      "files": 398,
+      "lines": 29669,
+      "codeLines": 22953,
       "functions": null,
       "complexity": null
     }
@@ -1825,6 +1889,237 @@
       }
     },
     {
+      "path": "plugins/command-dir/src/DirCommand.ts",
+      "responsibility": "Adapter pattern, the Client: `dir` lists the direct children of the working directory, directories first, each group in UTF-16 code-unit order (spec §2.2, design §8.2).",
+      "lines": 69,
+      "codeLines": 45,
+      "functions": 8,
+      "complexity": 12,
+      "maxComplexity": 3,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/command-dir/src/DirCommandType.ts",
+      "responsibility": "The registered static side of `dir` (design §2.2.1, G11): an instance, not the command class, because it carries the two Targets the Client needs and a static field holding them would be module-level state (L8).",
+      "lines": 34,
+      "codeLines": 22,
+      "functions": 2,
+      "complexity": 2,
+      "maxComplexity": 1,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/command-dir/src/DirPlugin.ts",
+      "responsibility": "Registers the `dir` command (spec §2.2, design §8.2); it takes no options.",
+      "lines": 27,
+      "codeLines": 17,
+      "functions": 2,
+      "complexity": 2,
+      "maxComplexity": 1,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/command-dir/src/DirectoryEntry.ts",
+      "responsibility": "Adapter pattern, the Target's data: one direct child of a directory as the `dir` command sees it, a name and whether it counts as a directory.",
+      "lines": 25,
+      "codeLines": 14,
+      "functions": 3,
+      "complexity": 3,
+      "maxComplexity": 1,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/command-dir/src/DirectoryLister.ts",
+      "responsibility": "Adapter pattern, the Target: the directory access interface the `dir` command (the Client) is written against (spec §2.2 \"设计要求\", design §8.2).",
+      "lines": 16,
+      "codeLines": 4,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/command-dir/src/NodeDirectoryLister.ts",
+      "responsibility": "Adapter pattern, the Adapter: makes Node's file system (the Adaptee: `readdirSync`, `Dirent`, `statSync`) fit the `DirectoryLister` Target.",
+      "lines": 30,
+      "codeLines": 19,
+      "functions": 3,
+      "complexity": 5,
+      "maxComplexity": 3,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/command-dir/src/NodeWorkingDirectory.ts",
+      "responsibility": "Adapter pattern, the Adapter for the second Target: the process's current directory (the Adaptee: `process.cwd()`, an absolute path) as a `WorkingDirectory`.",
+      "lines": 13,
+      "codeLines": 6,
+      "functions": 1,
+      "complexity": 1,
+      "maxComplexity": 1,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/command-dir/src/WorkingDirectory.ts",
+      "responsibility": "Adapter pattern, a second Target: where the `dir` command (the Client) learns which directory to list.",
+      "lines": 10,
+      "codeLines": 3,
+      "functions": 0,
+      "complexity": 0,
+      "maxComplexity": 0,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/command-stats/src/ShapeTally.ts",
+      "responsibility": "Counts leaves by kind name in first-seen order, and containers separately (spec §2.1).",
+      "lines": 44,
+      "codeLines": 27,
+      "functions": 2,
+      "complexity": 6,
+      "maxComplexity": 4,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/command-stats/src/StatsCommand.ts",
+      "responsibility": "`stats`: leaf counts by type in first-seen order, then the totals, on one line (spec §2.1).",
+      "lines": 27,
+      "codeLines": 17,
+      "functions": 2,
+      "complexity": 2,
+      "maxComplexity": 1,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/command-stats/src/StatsPlugin.ts",
+      "responsibility": "Registers the `stats` command (spec §2.1, design §8.1); it takes no options.",
+      "lines": 11,
+      "codeLines": 8,
+      "functions": 2,
+      "complexity": 2,
+      "maxComplexity": 1,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/shape-box/src/BoxAttributeHandler.ts",
+      "responsibility": "The `AttributeHandler` of box (design §2.4.2, §8.3): `set <box> fill` goes to the frame rect, `set <box> label` rewrites the title text.",
+      "lines": 38,
+      "codeLines": 28,
+      "functions": 2,
+      "complexity": 6,
+      "maxComplexity": 3,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/shape-box/src/BoxFillChange.ts",
+      "responsibility": "The `AttributeChange` of `set <box> fill` (design §2.4.2, §2.4.6): `box#n2 fill propagated to n2-rect` / `box#n2 fill restored on n2-rect`.",
+      "lines": 23,
+      "codeLines": 15,
+      "functions": 3,
+      "complexity": 3,
+      "maxComplexity": 1,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/shape-box/src/BoxLabelChange.ts",
+      "responsibility": "The `AttributeChange` of `set <box> label` (design §2.4.2, §2.4.6): `box#n2 label updated: \"v2\"` / `box#n2 label restored: \"v1\"`.",
+      "lines": 25,
+      "codeLines": 17,
+      "functions": 3,
+      "complexity": 3,
+      "maxComplexity": 1,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/shape-box/src/BoxPlugin.ts",
+      "responsibility": "The plugin entry (design §3.1, §8.3): the `box` shape type with its attribute semantics and tree tag.",
+      "lines": 24,
+      "codeLines": 16,
+      "functions": 2,
+      "complexity": 4,
+      "maxComplexity": 3,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/shape-box/src/BoxProvider.ts",
+      "responsibility": "The `ShapeProvider` of box (design §2.1.2, §8.3): the `create` parameters, the three ids a box occupies, the template built from a `rect` and a `text` through `ShapeKit`, the creation echo, and read-back of `<g data-kind=\"box\">` with degradation to a plain `g` when the parts are not as expected (decisions X6, X7; ADR-2).",
+      "lines": 117,
+      "codeLines": 77,
+      "functions": 10,
+      "complexity": 28,
+      "maxComplexity": 7,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/shape-box/src/BoxShape.ts",
+      "responsibility": "`box` (P1 spec §4.4, design §8.3): the Composite container of the box type, written as `<g data-kind=\"box\">` and holding the frame rect `<id>-rect` and the title text `<id>-label`.",
+      "lines": 53,
+      "codeLines": 31,
+      "functions": 8,
+      "complexity": 9,
+      "maxComplexity": 2,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/shape-box/src/BoxTypeLabel.ts",
+      "responsibility": "The `TreeDecorator` of box (design §2.3, §8.3): the tag `(box)` on box rows only, so the tree shows `g#n1 (box)`.",
+      "lines": 14,
+      "codeLines": 8,
+      "functions": 1,
+      "complexity": 2,
+      "maxComplexity": 2,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/tree-star/src/ModifiedStar.ts",
+      "responsibility": "The `TreeDecorator` and `DocumentListener` of modified-star (design §2.3, §3.4, §8.4, ADR-3): `*` on rows whose content differs from the last save, read or init point.",
+      "lines": 37,
+      "codeLines": 22,
+      "functions": 4,
+      "complexity": 7,
+      "maxComplexity": 4,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/tree-star/src/SaveBaseline.ts",
+      "responsibility": "The save point of modified-star (design §8.4, ADR-3): an immutable value object holding one fingerprint per shape id and the serialized text of the whole document, as they were at the last `init`, `read` or `save`.",
+      "lines": 37,
+      "codeLines": 23,
+      "functions": 6,
+      "complexity": 6,
+      "maxComplexity": 1,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
+      "path": "plugins/tree-star/src/TreeStarPlugin.ts",
+      "responsibility": "The plugin entry (design §3.1, §8.4): the tree tag `modified-star`.",
+      "lines": 18,
+      "codeLines": 10,
+      "functions": 2,
+      "complexity": 2,
+      "maxComplexity": 1,
+      "category": "plugins: optional",
+      "final": null
+    },
+    {
       "path": "src/adapters/NodeFileSystem.ts",
       "responsibility": "`FileSystem` on Node's synchronous fs API; the only file allowed to import `node:fs` (rule P1).",
       "lines": 26,
@@ -1875,8 +2170,8 @@
     {
       "path": "src/assembly/CompositionRoot.ts",
       "responsibility": "Way A: the plugins to install, listed in code.",
-      "lines": 22,
-      "codeLines": 17,
+      "lines": 35,
+      "codeLines": 30,
       "functions": 2,
       "complexity": 2,
       "maxComplexity": 1,
