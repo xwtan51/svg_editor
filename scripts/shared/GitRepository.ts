@@ -1,9 +1,12 @@
 import { spawnSync } from "node:child_process";
 
 /**
- * The git commands the tooling scripts need, run in one repository. Every
- * read goes through git objects (a commit and a path inside it), never the
- * working tree, so the scripts' results depend on commits only.
+ * The git commands the tooling scripts need, run in one repository.
+ * `commit`, `parents`, `exists` and `nameStatus` read objects in commits, so
+ * their results depend on commits only. `run` and `text` execute whatever git
+ * command the caller passes: `SessionRunner`, for one, reads the index with
+ * `text(["ls-files", …])` and then copies the listed files' contents from the
+ * working tree itself.
  *
  * The environment is a parameter: tests run against temporary repositories
  * with an isolated git configuration (design §9.1).

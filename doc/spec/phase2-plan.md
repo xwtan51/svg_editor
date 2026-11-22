@@ -27,7 +27,9 @@
 >
 > **修订记录（2026-11-19，二）**：S13 经 PR #27 合并（`main` = `0e36e90`；P = `0197263`，T = `50011e6`，C = `1ac5f82`，C′ = `b14e07c`），`cli-2-star` 的期望输出已在 S13 经同意生成，设计文档同步了 8.4（实际文件、状态机表加“测试”列、io 屏障）、ADR-3 的实测结果、4.7 #6、9.2、9.4，以及 G43（S12 审查遗留）、G44（T 提交）、G45（`StarInEditor` 拆分）、G46（`cli-2-star` 管住配置里的 `modified-star`）。审查时发现：把 `plugins.config.json` 里 `modified-star` 挪到 box 之前，测试与基线全绿，配置里的插件**顺序**目前没有任何检查。受影响的 S14、S16 两节加了 **〔S13 修订〕** 段落。
 >
-> **进度**：S0–S13 已合并；里程碑 ①（`dcd5f37`）、②（`92db60a`）、③（`9e9f786`）、④（`94da628`）、⑤（`18af646`）完成。
+> **修订记录（2026-11-21）**：S14 经 PR #28 合并（`main` = `023e51d`，父提交 `0e36e90`、`9907532`；P = `c65a87c`），设计文档同步了 4.7、4.9、§7 TR-122/124/170、9.2–9.4，以及 G38（只复制 git 跟踪的夹具）、G42、G43（决定不改）、G46 的结果和 G47（配置顺序在 S14 之前无人检查）、G48（SIGINT 偶发 130 的根因）。用户另外决定了 S15 的两件事：Phase 1 方案从 `doc/README.md` 移到单独的文件，新 README 只写 Phase 2；tag `p2` 在 S16 终验通过之后才打。受影响的 S15、S16 两节加了 **〔S14 修订〕** 段落。
+>
+> **进度**：S0–S14 已合并；里程碑 ①（`dcd5f37`）、②（`92db60a`）、③（`9e9f786`）、④（`94da628`）、⑤（`18af646`）完成。
 
 ---
 
@@ -567,6 +569,16 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 
 **〔S12 修订〕**：ADR-3 整理进 README 时以 S13 修订后的设计为准（含 io 屏障让 `undo` 不能越过保存点、`cli-2-star` 复现规格 §5、两种注册顺序的实测结果）。S12 已在 README 写了 `## box 的两种接入（Phase 2，S12）`，第 1 条在它的基础上整理。G43 如果 S14 决定不改，在已知局限里记一条。
 
+**〔S14 修订〕**：
+
+- **README 的组织（用户 2026-11-21 决定）**：Phase 1 方案移到单独的文件 `doc/phase1-architecture.md`，新的 `doc/README.md` 只写 Phase 2。做法：一个提交只做 `git mv doc/README.md doc/phase1-architecture.md`，并把内容恢复成 `final` 上的 `doc/README.md`（去掉 S9、S11、S12 追加的三节共 68 行，它们并入新 README）；草稿实测这样 `git diff -M` 认作改名，`git log --follow` 能接上历史。之后只允许在 Phase 1 文件开头加几行说明，并改 V1 的笔误，其余一字不动。第 1 条中“README §3 合并 L1–L10…”“README §5 记录 K1、K2 的消除”改为写在新 README 相应的节里。代码注释、测试、设计文档里的 “README §n”、R/F/E/U/V、D1–D8、P1–P9、K1–K6 都指 Phase 1 方案，运行代码不改，由新 README 开头与设计文档开头各加一句说明；`CLAUDE.md` 第 9、40 行，`vscode-svg/doc/analysis.md` 第 10、714 行里的 `doc/README.md` 改指新文件。
+- **tag 的时机（用户 2026-11-21 决定）**：cc 开 PR 后停下等审查；用户说“合并”后 cc 合并，**不打 tag**，再停下；我在全新 clone 上对合并后的 `main` 做 S16；终验通过、用户说“打 tag”后，cc 才执行 `git tag p2 <S15 合并提交> && git push origin p2`。`final` 是指向合并提交的轻量 tag，`p2` 照此。
+- **“第 18 列”的笔误一共三处**，都在 `tests/unit/view/TreeRenderer.test.ts` 的同一条测试里：测试名 “… in column 18” 应为 19；注释 “both at column 17” 应为 18（规格原文两行的摘要都从下标 18 开始）；注释 “(16) + 2 = 18” 应为 “(17) + 2 = 19”。列号从 0 起，与同一文件 “column 32” 那条一致（`tests/transcripts/README.md` 第 53 行写明了这一约定）。README V1 的“第 18 列”在 Phase 1 文件里改成 19。
+- **metrics 终版**：先提交上面两处注释修正（以及 `GitRepository` 的类注释），再在这个提交上运行 `npm run metrics -- HEAD`，R 就是它；之后 S15 的提交只改文档，所以 `git diff --stat R <S15 合并提交> -- packages plugins src tests scripts vscode-svg/src vscode-svg/tests` 为空，R 的数字就是 `p2` 的数字。草稿实测：在 S14 的 head 上 `npm run metrics -- HEAD` 正常生成，复现两次逐字节相同；可选插件一类 21 个文件、M = 105，合计 ΔM = +595。
+- **依赖图的渲染**：草稿实测用 PlantUML 1.2024.7 的 jar 重新渲染 Phase 1 README 里的 `modules` 源码，得到的 SVG 与仓库里的 `doc/diagrams/modules.svg` 逐字节相同（Phase 1 的三张图都是用这个版本渲染的）。新图用同一版本渲染、放进 `doc/diagrams/`；设计 §3.11.1 的 `p2-modules` 能渲染，但少画了 `extension → model`、`extension → view`、`app → io`、`app → model` 四条实际存在的边，README 的图要按 import 的实际情况画。
+- **S14 审查遗留**：设计 G38 的“改前基线报 4 处差异”实为 6 处（两次运行各多一条 `untracked.txt only in …`）；`doc/transcript/README.md` 里“夹具里没有符号链接（git 与 `cpSync` …）”已过时；设计 4.7 的 `SessionRunner.ts:19-31` 与 4.8 的 `SessionRunner.ts:26` 行号过时；`scripts/shared/GitRepository.ts` 类注释 “never the working tree” 与 `SessionRunner` 的用法（`ls-files` 读索引，内容取工作区）有出入；夹具全部未被跟踪时会话静默地在空目录里运行，`pluginClass() ===` 依赖两种装配解析到同一个模块实例（打包器下可能不成立），这两条记进已知局限。
+- **允许修改**另加：根目录的 `README.md`（25 行的入口说明，“文档”一节现在只指向 `doc/README.md`，要补 Phase 1 文件与三种启动参数）、`CLAUDE.md`（只限上面两行）、`tests/unit/view/TreeRenderer.test.ts`（只限一个测试名与两行注释）、`scripts/shared/GitRepository.ts`（只限类注释）、`doc/diagrams/`（新图）。S14 之后的基准：1831 个测试，基线 6 个会话 14 次运行。
+
 **允许修改**：文档、metrics 产物。〔S4 修订〕即 `doc/`、`docs/metrics/`、`vscode-svg/doc/analysis.md`，以及上述测试注释。
 
 **评审点（重）**：**打 tag 之前**把 README 发给我。tag 一旦打上就不能移动。
@@ -580,6 +592,8 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 在干净目录中 `git clone` 并检出 `p2`，依次运行：`npm ci`、类型检查、全部测试、三组双装配会话、基线兼容、对 box（A 和 B）与 tree-star 三个提交的差异判据、metrics 复现，并确认 `final` 没有被移动。发现问题时在 tag 之前的修复窗口内处理。如果 tag 已经打了，只能新增提交并在 README 里说明，不能移动 tag。
 
 **〔S13 修订〕**：三个判据提交是 box 方式 A 的 C_A = `f999fd1`、方式 B 的 C_B = `077bd88`（`demo/box-config` 分支，永久保留），以及 tree-star 的 C = `1ac5f82`（父提交是只改测试的 T = `50011e6`）。`stats` 的 C = `8dc2c43`、`dir` 的 C = `2977cb5` 也一并复跑 `plugin-diff --mode A`。
+
+**〔S14 修订〕**：终验对象改为 **S15 合并后的 `main`**，在打 `p2` 之前做（用户 2026-11-21 决定）；通过后由用户对 cc 说“打 tag”。另加三项：metrics 的 R 与 `main` 之间运行代码、测试、脚本的差异为空，`npm run metrics -- <R>` 复现后 `git diff --exit-code docs/metrics` 为空；README 引用的新图用 PlantUML 1.2024.7 重新渲染后与仓库里的 SVG 比较；`doc/phase1-architecture.md` 与 `final` 上的 `doc/README.md` 只差开头的说明与 V1 一处。草稿实测（S14 的 head）：五个判据提交的 `plugin-diff` 都是 PASS。
 
 ---
 
