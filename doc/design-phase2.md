@@ -1,7 +1,7 @@
 # Phase 2 插件化设计（S4）
 
 > 本文是计划 `doc/spec/phase2-plan.md` 第 S4 步的产出，也是 S5–S15 的唯一设计依据（`CLAUDE.md` 规则 3）：接口、文案、目录和取舍一律以本文为准。
-> 依据：规格 `doc/spec/phase_cli_2.md`（下称“规格”，§n 指其第二部分）、`doc/spec/phase_cli_1.md`（下称“P1 规格”）、`final` 的源码与 `doc/README.md`（下称“README”）。凡写“现有”的文件、类、方法、行号，均在 `fe10441`（里程碑 ① 之后的 `main`，`src/` 与 `final` 相同）上核对过，核对结果见附录 C。
+> 依据：规格 `doc/spec/phase_cli_2.md`（下称“规格”，§n 指其第二部分）、`doc/spec/phase_cli_1.md`（下称“P1 规格”）、`final` 的源码与 `doc/README.md`（下称“README”）。S15 起 Phase 1 方案移到 `doc/phase1-architecture.md`（内容与 `final` 上的 `doc/README.md` 相同，只改了 V1 的笔误），本文的 “README §n、V1、K1 …” 都指它；Phase 2 的交付说明是新的 `doc/README.md`（S15 修订）。凡写“现有”的文件、类、方法、行号，均在 `fe10441`（里程碑 ① 之后的 `main`，`src/` 与 `final` 相同）上核对过，核对结果见附录 C。
 > 分析 `doc/spec/phase2-analysis.md`（下称“分析”）只作参考：采纳的地方不再注明，推翻的地方在第 5 节写明理由。
 
 ---
@@ -29,12 +29,12 @@ README 已经用了 R/F/E/U/V/K/B/C/W/Q/A/M/P/D，VSCode 扩展用了 VA。本�
 | 前缀 | 含义 | 与已有编号的关系 |
 |---|---|---|
 | **X1–X30** | 决策。**X1–X18 与分析 §7 的 D1–D18 一一对应**（X*n* = 分析 D*n*），X19 起是本文新增 | 分析的“D3”在本文一律写作“决策 X3（分析 D3）”；README §3.1 的依赖规则 D1–D8 在本文一律写作“依赖规则 D1”等，两者不会撞车 |
-| **L1–L10** | 新增的分层依赖规则（内核 / 装配处 / 插件之间） | 与 README 的依赖规则 D1–D8、范式规则 P1–P9 并列；S15 并入 README §3 |
+| **L1–L10** | 新增的分层依赖规则（内核 / 装配处 / 插件之间） | 与 README 的依赖规则 D1–D8、范式规则 P1–P9 并列；定稿写在新 `doc/README.md` 第 5 节“依赖规则”（S15 修订） |
 | **P5a、P5b、P10** | 对范式规则的例外与新增 | P5a/P5b 是 P5 的两条受控例外，P10 是新规则 |
-| **N1–N17** | 约定补充（对规格的解释）；N17 是 S8 修订 | 规则 6 要求登记的“解释” |
+| **N1–N19** | 约定补充（对规格的解释）；N17 是 S8 修订，N18、N19 是 S9 修订（S15 修订：原写 N1–N17） | 规则 6 要求登记的“解释” |
 | **T1–T4** | 已知偏差（对规格的偏离） | 规则 6 要求登记的“偏离”；README 的 K1–K6 去向见 5.4 |
-| **ADR-1–ADR-6** | 架构决策记录草稿 | S15 整理进 README |
-| **G1–G16** | 接入演练发现、已回填进第 2、3 部分的缺口 | 见 8.5 |
+| **ADR-1–ADR-6** | 架构决策记录草稿 | 定稿写在新 `doc/README.md` 第 8 节“ADR”（S15 修订） |
+| **G1–G48** | 接入演练与 S7–S14 实现、审查中发现、已回填进正文的缺口（S15 修订：原写 G1–G16） | 见 8.5 |
 | **TR-001…** | 规格追溯表的行号 | 见第 7 节 |
 
 ### 0.3 名字约定
@@ -185,8 +185,8 @@ README 已经用了 R/F/E/U/V/K/B/C/W/Q/A/M/P/D，VSCode 扩展用了 VA。本�
 │   ├── shape-box/            S12
 │   └── tree-star/            S13
 ├── tests/                    根测试：Phase 1 的 889 个测试（S5 只改 import 路径）、系统测试、architecture test、装配处测试、加载器夹具
-├── scripts/                  baseline/（已有）、metrics/（S9）、plugin-diff/（S9）
-├── doc/  docs/               doc/：README、设计、会话；docs/metrics/：S9 起的 metrics 产物
+├── scripts/                  baseline/（已有）、metrics/（S9）、plugin-diff/（S9）、shared/（S9，GitRepository；S15 修订）
+├── doc/  docs/               doc/：README（S15 起为 Phase 2 交付说明）、phase1-architecture.md（S15 起的 Phase 1 方案）、设计、会话；docs/metrics/：S9 起的 metrics 产物（S15 修订）
 └── vscode-svg/               VSCode 扩展：独立 package.json 与锁文件，不进 workspaces、不进 CLI 的任何统计
 ```
 
@@ -1215,7 +1215,7 @@ protected checkReleasable(shape: Shape): void;
 
 ### 3.11 图
 
-渲染方式：本机 PlantUML 1.2026.10，`PLANTUML_LIMIT_SIZE=8192`；渲染结果不入库。
+渲染方式：本机 PlantUML 1.2026.10，`PLANTUML_LIMIT_SIZE=8192`；渲染结果不入库。README 用到的图（重构前后的模块依赖图、迭代对比图）另用 PlantUML 1.2024.7 渲染进了 `doc/diagrams/`（S15 修订）。
 
 #### 3.11.1 重构后的模块与依赖
 
@@ -1300,6 +1300,8 @@ importer --> shapereg
 tree --> dec
 @enduml
 ```
+
+（S15 修订）这张图少画了内核内部实际存在的四条边：`extension → model`、`extension → view`、`app → io`、`app → model`。README 的 `p2-modules` 按 import 的实际统计重画（内核内部每条边都画出，区域之间画到模块一级），本图保留 S4 的原样。
 
 #### 3.11.2 四个扩展点
 
@@ -1676,11 +1678,11 @@ CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文�
 
 **各行在哪一步加入**：#1 在 S9；#2、#4 在 S12 的配置提交；#6 在 S13 的配置提交 C′，期望输出在 S13 经用户同意用 `--update cli-2-star` 生成并逐行核对（S13 修订）；#5 的双装配组在 S11 的配置提交，期望输出也在 S11 经用户同意用 `--update cli-2` 生成并手工核对（S11 修订：原为“只比较 A = B，期望输出在 S14 补”）；#3 在 **S14**：`doc/transcript/cli-1.runs.json` 的第二组，`"expected": null`，两次运行 `[]` 与 `["--config", "{repo}/plugins.config.json"]` 只互相比较；没有期望输出是因为 S13 之后 full 的 `tree` 比 `final` 多 6 处行尾 ` *`，而期望输出只能来自 `final`（S14 修订）。#3 不能更早：S10–S13 每次接入都是“先改组合根（C）、再改配置（C′）”，在 C 与 C′ 之间方式 A 比方式 B 多一个插件，`cli-1` 的 `tree` 会在 S13 的 C 上多出 `*`。`cli-2` 不含 `tree`、不含 box，所以 S12、S13 的 C 不会让 #5 失配。#6 与 S13 的 C′ 同时加入，C 上还没有这个会话，所以 C 不会让它失配（S13 修订）。S14 之后再接入会影响双装配会话的插件时，C 上的基线失配是预期的，C′ 恢复；或者把 C、C′ 合成一个提交（决策 X24 的例外，PR 中说明）。
 
-`dir` 的会话（#5）：`SessionRunner` 已经在新建的临时目录里运行 CLI 并以它为 cwd（`SessionRunner.ts:19-31`），fixtures 复制进去后目录内容是固定的；stdout、stderr 经管道收集，**不写进这个目录**，所以日志不会改变目录列表。`cli-2` 的输入把 `dir` 放在任何 `save` 之前（`save` 产出的文件会出现在列表里）。fixtures 里放 `.hidden`、一个子目录（目录里放一个文件，因为 git 存不了空目录）和几个普通文件。S14 起 `SessionRunner` 只复制 git 跟踪的夹具（`git ls-files`，内容取工作区），被忽略或未跟踪的文件（如 macOS 的 `.DS_Store`）不再进入临时目录与 `dir` 的输出；被跟踪而工作区里已删除的夹具、不在 git 仓库里的夹具目录都报错并指出会话（G38）（S14 修订）。
+`dir` 的会话（#5）：`SessionRunner` 已经在新建的临时目录里运行 CLI 并以它为 cwd（`SessionRunner.run`；S15 修订：原写行号），fixtures 复制进去后目录内容是固定的；stdout、stderr 经管道收集，**不写进这个目录**，所以日志不会改变目录列表。`cli-2` 的输入把 `dir` 放在任何 `save` 之前（`save` 产出的文件会出现在列表里）。fixtures 里放 `.hidden`、一个子目录（目录里放一个文件，因为 git 存不了空目录）和几个普通文件。S14 起 `SessionRunner` 只复制 git 跟踪的夹具（`git ls-files`，内容取工作区），被忽略或未跟踪的文件（如 macOS 的 `.DS_Store`）不再进入临时目录与 `dir` 的输出；被跟踪而工作区里已删除的夹具、不在 git 仓库里的夹具目录都报错并指出会话（G38）（S14 修订）。
 
 ### 4.8 基线工具的扩展（S9）
 
-现在 `SessionRunner.run`（`scripts/baseline/SessionRunner.ts:26`）以 `spawnSync(BaselinePaths.TSX, [BaselinePaths.entryAbsolute()], { cwd: workDir … })` 无参数启动 CLI。扩展方式：**不另写第二个 runner**，只让同一个 `SessionRunner` 接受参数。
+现在 `SessionRunner.run`（`scripts/baseline/SessionRunner.ts`；S15 修订：原写行号）以 `spawnSync(BaselinePaths.TSX, [BaselinePaths.entryAbsolute()], { cwd: workDir … })` 无参数启动 CLI。扩展方式：**不另写第二个 runner**，只让同一个 `SessionRunner` 接受参数。
 
 | 改动 | 内容 |
 |---|---|
@@ -1851,7 +1853,7 @@ CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文�
 
 ## 6 ADR 草稿
 
-S15 把这些草稿整理进 README。
+S15 把这些草稿整理进 README。定稿在新 `doc/README.md` 第 8 节“ADR”（S15 修订）。
 
 ### ADR-1 属性扩展点的契约
 
@@ -3042,7 +3044,7 @@ M	plugins.config.json
 | G35 | S10 草稿（照抄 8.1 的测试计划） | 8.1 的“替身 `History`”在类型上不可能：`History` 是带私有字段的类，`api.ts` 只以 `export type` 导出它，结构相同的对象传给 `recordIn` 时 `tsc` 报 TS2739；插件测试也不能 `new History()`（两个入口都不导出它的值）。`FakeCommandContext` 的 `history()` 同理 | 经 `@svgframe/kernel/host` 的真实 `EditorSession` + `Editor` 运行 `stats`，比较前后的 `undoDepth`、`redoDepth`、`isLocked` 与序列化结果（8.1 第 1 小节与“测试”）；S10 补上（S10 修订） |
 | G36 | S10 实现（插件测试的最小编辑器） | 插件测试只装本插件与替身插件（9.1），而 `undo`、`redo`、`help` 都在内置命令插件里，L3 不许 import：“`stats` 之后 `undo`”与“`help` 里有 `stats`”在插件测试里没有现成的命令可用 | `undo` / `redo` 在测试插件里用 `HistoryCommand` 的替身（经 `UndoStack`，与内置的写法相同）；`help` 的分组依据是命令目录与 `category`，插件测试断言 `stats` 在目录末尾、类别为 `DISPLAY`，`help` 中的那一行由通用装配契约测试覆盖（8.1“测试”）；S10 补上（S10 修订） |
 | G37 | S11 草稿（`cli-2` 的夹具） | 8.2 原来的夹具（`.hidden`、`demo.svg`、`package.json`、`docs/`、`plugins/`）只有小写名字，UTF-16 码元顺序与 `localeCompare` 的结果相同，会话钉不住排序规则（X12 的“按码元”只剩替身测试在管） | 夹具加大写开头的 `README.md`：码元顺序是 `.hidden`、`README.md`、`demo.svg`、`package.json`，`localeCompare` 会把 `README.md` 排到最后（8.2 第 3 小节、`doc/transcript/README.md`）；S11 补上（S11 修订） |
-| G38 | S11 草稿（在 macOS 上生成期望输出） | `SessionRunner` 用 `fs.cpSync` 复制的是**工作区**里的 `fixtures/<会话>/`，不是 git 里的内容。被 `.gitignore` 忽略的文件（如 macOS 的 `.DS_Store`）与未跟踪的文件 `git status` 不显眼，却会被复制进临时目录、出现在 `dir` 的输出里，使本机比对与 CI 不同，`--update` 时还会被写进期望输出 | `doc/transcript/README.md` 写明：比对或生成之前确认 `git status --ignored --short doc/transcript/fixtures/cli-2` 没有输出；S11 在全新 clone 上跑四项检查，证明 `expected/cli-2/` 不依赖本机工作区。让 `SessionRunner` 只复制 git 跟踪的文件要改 `scripts/`，不在 S11 范围内，留给 S14 决定（S11 修订）。**S14 改了**（用户 2026-11-19 同意）：`SessionRunner` 用 `GitRepository.text(["ls-files", "-z", "--", "."])` 列出夹具目录里被跟踪的文件，逐个 `mkdirSync` + `copyFileSync`，内容取工作区；被跟踪而工作区里已删除的夹具报 `cannot run session <会话>: the fixture fixtures/<会话>/<路径> is tracked by git but missing from the working tree`，夹具目录不在 git 仓库里报 `cannot run session <会话>: cannot list the fixtures git tracks in <目录> (<git 的报错>)`，两者都由 `SessionRunner` 抛出、不在别处捕获（与已有的 `cannot run session …` 相同，进程以未捕获异常结束、退出码 1）。测试 `tests/unit/scripts/baseline/SessionRunner.test.ts`（5 个，临时仓库 + 真实 CLI）；在仓库的 `fixtures/cli-2/` 放 `.DS_Store` 与未跟踪文件，改前基线报 4 处差异，改后 0 差异。`doc/transcript/README.md` 同步：新加的夹具要先 `git add` 才会生效（S14 修订） |
+| G38 | S11 草稿（在 macOS 上生成期望输出） | `SessionRunner` 用 `fs.cpSync` 复制的是**工作区**里的 `fixtures/<会话>/`，不是 git 里的内容。被 `.gitignore` 忽略的文件（如 macOS 的 `.DS_Store`）与未跟踪的文件 `git status` 不显眼，却会被复制进临时目录、出现在 `dir` 的输出里，使本机比对与 CI 不同，`--update` 时还会被写进期望输出 | `doc/transcript/README.md` 写明：比对或生成之前确认 `git status --ignored --short doc/transcript/fixtures/cli-2` 没有输出；S11 在全新 clone 上跑四项检查，证明 `expected/cli-2/` 不依赖本机工作区。让 `SessionRunner` 只复制 git 跟踪的文件要改 `scripts/`，不在 S11 范围内，留给 S14 决定（S11 修订）。**S14 改了**（用户 2026-11-19 同意）：`SessionRunner` 用 `GitRepository.text(["ls-files", "-z", "--", "."])` 列出夹具目录里被跟踪的文件，逐个 `mkdirSync` + `copyFileSync`，内容取工作区；被跟踪而工作区里已删除的夹具报 `cannot run session <会话>: the fixture fixtures/<会话>/<路径> is tracked by git but missing from the working tree`，夹具目录不在 git 仓库里报 `cannot run session <会话>: cannot list the fixtures git tracks in <目录> (<git 的报错>)`，两者都由 `SessionRunner` 抛出、不在别处捕获（与已有的 `cannot run session …` 相同，进程以未捕获异常结束、退出码 1）。测试 `tests/unit/scripts/baseline/SessionRunner.test.ts`（5 个，临时仓库 + 真实 CLI）；在仓库的 `fixtures/cli-2/` 放 `.DS_Store` 与未跟踪文件，改前基线报 6 处差异（两次运行各有 `stdout differs at line 4`、`file .DS_Store only in …`、`file untracked.txt only in …`；S15 修订：原写 4 处），改后 0 差异。`doc/transcript/README.md` 同步：新加的夹具要先 `git add` 才会生效（S14 修订） |
 | G39 | S11 草稿（读取失败怎样测） | “`chdir` 进临时目录再删掉”模拟不了读取失败：`readdirSync(".")` 在已删除的目录上返回 `[]`；在还没调用过 `process.cwd()` 的进程里删掉目录后，`process.cwd()` 直接抛 `ENOENT`。而运行中的 CLI 里 `process.cwd()` 返回缓存的路径，`readdirSync(<绝对路径>)` 抛 `ENOENT`，输出正确（N7）。另外 macOS 的 `os.tmpdir()` 是符号链接，`mkdtemp` 返回的路径与 `process.cwd()` 不同 | 插件测试一律不 `chdir`：读取失败用替身抛错，真实适配器读不存在的路径与普通文件（9.2 的 S11 行）；真实 CLI 中删掉工作目录的情形在 S11 的 PR 中用一次性脚本手工验证。`process.cwd()` 本身抛错（`NodeWorkingDirectory.current()` 抛出非 `EditorError`，CLI 以退出码 1 结束）的情形不处理，记在 S11 的 PR 中（S11 修订） |
 | G40 | S11 实现（“不调用 `context`”怎样验证） | 8.2 对照表说 `dir` 不调用 `context` 的任何方法，但经真实 `EditorSession` 运行时，调用 `document()`、`history()` 这类只读方法不留痕迹，状态测试只能发现改动，发现不了读取（例如没有文档时调 `document()` 会抛 `no document`，有文档时却看不出来） | 每个方法都抛错的 `UntouchableContext`，`DirCommand` 的替身测试全部经它运行（8.2 第 1 小节）；S11 补上（S11 修订） |
 | G41 | S12 草稿（照抄 8.3 的测试计划） | 8.3 的 `BoxInEditor` 在插件测试里做不到：它要用的 `create`、`move`、`delete`、`set`、`group`、`ungroup`、`addto`、`front`、`show`、`read`、`save` 都在内置命令插件里，插件测试不能 import（L3），替身命令等于把内置命令重写一遍 | 拆成两处（S12 修订）：插件自己的测试只用替身 rect/text/g 与内核（`BoxTestbed`：经真实 `PluginInstaller` 安装，`registry.shapes().build` 造 box，`SvgImporter` / `SvgSerializer` / `TreeRenderer` / `EditorSession.attributeEdits().plan` 直接驱动）；真实命令下的行为放到根 `tests/system/boxInEditor.test.ts`，用 `EditorAssembler` + `OnlyProfile` / `BareProfile` + `MemoryFileSystem` 组装与 CLI 相同的编辑器。`EditorAssembler` 只交出 `Editor`，拿不到会话，所以“状态不变”用孪生编辑器比较：两个编辑器执行相同的前置命令，只有一个执行失败的那条，然后用同样的方式探查（`undo` 到底、`redo` 到底、`save`），输出与文件都相同即文档、undo 深度、redo 深度都相同（8.3 第 1、3 小节，9.2） |
@@ -3088,7 +3090,7 @@ M	plugins.config.json
 | S12 | box 插件自己的测试（8.3），共 58 个（S12 修订：按实际补全）。`BoxShape.test.ts`（6）：`tagName` 为 `g`、`kindName` 为 `box`、`label` 为 `box#n1`、`treeLabel` 为 `g#n1`；`canUngroup()` 为 `false`；`canRelease` 对两个部件为 `false`，对嵌套 box、其他子元素与嵌套 box 的部件为 `true`；派生 id；`svgAttributes` 中 `data-kind` 紧跟 `id` 且只出现一次（读回带样式与透传属性时也是）。`BoxProvider.test.ts`（11）：经 `registry.shapes().build` 造出，子树的 id 恰为 `claimedIds`；合法 id 的派生 id 也合法；rect 的四个几何值原样、`fill` 为 `#4a90d9`；标题位置按 X3，含 $w \ne 160$ 的三个例子（`(1.25,10)`、`(0.875,8.5)`、负的 x 与 h = 0）；`creationDetail`；`params` 的 usage 记号与键名；非法尺寸由替身 rect 报 `invalid value for width: -1`，非数字报 `invalid number`。`BoxReadBack.test.ts`（20，真实 `SvgImporter` + 内存文件）：序列化结果等于预先写好的文件；读 → 存 → 读 → 存逐字节相同；`matchScore` 为 2、`g` 为 1，其他元素为 0；不装 box 读同一份文本 → 普通 `g`，`data-kind` 原样写回；9 种不完整（缺标题、缺框、框是 `<circle>`、标题是 `<rect>`、无 id、空 id、部件无 id、部件不是直接子元素、同一派生 id 两个子元素但只有一个被导入），每种断言完整的警告列表并写回 `data-kind`；部件顺序调换、多出子元素与嵌套 box 照常读成 box；重复 id 拒绝（另一处 `n1-rect`、box 之前的 `n1-label`、box 内两个 `n1-rect`）与照常读入（被跳过的 `<path>`、被跳过元素里的同名 id）。`BoxAttributeHandler.test.ts`（8）：`handles` 只对 box 的 `fill`、`label` 为真；注册的处理器与优先级；`EditorSession.attributeEdits().plan` 得到的编辑：计划时文档不变，`redo()` / `undo()` 后的序列化结果与两条回显（`fill` 只改框、box 自身没有样式；`label` 的撤销回显是旧文本；空标签）；`fill ""` 被拒绝且文档不变；`stroke` 不归它管（答 `null`）；两个 `AttributeChange` 的文案。`BoxTypeLabel.test.ts`（4）：只对 box 行答 `(box)`；注册的标签；整棵树（含嵌套 box）；不装 box 时没有标签。`BoxPlugin.test.ts`（9）：`contributes` 恰为三类各一项；以本包清单安装成功，注册的恰是三个对象、没有命令与监听器；只要 rect、text；没有任何图形、缺 rect、缺 text 三种 → `plugin failed to activate: @svgframe/plugin-shape-box (requires shape types: rect, text)`，注册表没有残留；补装图形后可以安装；两次安装各有自己的对象；候选用的是本包的入口与清单。根 `tests/system/boxInEditor.test.ts`（25，G41）：创建回显（含 `in box#n1`、undo / redo）；三个 id 各被占用时整个拒绝、什么都不留下；非法尺寸、缺标签、非法 id；`create … in`、`addto`、嵌套 box；`move`、`scale`、`delete` 及其 undo；`group`、拒绝 `ungroup`、box 里普通 `g` 的 `ungroup` 照常；`delete` / `addto` / `group` 移走部件被拒绝、状态不变（孪生编辑器）；`front`、移走非部件子元素允许；`set fill`、`set label` 各是一个 undo 单元，`undo`、`redo` 各一次；`fill ""` 失败后不变；其他属性走白名单；`tree`、`tree n1`、`show`；`stats` 把 box 计入 containers；`save` / `read` 往返逐字节相同；不完整的 box 读成 `g`；两种重复 id 的 `read` 被拒绝、原文档与历史不变；`BareProfile` 读写同一份文本逐字节相同、树里没有 `(box)`、`show` 有 `data-kind=box`、`set label` 报 `unknown attribute`，再用 `OnlyProfile` 读回是 box。另外契约测试自动多出 `@svgframe/plugin-shape-box` 一行（box 不声明命令，这一行等于空检查） | 判据脚本对 C_A、C_B 都通过；`git diff C_A C_B -- plugins/shape-box` 为空；`cli-1-1b` 两次运行都等于期望输出 |
 | S13 | `modified-star` 插件自己的测试（8.4），共 49 个（S13 修订：按实际补全）。`SaveBaseline.test.ts`（18）：刚记录时什么都不 dirty；`tagName`、几何属性、原来没有的样式属性、透传属性、id、文本、父 id 各改一项都 dirty（只改那一个图形与文档）；只改子节点、删子节点、只调兄弟顺序时容器与兄弟都不 dirty、文档 dirty；未知 id dirty；改了又改回、`snapshot` / `restore` 之后不 dirty；画布尺寸只影响文档，改回后不 dirty；删除只体现在文档；空文档；记录之后文档再变不影响已记录的保存点。`ModifiedStar.test.ts`（17）：真实 `SvgDocument` + 替身图形 + 内核 `TreeRenderer`，直接调三个回调——还没有保存点时一律无 `*`；`documentReplaced`（`init` 与 `read`）、`documentSaved` 各自建立保存点；`documentEdited` 不改变任何答案；编辑 → 保存 → 再编辑 → 回到保存点 → `redo`；越过保存点、保存后 `redo`、改回更早的保存点（真实编辑器里到不了，io 屏障）；新节点立即标；深层嵌套不向祖先传播；删除与 z-order 只在根行；`renderSubtree` 没有根行；换了文档按新文档比较；`tagFor` 只答 `"*"` 与 `null`；空文档、200 层嵌套、没见过的文档都不抛错；注册名。`TagOrder.test.ts`（4，替身 `(box)` 标签 `FakeBoxTag` 认 `kindName() = "box"` 的替身容器）：替身先装 → `g#n1 (box) *`，star 先装 → `g#n1 * (box)`（整棵树与 `tree n1` 的第一行）；规格 §5 的树；互不感知。`EventPipeline.test.ts`（5，`TestEditor`：替身命令 + 真实 `Editor`）：`init` 之后无 `*`；编辑 → 保存 → 编辑 → `undo` → `redo`；文件系统拒绝的保存、先 `markSaved` 再失败的保存都不建立保存点；失败的编辑与 `init` 不改变什么。`TreeStarPlugin.test.ts`（5）：`contributes` 恰为 `{ decorators: ["modified-star"] }`；以本包清单安装成功，注册的标签与订阅的监听器是同一个 `ModifiedStar`，没有命令、图形、处理器；排在先装的标签之后；两个注册表各有自己的 `ModifiedStar`，一边的保存点不影响另一边（TR-088）；候选用的是本包的入口与清单。根 `tests/system/starInEditor.test.ts`（37，G45）：8.4 的表每行一条（20），完整断言 `tree` 的输出；io 屏障（3）；`scale`、`set` 新属性（rect 的 `stroke`、circle 的 `stroke-width`）、`delete`、`addto`、`group`、`ungroup` 嵌套容器各自 `undo` 后没有 `*`（7），`addto gb ra` 只标根行与 `ra`（1）；与 box 并存：新建 box、`set label` 与 `tree n1`、规格 §5 的树逐行、只装 star 时 `create box` 报未知类型（4）；不装 star：`--bare` 与 `--only box` 下没有 `*`（2）。另外契约测试自动多出 `@svgframe/plugin-tree-star` 一行（不声明命令，等于空检查）。C 之前的 T 改 `tests/unit/cli/main.test.ts` 的一处（G44） | 判据脚本通过；`--bare` 与空配置下 `tree` 与 `final` 逐字节相同（`cli-1`、`cli-1-1a`、`regression`）；`cli-2-star` 两次运行都等于期望输出 |
 | S14 | 共 11 个（S14 修订：按实际补全）。根 `tests/system/assemblyConsistency.test.ts`（4，G42、G46、G47）：配置启用项的 `module` 序列 = `optional()` 的 `label()` 序列（数组 `toEqual`，顺序有意义，且非空）；启用项的 `options()` 与组合根同位置的候选逐项 `toEqual`；`PluginLoader.load` 读同一份配置，没有 `LoadFailure`，每一项都是 `LoadedCandidate`，`label()` 相同、`pluginClass()` 是同一个对象（`===`）、`manifestJson()` 与 `options()` 深相等；文件源码里不出现任何一个被检查的插件的包名。配置路径由测试文件位置推出，不依赖 `process.cwd()`。`tests/unit/scripts/baseline/SessionRunner.test.ts`（5，G38，临时仓库 + 真实 `SessionRunner` 与 CLI，`--only @svgframe/plugin-command-dir`）：被忽略的 `.DS_Store` 与未跟踪的文件不进入 `outcome.files` 与 `dir` 的输出，子目录里的跟踪文件照常复制；改过未提交的跟踪文件按工作区内容复制；跟踪而工作区里删掉的夹具 → 报错含会话名与相对路径；夹具目录不在 git 仓库里 → 报错含会话名；没有夹具的会话在空目录里照常运行。`tests/unit/scripts/metrics/FinalMapping.test.ts` 追加 1 个：`final` 中两个同名的已删除文件，R 中只有一个同名文件 → 两个都判为已删除（S9 审查）。`tests/unit/scripts/shared/GitRepository.test.ts`（1）：原样挪动的文件经 `nameStatus` 是 `["D\ta/Old.ts", "A\tb/New.ts"]`（`--no-renames`，S9 审查）。另外：`cli-1.runs.json` 加第二组（4.7 #3，基线从 12 次运行变为 14 次）；SIGINT 用例改为单进程启动（G48），`assemblyContract.test.ts` 一个测试名、`CompositionRoot.test.ts` 一行注释去掉过时的说法 | 测试数 1820 → 1831；`npm run baseline` 为 `6 sessions, 0 differences (…; 14 runs)`；CI 全绿 |
-| S15 | 无新增测试；README 的一致性自查用脚本输出作证据 | — |
+| S15 | 无新增测试（S15 修订：按实际补全）。只改了 `tests/unit/view/TreeRenderer.test.ts` 的一个测试名与两行注释（“第 18 列”的笔误，列号从 0 起应为 19；断言不变），以及 `scripts/shared/GitRepository.ts` 的类注释；README 的一致性自查与验收证据用脚本输出（核对脚本不入库） | 测试数仍为 1831，按“文件 + 测试名”与开工时的 `main` 比对，除改名的一条外全部相同；四项检查通过；metrics 的 R 是这两处注释的提交，`npm run metrics -- <R>` 复现后 `git diff --exit-code docs/metrics` 为空 |
 
 ### 9.3 步骤划分的确认与修订
 
@@ -3105,7 +3107,7 @@ M	plugins.config.json
 | S11 | `dir` 的双装配一致性“使用 S9 的运行器” | C′ 加 `cli-2.txt`、fixtures、`cli-2.runs.json`（一组：A、B 两次运行，`expected: "cli-2"`）与 S11 经用户同意生成的期望输出（S11 修订：原为“只有 A = B 组，无期望输出”）；`cli-2` 不含 `tree`、`save` | 4.7：避免 S12、S13 的 C 让它失配 |
 | S12 | 主线方式 A + 演示分支方式 B；主线随后把 box 加进配置；§6.1B 会话 | 主线随后的提交 C_A2 = 配置 + `cli-1-1b` 的输入、`.runs.json`、`configs/box.json`、期望输出、`doc/transcript/README.md` 加注；方式 A 的运行用 `--only @svgframe/plugin-shape-box` | 8.3；4.7 #2 |
 | S14 | 三组会话双装配、基础兼容、接入 CI | 另加：`cli-1` 的 full 双装配组；组合根与配置一致性测试（`cli-2` 的期望输出已在 S11 经用户同意生成，S11 修订）；CI 加 `npm run typecheck:scripts`、`npm run baseline`，处理 `actions/checkout@v4`、`actions/setup-node@v4` 的 Node 20 弃用提示 | 4.7、4.9 |
-| S15 | 文档收尾 | 另加：`vscode-svg/doc/analysis.md` §1.4 中“设计文档尚未编写”的说法改为指向 README；README §3 合并 L 规则、P5a/P5b/P10；README §5 记录 K1、K2 的消除；README 与测试注释中 `tree n1` “第 18 列”的笔误（2.3.3） | 本步发现，留给 S15 |
+| S15 | 文档收尾 | 另加：`vscode-svg/doc/analysis.md` §1.4 中“设计文档尚未编写”的说法改为指向 README；README §3 合并 L 规则、P5a/P5b/P10；README §5 记录 K1、K2 的消除；README 与测试注释中 `tree n1` “第 18 列”的笔误（2.3.3）。（S15 修订：实际做法）Phase 1 方案原样移到 `doc/phase1-architecture.md`，只在开头加说明并改 V1 的笔误；新 `doc/README.md` 只写 Phase 2，L 规则、P5a/P5b/P10 与区域表在它的第 5 节，K1、K2 的消除在 9.3；测试里的笔误共三处（一个测试名、两行注释）；`CLAUDE.md`、`vscode-svg/doc/analysis.md`、根 `README.md`、`doc/transcript/README.md` 改指新文件；tag `p2` 在 S16 终验通过后再打 | 本步发现，留给 S15；S14 时用户决定了 README 的组织与打 tag 的时机 |
 
 修订后的步骤表（只列与原计划不同的列）：
 
@@ -3121,7 +3123,7 @@ M	plugins.config.json
 | S12 | `feat/plugin-box` + `demo/box-config` | 同上（`plugins/shape-box/`）+ `doc/transcript/`（`cli-1-1b`）+ `tests/system/`（降级测试） | `milestone(4/6)` |
 | S13 | `feat/plugin-tree-star` | 同上（`plugins/tree-star/`） | `milestone(5/6)` |
 | S14 | `test/p2-system` | `tests/`、`doc/transcript/`、`.github/workflows/`、`scripts/baseline/SessionRunner.ts`（G38，S14 修订） | — |
-| S15 | `docs/p2-final` | `doc/`、`docs/metrics/`、`vscode-svg/doc/analysis.md` | `milestone(6/6)`，tag `p2` |
+| S15 | `docs/p2-final` | `doc/`、`docs/metrics/`、`vscode-svg/doc/analysis.md`（S15 修订：实际还有根 `README.md`、`CLAUDE.md` 的两行、`tests/unit/view/TreeRenderer.test.ts` 的测试名与两行注释、`scripts/shared/GitRepository.ts` 的类注释；`doc/` 内只限计划副本、Phase 1 文件、新 README、新图、本文的 S15 修订、过程记录一行与 `doc/transcript/README.md` 一行） | `milestone(6/6)`；tag `p2` 在 S16 终验通过、用户同意后打（S15 修订） |
 
 ### 9.4 写进对应步骤的已知事项
 
@@ -3131,7 +3133,7 @@ M	plugins.config.json
 | S13 | 会话 `cli-2-star` 的期望输出经用户同意生成（S13 修订）：已在 S13 执行 `npm run baseline -- --update cli-2-star`（只带 `cli-2-star` 一个参数），输出 `wrote doc/transcript/expected/cli-2-star: stdout 20 lines, exit 0, files flowchart-star.svg`，只新增了 `expected/cli-2-star/`；逐行核对的结果写进了 PR |
 | S9 | 圈复杂度脚本按决策 X18（5.3）实现：`typescript/unstable/sync`，启动自检，口径与输出格式按 5.3 |
 | S14 | CI 统一处理：`typecheck:scripts` 与 `baseline` 进 CI；`actions/checkout@v4`、`actions/setup-node@v4` 的 Node 20 弃用提示；`cli-2` 的期望输出已在 S11 经用户同意生成（S11 审查遗留）。**已完成**（S14 修订）：`test` job 在 `npm run typecheck` 之后加 `npm run typecheck:scripts` 与“经符号链接路径的 `npm run typecheck`”（`ln -s "$GITHUB_WORKSPACE" "$RUNNER_TEMP/repo-link"` 后 `cd` 进去），在 `npm test` 之后加 `npm run baseline`；两个 job 的 `actions/checkout`、`actions/setup-node`、`actions/cache` 升到 `@v5`（`using: node24`），其他参数不变。`npm run metrics` 不进 CI（浅克隆、没有 `final` tag） |
-| S5–S15 | `npm run baseline -- --update` 未经用户明确同意一律不用（`CLAUDE.md`） |
+| S5–S15 | `npm run baseline -- --update` 未经用户明确同意一律不用（`CLAUDE.md`）。S15 没有使用（S15 修订） |
 
 ---
 
