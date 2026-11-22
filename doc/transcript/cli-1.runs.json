@@ -6,6 +6,13 @@
         ["--bare"],
         ["--config", "{transcript}/configs/empty.json"]
       ]
+    },
+    {
+      "expected": null,
+      "runs": [
+        [],
+        ["--config", "{repo}/plugins.config.json"]
+      ]
     }
   ]
 }

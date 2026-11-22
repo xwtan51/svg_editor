@@ -25,7 +25,9 @@
 >
 > **修订记录（2026-11-19）**：S12 经 PR #26 合并（`main` = `2a57579`；P = `3c87ebe`，C_A = `f999fd1`，C_B = `077bd88` 在永久保留的 `demo/box-config` 上，C_A2 = `9997e35`），设计文档同步了 8.3 的实际文件与测试、9.2、9.4，以及 G41（`BoxInEditor` 改为插件测试 + 根 `tests/system/boxInEditor.test.ts`）、G42（配置里的 box 在 S14 之前没有测试管着）。为写 S13 提示词做草稿实测时发现：S8 之前的 `tests/unit/cli/main.test.ts` 有一条不带参数（full）运行 Phase 1 §6 会话的测试，组合根一加 `modified-star`，树行带 `*` 就失败；设计 8.4 的 `StarInEditor` 与 G41 同样做不到；配置里的 `modified-star` 同样没有测试管着，经用户同意在 C′ 加会话 `cli-2-star`。另有 S12 审查遗留一条（box 首次读写不幂等）。受影响的 S13、S14、S15 各节加了 **〔S12 修订〕** 段落。
 >
-> **进度**：S0–S12 已合并；里程碑 ①（`dcd5f37`）、②（`92db60a`）、③（`9e9f786`）、④（`94da628`）完成。
+> **修订记录（2026-11-19，二）**：S13 经 PR #27 合并（`main` = `0e36e90`；P = `0197263`，T = `50011e6`，C = `1ac5f82`，C′ = `b14e07c`），`cli-2-star` 的期望输出已在 S13 经同意生成，设计文档同步了 8.4（实际文件、状态机表加“测试”列、io 屏障）、ADR-3 的实测结果、4.7 #6、9.2、9.4，以及 G43（S12 审查遗留）、G44（T 提交）、G45（`StarInEditor` 拆分）、G46（`cli-2-star` 管住配置里的 `modified-star`）。审查时发现：把 `plugins.config.json` 里 `modified-star` 挪到 box 之前，测试与基线全绿，配置里的插件**顺序**目前没有任何检查。受影响的 S14、S16 两节加了 **〔S13 修订〕** 段落。
+>
+> **进度**：S0–S13 已合并；里程碑 ①（`dcd5f37`）、②（`92db60a`）、③（`9e9f786`）、④（`94da628`）、⑤（`18af646`）完成。
 
 ---
 
@@ -519,6 +521,14 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 - G43（S12 审查遗留）：决定是否修正 box 结构检查的 “2 children with id …” 规则（只看标签对得上的同 id 子元素），使首次读写幂等。改的话要动 `plugins/shape-box/`，不是测试，需要单独开修复 PR 并说明 C_A、C_B 是判据快照、不受影响；不改的话在 README 已知局限里记一条（S15）。
 - `cli-1` 的 full 双装配组：S13 之后不带参数的 `cli-1` 输出比 `final` 多 6 处 ` *`（草稿实测，与 `--config plugins.config.json` 逐字节相同），所以这一组只比较 A = B，`expected` 写 `null`。
 
+**〔S13 修订〕**：
+
+- **配置顺序目前无人管**（S13 审查实测）：把 `plugins.config.json` 里的 `modified-star` 挪到 box 之前，`npm test` 与 `npm run baseline` 全绿——`cli-2-star` 里 `g#n1` 本来就不带 `*`，看不出两个标签的先后；`starInEditor` 走的是组合根，不读配置。反过来，组合根里两项对调只有 `starInEditor` 的 row 20 能发现（S13 自查第 13 项）。所以第一批的一致性测试必须读 `plugins.config.json`，与 `CompositionRoot.optional()` **逐项**比较模块名、顺序与 options，不能只比集合；自查里必须注入“配置里 star 与 box 对调”和“配置漏掉 box”，确认这条测试失败。
+- 设计 4.7 的六行里，#1、#2、#4、#5、#6 已在 S9–S13 接进基线（#6 = `cli-2-star`，S13 加入，期望输出已生成，本步不改）；只剩 #3（`cli-1` 的 full 双装配组）在本步加，`expected` 写 `null`，即上面〔S12 修订〕第三条。
+- S13 测试数 1820，基线 6 个会话 12 次运行；本步开工时的基准以此为准。
+- **两项待定事项已决定**（2026-11-19，用户同意）：G38 **改**——`SessionRunner` 只复制 git 跟踪的夹具（`git ls-files`），文件内容取工作区，加测试，`doc/transcript/README.md` 与设计 G38 同步；G43 **不改**——设计 G43 记下决定，S15 在 README 已知局限记一条。
+- **SIGINT 用例偶发退出码 130 的原因已查明**（写 S14 提示词前的草稿实测）：tsx 的 CLI 是父子两个进程，父进程收到 SIGINT 后只等子进程 30 ms 回报，超时就 `SIGKILL` 子进程并以 $128+2=130$ 退出；机器忙时子进程来不及回报。把子进程暂停 200 ms 可以稳定复现 130。只把这一条用例改成 `node --import <tsx 的 loader> main.ts` 单进程启动即可消除（测试名与断言不改）。
+
 **允许修改**：测试、会话数据、CI 配置。**不改运行代码**；发现问题时单独开修复 PR。
 
 **验收**：`npm test` 和 CI 全绿。
@@ -568,6 +578,8 @@ S0 会把这些规则写进仓库根目录的 `CLAUDE.md`，此后每个会话�
 ### S16　全新 clone 终验（由我来做）
 
 在干净目录中 `git clone` 并检出 `p2`，依次运行：`npm ci`、类型检查、全部测试、三组双装配会话、基线兼容、对 box（A 和 B）与 tree-star 三个提交的差异判据、metrics 复现，并确认 `final` 没有被移动。发现问题时在 tag 之前的修复窗口内处理。如果 tag 已经打了，只能新增提交并在 README 里说明，不能移动 tag。
+
+**〔S13 修订〕**：三个判据提交是 box 方式 A 的 C_A = `f999fd1`、方式 B 的 C_B = `077bd88`（`demo/box-config` 分支，永久保留），以及 tree-star 的 C = `1ac5f82`（父提交是只改测试的 T = `50011e6`）。`stats` 的 C = `8dc2c43`、`dir` 的 C = `2977cb5` 也一并复跑 `plugin-diff --mode A`。
 
 ---
 
