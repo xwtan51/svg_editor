@@ -34,7 +34,7 @@ README 已经用了 R/F/E/U/V/K/B/C/W/Q/A/M/P/D，VSCode 扩展用了 VA。本�
 | **N1–N19** | 约定补充（对规格的解释）；N17 是 S8 修订，N18、N19 是 S9 修订（S15 修订：原写 N1–N17） | 规则 6 要求登记的“解释” |
 | **T1–T4** | 已知偏差（对规格的偏离） | 规则 6 要求登记的“偏离”；README 的 K1–K6 去向见 5.4 |
 | **ADR-1–ADR-6** | 架构决策记录草稿 | 定稿写在新 `doc/README.md` 第 8 节“ADR”（S15 修订） |
-| **G1–G48** | 接入演练与 S7–S14 实现、审查中发现、已回填进正文的缺口（S15 修订：原写 G1–G16） | 见 8.5 |
+| **G1–G50** | 接入演练与 S7–S14 实现、审查中发现、已回填进正文的缺口；G49、G50 来自 S17 交付物审计（S15 修订：原写 G1–G16；S18 修订：原写 G1–G48） | 见 8.5 |
 | **TR-001…** | 规格追溯表的行号 | 见第 7 节 |
 
 ### 0.3 名字约定
@@ -419,9 +419,9 @@ export interface ShapeProvider {
    * 构造一棵游离（无父节点）的子树。values 以 ParamSpec.attributeName() 为键，均为原始字符串。
    * 子部件必须经 kit 按类型名构造，不得 import 其他插件的类（L3）。
    * 前置：claimedIds(id) 中的每个 id 都不在文档中。
-   * 后置：返回的子树中出现的 id 集合恰好等于 claimedIds(id)；子树不挂在任何容器上。
+   * 后置：返回的子树中出现的 id 恰好是 claimedIds(id) 中的那些，每个只出现一次；子树不挂在任何容器上。（S18 修订：原写“id 集合恰好等于”，漏了“不能重复”，G49）
    * 失败：取值非法时抛 EditorError（与 Phase 1 相同：invalid number / invalid value for …），且不留下任何东西。
-   * 违约：后置条件不成立（id 集合不符、已有父节点）→ 调用时由 create 检出，转为 `shape provider failed: <type> (<reason>)`。
+   * 违约：后置条件不成立（id 不符、有重复、已有父节点）→ 调用时由 create 检出，转为 `shape provider failed: <type> (<reason>)`。
    */
   create(id: string, values: ReadonlyMap<string, string>, kit: ShapeKit): Shape;
 
@@ -1187,8 +1187,9 @@ protected checkReleasable(shape: Shape): void;
 | 构造函数 / `activate` 抛错、异步 `activate` | 安装时 | 同上 | 同上 |
 | 重复注册 | 安装时（第 2 步） | `error: duplicate registration: <category>/<name>` | 同上 |
 | 清单与注册不符 | 安装时（第 3 步） | `error: plugin manifest mismatch: …` | 同上 |
-| `matchScore` / `read` 抛错或返回非法值 | 调用时（读回） | `error: cannot parse file: <path> (shape provider <type> failed: <reason>)` | 读入失败，原文档不变 |
-| `claimedIds` / `create` 抛出非 `EditorError`，或后置条件不成立 | 调用时（`create` 的 `prepare`） | `error: shape provider failed: <type> (<reason>)` | `prepare` 尚未改文档 |
+| `read` 抛出 `EditorError`（插件自己的领域错误，例如 `reader.reject(…)`）（S18 修订：原与下一行合写） | 调用时（读回） | 原样报出（`reader.reject(<detail>)` 即 `error: cannot parse file: <path> (<detail>)`；不包装，`ImportSession.readWith`） | 读入失败，原文档不变 |
+| `matchScore` 抛错、`read` 抛出其他异常，或二者返回非法值 | 调用时（读回） | `error: cannot parse file: <path> (shape provider <type> failed: <reason>)` | 读入失败，原文档不变 |
+| `claimedIds` / `create` 抛出非 `EditorError`，或后置条件不成立（包括实际 id 有重复，S18 修订） | 调用时（`create` 的 `prepare`） | `error: shape provider failed: <type> (<reason>)` | `prepare` 尚未改文档 |
 | `handles` / `apply` 抛出非 `EditorError`（或返回值违约，2.4.3） | 调用时（`set` 的 `prepare`） | `error: attribute handler failed: <name> (<reason>)` | 已回滚，历史不变 |
 | `apply`（或文案方法）绕过接口改了子树结构 | 调用时（`set` 的 `prepare`，2.4.3 第 6 步） | 程序错误：普通 `Error` `attribute handler <name> changed the structure of <label>`，不包装（S7 修订） | 回滚不可信，所以不还原、停止 |
 | `tagFor` 抛错或返回非法值 | 调用时（`tree`） | `error: tree decorator failed: <name> (<reason>)` | `tree` 只读，不影响状态 |
@@ -1736,7 +1737,7 @@ CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文�
 | **X9**（D9）处理器冲突 | 取 `priority` 最大者；最大值上并列 → `error: ambiguous attribute handlers for <attr> on <id>: <a>, <b>`，不修改（2.4.4） | ① 先注册者胜；② 全部按顺序组合执行 | ①是“未定义的覆盖”的一种，换个加载顺序结果就变；②语义不清（两个处理器都改 fill 时谁的值留下？），回显也不好写 | S7；验证：替身处理器的冲突测试 |
 | **X10**（D10）处理器的回显 | 由处理器返回的 `AttributeChange` 提供，`plan` 时取得并保存；`fill` 的 undo 为 `box#n2 fill restored on n2-rect` | `fill` 的 undo 沿用 Phase 1 的 `box#n2 updated: fill=#4a90d9` | 与 apply 回显 `fill propagated to n2-rect` 对称，说明改的是哪个部件；P1 规格给的 `label` undo（`label restored: "…"`）也是“restored”句式 | S7（机制）、S12（文案）；验证：box 测试、`cli-1-1b` |
 | **X11**（D11）没有文档时 `stats` | `requiresDocument = true`：报 `no document. use 'init' or 'read' first` | 输出 `(total 0, containers 0)` | 规格把“空文档”与“没有文档”区分开（`dir` 特别说明“未执行 init 或 read 时也可使用”，`stats` 没有这句）；与 Phase 1 的 `tree` 一致 | S10；验证：`stats` 单元测试 |
-| **X12**（D12）`dir` 的细节 | 排序：按 UTF-16 码元比较（`a < b`），不用 `localeCompare`；符号链接跟随一层后按目标归类，断链与其他特殊项（FIFO、socket、设备）一律 `[FILE]`；错误中的 `<path>` 是当前工作目录的绝对路径；有参数时报 `usage: dir` | 符号链接单独标 `[LINK]` | 规格的输出格式只有两种标记；对用户而言指向目录的链接就是目录；`stat` 一层不算“遍历其目标”。码元排序与 locale 无关，保证逐字节一致 | S11；验证：替身测试、真实临时目录测试（含符号链接） |
+| **X12**（D12）`dir` 的细节 | 排序：按 UTF-16 码元比较（`a < b`），不用 `localeCompare`；符号链接按 `stat` 得到的最终目标分类（链接的链会一直走到底）：最终目标是目录 → `[DIR]`，其余（含断链、循环链接）→ `[FILE]`；不列出目标里的内容；其他特殊项（FIFO、socket、设备）一律 `[FILE]`（S18 修订：原写“跟随一层”）；错误中的 `<path>` 是当前工作目录的绝对路径；有参数时报 `usage: dir` | 符号链接单独标 `[LINK]` | 规格的输出格式只有两种标记；对用户而言指向目录的链接就是目录；`stat` 只取最终目标的类型、不列出目标里的内容，不算“遍历其目标”。码元排序与 locale 无关，保证逐字节一致 | S11；验证：替身测试、真实临时目录测试（含符号链接） |
 | **X13**（D13）`stats` / `dir` 在 `help` 中的位置 | 类别 `Display`（`QueryCommand` 的默认），组内按注册顺序：排在 `help` 之后；插件不能新增类别 | 新增 `Plugins:` 类别 | 不改 `help` 的实现与已有输出；按功能分组比按来源分组对用户有用 | S10、S11；验证：S9 的装配契约测试（9.2） |
 | **X14**（D14）加载器的输出 | stdout、banner 之后、第一条命令之前；求值失败为 `plugin failed to load: <module> (<reason>)`；一个插件只报第一条（4.5、ADR-4） | 写 stderr | Phase 1 的 `error:` 一律走 stdout（R12），基线比对 stdout；只有程序错误走 stderr | S8；验证：加载器失败路径测试（每条一个夹具） |
 | **X15**（D15）默认导出 | **类**；options 经构造参数传入（3.1） | 实例；options 经 `activate(ctx, options)` | 实例是模块级单例，同一进程里的多个 `Editor` 会共享插件状态（`modified-star` 的保存点就会串）；构造参数让 options 成为私有字段 | S6（接口）、S8（加载器）；验证：加载器测试“同一插件装进两个 Editor 状态独立” |
@@ -1822,7 +1823,7 @@ CLI 由 tsx 运行，插件源码是 `.ts`：tsx 的加载钩子对 `import(文�
 |---|---|---|---|
 | N1 | P1 规格 §4.1 说 `in` 的目标“必须为 g 类型”；规格 §4 要求 box 支持 `in` | `in` 与 `addto` 的目标可以是任何 `ContainerShape`（`g`、box）。对 Phase 1 已有的输入行为不变；`in <box>` 是新输入 | 规格开头“不修改它们的行为”指已有行为 |
 | N2 | `dir` 的标记与名字之间几个空格：正文说两个，示例 `[FILE] demo.svg` 是一个 | 按示例：名字从第 7 列对齐（决策 X27，偏差 T2） | 示例是逐字节的输出 |
-| N3 | `dir` 对符号链接等特殊项 | 跟随一层；目标是目录 → `[DIR]`，其余（含断链、FIFO、socket）→ `[FILE]`；不递归 | 决策 X12 |
+| N3 | `dir` 对符号链接等特殊项 | 按 `stat` 得到的最终目标分类（链接的链会一直走到底）：最终目标是目录 → `[DIR]`，其余（含断链、循环链接）→ `[FILE]`；不列出目标里的内容；FIFO、socket 等 → `[FILE]`；不递归（S18 修订：原写“跟随一层”） | 决策 X12 |
 | N4 | §6.1B 树的对齐与 V1 规则差一位 | 按 V1：3/2/8 个空格；与规格 §5 的示例一致（偏差 T3） | V1 是 Phase 1 已定的统一规则 |
 | N5 | `create box … in` 的回显 | `box#n3 created (g#n3 + rect#n3-rect + text#n3-label) in box#n1` | 决策 X4 |
 | N6 | 没有文档时 `stats` | `no document` 错误 | 决策 X11 |
@@ -2392,7 +2393,7 @@ export class NodeDirectoryLister implements DirectoryLister {
 | 当前工作目录从哪里来 | `WorkingDirectory.current()`，真实实现是 `process.cwd()`；`read`、`save` 不改变它（它们只读写文件路径） |
 | 排序 | 先目录后文件；组内按 UTF-16 码元升序（`localeCompare` 依赖 ICU 与 locale，换机器可能变，会破坏逐字节一致） |
 | 隐藏项 | 列出（`readdirSync` 本来就不返回 `.`、`..`） |
-| 符号链接等特殊项 | 跟随一层，指向目录 → `[DIR]`，其余 → `[FILE]`（N3） |
+| 符号链接等特殊项 | 按 `stat` 得到的最终目标分类（链接的链会一直走到底）：最终目标是目录 → `[DIR]`，其余（含断链、循环链接）→ `[FILE]`；不列出目标里的内容（N3；S18 修订：原写“跟随一层”） |
 | 空目录 | `(empty directory)` |
 | 读取失败 | `error: cannot read directory: <path>`，`<path>` 是当前目录的绝对路径（N7）；`Editor` 照常返回，下一行继续 |
 | 多余的参数 | `usage: dir` |
@@ -3055,6 +3056,8 @@ M	plugins.config.json
 | G46 | S13 草稿（C′ 的检查，对照 G42） | 配置里的 `modified-star` 与 G42 的 box 一样没有测试管着：它不贡献命令，契约测试是空检查，`cli-1-1b` 不含它，`cli-2` 不含 `tree` | C′ 加会话 `cli-2-star`（4.7 #6）：配置漏加 `modified-star` 时它的 `--config` 运行少 `*`，基线报 2 处差异；会话与配置改动在同一个提交里。box 在配置里仍只靠 G42 的检查与 S14 的一致性测试（这个会话不带 box 时 `create box` 也会失败，所以实际上同时管住了 box）（S13 修订）。**S14**：配置里的 `modified-star` 另由 `tests/system/assemblyConsistency.test.ts` 管（删掉它，序列测试与 `PluginLoader` 测试失败，基线 `cli-2-star` 与 `cli-1` 第二组也报差异）；配置里的顺序（G47）只有这个测试管（S14 修订） |
 | G47 | S13 审查（配置里 `modified-star` 挪到 box 之前） | 配置里插件的**顺序**在 S14 之前没有任何检查：`cli-2-star` 里 `g#n1` 本来就不带 `*`，看不出两个标签的先后；`cli-1` 的第二组（4.7 #3）没有 box，同样看不出；`starInEditor` 走组合根、不读配置。把 `plugins.config.json` 里 star 与 box 对调，`npm test` 与 `npm run baseline` 全绿。组合根里对调只有 `starInEditor` 的 row 20 能发现 | `tests/system/assemblyConsistency.test.ts` 按**序列**比较配置启用项的 `module` 与 `optional()` 的 `label()`（`toEqual` 数组，不是集合）；S14 自查注入“配置里 star 与 box 对调”“组合根里 star 与 box 对调”，这个测试都失败（S14 修订） |
 | G48 | S9 审查（`tests/unit/cli/main.test.ts` 的 SIGINT 用例偶发退出码 130） | 用例以 `node <tsx/cli> main.ts` 启动，tsx 的 CLI 是父子两个进程：父进程收到 SIGINT 后只等子进程回报 30 ms（`tsx/dist/cli.mjs` 的 `waitForSignalFromChild`），等不到就转发 SIGINT、再等 30 ms，仍等不到就 `SIGKILL` 子进程并以 $128+2=130$ 退出。机器忙时子进程来不及回报。发 SIGINT 前把子进程 `SIGSTOP` 200 ms 可以稳定复现 | 只这一条用例改成 `node --import <tsx 的 loader> main.ts`（loader 是 `tsx` 包 `"."` 导出的 `dist/loader.mjs`），单进程、没有转发；测试名与三条断言不变，其余用例仍用 `tsx/cli`。S14 自查：每核 4 个 `yes > /dev/null` 加压，并发跑这一条 24 次全部通过；`ps` 确认只有一个 node 进程（S14 修订） |
+| G49 | S17 交付物审计（`CreateCommand.checkCreated`） | `create` 的后置条件只比较实际 id 与声明 id 的个数和包含关系，漏了“实际 id 不能重复”：提供者声明 `[n1, n1-a]`、实际造出 `g#n1` 里套 `dot#n1` 时检查照样通过，`create pair n1 1 2` 回显成功，文档里出现两个 `n1`，README §3 承诺的“后置条件不成立 → `shape provider failed`”不成立。根源在 2.1.2 把后置条件写成“id **集合**恰好等于”，集合看不出重复 | `checkCreated` 的条件加 `new Set(created).size === created.length`，报错沿用 `created ids … differ from claimed ids …`；`plugins/builtin-commands/tests/CreateCommand.test.ts` 的 `it.each` 加一项 “create builds a claimed id twice (as many ids as claimed)”；2.1.2 的后置条件与 3.9 的失败文案总表改写（S18 修订） |
+| G50 | S17 交付物审计（规格 §3.4 最后一条的测试） | “模拟处理器在部分修改后抛错，undo/redo 历史均保持在命令执行前的状态”：已有测试（内核 `AttributeDispatcher.test.ts` 与 `SetCommand.test.ts` 的 “… after a partial change”）失败前 redo 栈都是空的，失败时把 redo 栈清空的实现也能通过 | `SetCommand.test.ts` 的 describe “set through a failing handler: state unchanged, no whitelist fallback” 加一个以 `failures` 参数化的用例（2 个）：先 `set`、`set`、`undo` 留下一个待 redo 的单元，失败后文档、两个栈的深度与 io 锁都不变，`redo` 仍重做那一个单元，再 `undo` 两次回到起点（S18） |
 
 ---
 

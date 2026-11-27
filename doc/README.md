@@ -20,7 +20,7 @@
 | X1–X30 | 决策 | [设计 §5.1–5.2](design-phase2.md#5-决定约定补充与已知偏差) |
 | L1–L10、P5a、P5b、P10 | Phase 2 新增的分层规则与范式规则的例外 / 新规则 | [设计 §1.2](design-phase2.md#12-依赖规则与强制手段)；本文第 5 节 |
 | N1–N19、T1–T4 | 约定补充（对规格的解释）、已知偏差（对规格的偏离） | [设计 §5.5](design-phase2.md#55-约定补充-n1n19对规格的解释n17-为-s8-修订n18n19-为-s9-修订)、[§5.6](design-phase2.md#56-已知偏差-t1t4对规格的偏离)；本文第 9 节 |
-| G1–G48 | 设计与实现过程中发现、已补进设计的缺口 | [设计 §8.5](design-phase2.md#85-缺口回填记录) |
+| G1–G50 | 设计与实现过程中发现、已补进设计的缺口 | [设计 §8.5](design-phase2.md#85-缺口回填记录) |
 | ADR-1–ADR-6 | 架构决策记录 | 本文[第 8 节](#8-adr)（定稿）；草稿在[设计第 6 部分](design-phase2.md#6-adr-草稿) |
 | TR-001… | 规格追溯表的行 | [设计第 7 部分](design-phase2.md#7-规格追溯表) |
 | VA1–VA22 | VSCode 扩展的决定 | [`vscode-svg/README.md`](../vscode-svg/README.md#决定va-编号供-s3-引用) |
@@ -199,7 +199,7 @@ npm run baseline
 
 | 接口名 | 职责 | 调用位置（文件 + 函数） | 已有实现 | 禁用时的行为 | 违约时的报错 |
 |---|---|---|---|---|---|
-| `ShapeProvider`（`packages/kernel/src/model/ShapeProvider.ts`；`PluginContext.registerShape`；`contributes.shapes`） | 一种图形类型：`create` 的参数（`params`）与构造（`create`）、占用的全部 id（`claimedIds`）、创建回显的附加文字（`creationDetail`）、读回时对元素的认领分数（`matchScore`）与读取（`read`） | **内置命令插件** `CreateCommand.ts` 的 `prepare`：`context.shapes().lookup(type)`（内核 `ShapeRegistry.lookup`）之后依次调 `claimedIds`（经私有方法 `claimedIds`）、`create`、`creationDetail`；`usageOf` 读 `params`。**内置命令插件** `GroupCommand.ts` 的 `newContainer`：`lookup("g").create(…)`。**内核** `io/ImportSession.ts` 的 `dispatch` → `readWithNext` → `choose` → `scoreOf`（`matchScore`）与 `readWith`（`read`），由 `io/SvgImporter.ts` 的 `read` 驱动，后者由**内置命令插件** `ReadCommand.ts` 的 `execute` 调用。**内核** `model/ShapeRegistry.ts` 的 `build`（`ShapeKit`，组合图形在自己的 `create` 中按类型名造部件）→ `create` | 内置插件 `@svgframe/plugin-builtin-shapes`：`rect`、`circle`、`ellipse`、`line`、`text`、`g`，六个图形类各由 `StaticShapeProvider` 适配（`BuiltinShapesPlugin.activate`）；可选插件 `@svgframe/plugin-shape-box`：`box`（`BoxPlugin.activate` 注册 `BoxProvider`，`rect`、`text` 未注册时拒绝激活；`claimedIds` 为 `<id>`、`<id>-rect`、`<id>-label`，`create` 经 `ShapeKit` 按类型名造出 `rect` 与 `text`，`creationDetail` 为 ` (g#n1 + rect#n1-rect + text#n1-label)`；`matchScore` 对 `<g data-kind="box">` 为 2，胜过 `g` 的 1；没有 id 或部件不全时警告并降级为 `g`，涉及三个 id 的重复拒绝整个读入） | `create <type> …` → `unknown shape type: <type> (is the plugin loaded?)`；读回时没有提供者认领（分数全为 0）的元素连同子树被跳过，警告 `skipped unsupported element <name>`（F6）；`<g data-kind="box">` 由 `g` 认领，读成普通 `g`，`data-kind` 作为透传属性原样写回 | `claimedIds` / `create` / `creationDetail` 抛出非 `EditorError` 或后置条件不成立 → `shape provider failed: <type> (<reason>)`，文档不变；`matchScore` / `read` 抛错或返回非法值 → `cannot parse file: <path> (shape provider <type> failed: <reason>)`，原文档不变；最高分并列 → `cannot parse file: <path> (ambiguous shape providers for <tag>: <a>, <b>)`；注册参数形状不对 → `plugin failed to activate: <name> (<reason>)`；重名 → `duplicate registration: shapes/<name>` |
+| `ShapeProvider`（`packages/kernel/src/model/ShapeProvider.ts`；`PluginContext.registerShape`；`contributes.shapes`） | 一种图形类型：`create` 的参数（`params`）与构造（`create`）、占用的全部 id（`claimedIds`）、创建回显的附加文字（`creationDetail`）、读回时对元素的认领分数（`matchScore`）与读取（`read`） | **内置命令插件** `CreateCommand.ts` 的 `prepare`：`context.shapes().lookup(type)`（内核 `ShapeRegistry.lookup`）之后依次调 `claimedIds`（经私有方法 `claimedIds`）、`create`、`creationDetail`；`usageOf` 读 `params`。**内置命令插件** `GroupCommand.ts` 的 `newContainer`：`lookup("g").create(…)`。**内核** `io/ImportSession.ts` 的 `dispatch` → `readWithNext` → `choose` → `scoreOf`（`matchScore`）与 `readWith`（`read`），由 `io/SvgImporter.ts` 的 `read` 驱动，后者由**内置命令插件** `ReadCommand.ts` 的 `execute` 调用。**内核** `model/ShapeRegistry.ts` 的 `build`（`ShapeKit`，组合图形在自己的 `create` 中按类型名造部件）→ `create` | 内置插件 `@svgframe/plugin-builtin-shapes`：`rect`、`circle`、`ellipse`、`line`、`text`、`g`，六个图形类各由 `StaticShapeProvider` 适配（`BuiltinShapesPlugin.activate`）；可选插件 `@svgframe/plugin-shape-box`：`box`（`BoxPlugin.activate` 注册 `BoxProvider`，`rect`、`text` 未注册时拒绝激活；`claimedIds` 为 `<id>`、`<id>-rect`、`<id>-label`，`create` 经 `ShapeKit` 按类型名造出 `rect` 与 `text`，`creationDetail` 为 ` (g#n1 + rect#n1-rect + text#n1-label)`；`matchScore` 对 `<g data-kind="box">` 为 2，胜过 `g` 的 1；没有 id 或部件不全时警告并降级为 `g`，涉及三个 id 的重复拒绝整个读入） | `create <type> …` → `unknown shape type: <type> (is the plugin loaded?)`；读回时没有提供者认领（分数全为 0）的元素连同子树被跳过，警告 `skipped unsupported element <name>`（F6）；`<g data-kind="box">` 由 `g` 认领，读成普通 `g`，`data-kind` 作为透传属性原样写回 | `claimedIds` / `create` / `creationDetail` 抛出非 `EditorError` 或后置条件不成立（包括实际 id 有重复）→ `shape provider failed: <type> (<reason>)`，文档不变；`read` 抛出 `EditorError`（插件自己的领域错误，例如 `reader.reject(<detail>)` 得到的 `cannot parse file: <path> (<detail>)`）→ 原样报出，读入失败、原文档不变；`matchScore` 抛错、`read` 抛出其他异常，或二者返回非法值 → `cannot parse file: <path> (shape provider <type> failed: <reason>)`，原文档不变；最高分并列 → `cannot parse file: <path> (ambiguous shape providers for <tag>: <a>, <b>)`；注册参数形状不对 → `plugin failed to activate: <name> (<reason>)`；重名 → `duplicate registration: shapes/<name>` |
 | `Command`：注册对象是命令类的静态侧 `CommandType`（`packages/kernel/src/commands/CommandType.ts`），或实现它的实例；它造出的命令对象是 `Command`（`commands/Command.ts`）；`PluginContext.registerCommand`；`contributes.commands` | 一条命令：名字、用法、一句说明、类别、是否需要文档；`parse` 只检查语法并造出命令对象，`execute` 执行；对历史的影响由子类决定：`EditCommand` 入 undo 栈，`DocumentCommand` 清栈并加 io 锁，`QueryCommand`、`HistoryCommand` 什么也不做 | **内核** `commands/CommandParser.ts` 的 `resolve`：`CommandRegistry.lookup` 按名查找，以 `usage` 构造 `ArgList`；**内核** `app/Editor.ts` 的 `run`：检查 `requiresDocument` → `CommandLine.parse()`（即 `type.parse(args)`）→ `command.execute(session)` → `command.recordIn(session.history())`；**内置命令插件** `HelpCommand.ts` 的 `execute`：经 `context.commands().commandTypes()` 读 `usage`、`summary`、`category` | 内置插件 `@svgframe/plugin-builtin-commands`：Phase 1 的 19 条命令（`BuiltinCommandsPlugin.activate`）；可选插件 `@svgframe/plugin-command-stats`：`stats`（`StatsCommand` 是 `QueryCommand` 的子类，需要文档，在 `help` 的 `Display:` 组末尾）；可选插件 `@svgframe/plugin-command-dir`：`dir`（`DirPlugin.activate` 注册一个 `DirCommandType` **实例**，实例持有两个目录访问接口，`parse` 把它们交给每个 `DirCommand`；`requiresDocument = false`；`DirCommand` 是 `QueryCommand` 的子类；在 `Display:` 组 `stats` 之后） | 输入这条命令 → `unknown command: <name>`；`help` 不列出它 | 注册参数形状不对（如名字含大写或空白、类别不是四个常量之一）→ `plugin failed to activate: <name> (<reason>)`；重名 → `duplicate registration: commands/<name>`；`execute` 抛出非 `EditorError` 是程序错误：`Editor.executeLine` 不捕获，进程以退出码 1 结束（stderr 由装配处 `src/cli/Repl.ts` 写出，[设计 §3.9](design-phase2.md#39-违约处理总则)） |
 | `TreeDecorator`（`packages/kernel/src/view/TreeDecorator.ts`；`PluginContext.registerTreeDecorator`；`contributes.decorators`） | 结构树每一行行尾的标签（`tagFor`） | **内核** `view/TreeRenderer.ts` 的 `alignAndDecorate` → `decorate` → `tagOf`（`tagFor`），由 `renderDocument` / `renderSubtree` 对每一行调用；调用方是**内置命令插件** `TreeCommand.ts` 的 `execute`（`new TreeRenderer(context.treeDecorators())`） | 内置插件不注册树标签；可选插件 `@svgframe/plugin-shape-box`：`box-type-label`（`BoxTypeLabel`，只对 box 的行答 `(box)`，即 `g#n1 (box)`，对根行、普通 `g` 与叶子答 `null`）；可选插件 `@svgframe/plugin-tree-star`：`modified-star`（`TreeStarPlugin.activate` 新建一个 `ModifiedStar`，同一个对象既注册为标签又订阅为监听器；内容与最近一次 `init` / `read` / `save` 不同的行答 `*`：根行比较整份序列化，图形行比较自身的指纹，不向祖先传播；还没有保存点时一律答 `null`；box 先装，所以同一行是 `g#n1 (box) *`） | 没有标签，或全部答 `null` / `""`：`tree` 的输出与 `final` 逐字节相同 | `tagFor` 抛错，或答案不是字符串 / `null`、含换行、首尾有空白 → `tree decorator failed: <name> (<reason>)`，这次 `tree` 不输出其他行，文档与历史不受影响；注册参数形状不对 → `plugin failed to activate: <name> (<reason>)`；重名 → `duplicate registration: decorators/<name>` |
 | `AttributeHandler`（`packages/kernel/src/model/AttributeHandler.ts`；`PluginContext.registerAttributeHandler`；`contributes.attributes`） | 某个属性在某种图形上的语义：`handles` 判断是否负责（只拿到只读视图），`apply` 经 `AttributeTarget` 只改属性，返回带两条文案的 `AttributeChange`；`priority` 裁决冲突 | **内置命令插件** `SetCommand.ts` 的 `prepare` 调 `context.attributeEdits().plan(…)`（`CommandContext.attributeEdits()`，由内核 `EditorSession` 实现）→ **内核** `model/AttributeDispatcher.ts` 的 `plan` → `asks`（`handles`）→ `tryOut`（`apply`，再取 `AttributeChange.appliedMessage`、`undoneMessage`，然后检查结构） | 内置插件不注册属性处理器；可选插件 `@svgframe/plugin-shape-box`：`box-attributes`（`BoxAttributeHandler`，只负责 box 的 `fill` 与 `label`：`fill` 改 `<id>-rect`，`label` 改 `<id>-label` 的文本，各是一个 undo 单元；回显由 `BoxFillChange`、`BoxLabelChange` 给出） | `plan` 答 `null`，`set` 走 Phase 1 的属性白名单（不在白名单 → `unknown attribute: <name>`） | `handles` / `apply` 抛出非 `EditorError` 或返回值违约 → `attribute handler failed: <name> (<reason>)`，已回滚，历史不变；最高 `priority` 并列 → `ambiguous attribute handlers for <attr> on <id>: <a>, <b>`；值不合法时处理器自己的 `EditorError` 原样报出；绕过接口改了子树结构（在 `apply` 或文案方法里）是程序错误：普通 `Error` `attribute handler <name> changed the structure of <label>`，不包装、不还原；注册参数形状不对（如 `priority` 不是整数）→ `plugin failed to activate: <name> (<reason>)`；重名 → `duplicate registration: attributes/<name>` |
@@ -616,7 +616,7 @@ view -> model
 
 ### 7.2 `dir`（适配器模式）
 
-- **提供什么**：命令 `dir`，列出 CLI 进程当前工作目录的直接子项：目录在前、文件在后，组内按 UTF-16 码元升序；`[DIR]  name` / `[FILE] name`（名字都从第 7 列开始，T2）；包含隐藏项，不含 `.`、`..`；符号链接跟随一层，指向目录的算 `[DIR]`，其余（含断链）算 `[FILE]`（N3）；空目录 `(empty directory)`；读取失败 `error: cannot read directory: <当前目录的绝对路径>`（N7），之后照常可用。不需要文档；不改变文档、dirty 状态、工作目录与 undo / redo 历史。
+- **提供什么**：命令 `dir`，列出 CLI 进程当前工作目录的直接子项：目录在前、文件在后，组内按 UTF-16 码元升序；`[DIR]  name` / `[FILE] name`（名字都从第 7 列开始，T2）；包含隐藏项，不含 `.`、`..`；符号链接按 `stat` 得到的最终目标分类（链接的链会一直走到底）：最终目标是目录 → `[DIR]`，其余（含断链、循环链接）→ `[FILE]`；不列出目标里的内容（N3）；空目录 `(empty directory)`；读取失败 `error: cannot read directory: <当前目录的绝对路径>`（N7），之后照常可用。不需要文档；不改变文档、dirty 状态、工作目录与 undo / redo 历史。
 - **接入**：`2977cb5`；会话 `cli-2` 在两种装配下的输出都等于 `expected/cli-2/`。
 - **测试**：`plugins/command-dir/tests/` 的 `DirCommand.test.ts`（14，替身 + 每个方法都抛错的 `UntouchableContext`）、`NodeDirectoryLister.test.ts`（6，真实临时目录）、`DirOnRealFileSystem.test.ts`（4，命令 + 真实适配器）、`DirInEditor.test.ts`（14，经最小编辑器验证状态不变）、`DirPlugin.test.ts`（4），共 42 个。
 
@@ -627,7 +627,7 @@ view -> model
 | `DirectoryLister` | Target（目标接口） | 列出一个目录的直接子项：`list(path): DirectoryEntry[]`，包含隐藏项，不含 `.`、`..`，顺序不限；读不了就抛异常 | `src/DirectoryLister.ts` |
 | `DirectoryEntry` | Target 的数据 | 值对象：`name()`、`isDirectory()`；符号链接算不算目录，由 Adapter 构造它时决定 | `src/DirectoryEntry.ts` |
 | `WorkingDirectory` | Target（第二个目标接口） | 当前工作目录的绝对路径：`current()` | `src/WorkingDirectory.ts` |
-| `NodeDirectoryLister` | Adapter | 把 `readdirSync(path, { withFileTypes: true })` 返回的 `Dirent` 转成 `DirectoryEntry`；符号链接用 `statSync` 跟随一层，指向目录的算目录，其余（包括断链）算文件（N3） | `src/NodeDirectoryLister.ts` |
+| `NodeDirectoryLister` | Adapter | 把 `readdirSync(path, { withFileTypes: true })` 返回的 `Dirent` 转成 `DirectoryEntry`；符号链接用 `statSync` 按 `stat` 得到的最终目标分类（链接的链会一直走到底）：最终目标是目录 → 目录，其余（含断链、循环链接）→ 文件；不列出目标里的内容（N3） | `src/NodeDirectoryLister.ts` |
 | `NodeWorkingDirectory` | Adapter | 返回 `process.cwd()` | `src/NodeWorkingDirectory.ts` |
 | `node:fs` 的 `readdirSync`、`Dirent`、`statSync`，以及 `process.cwd()` | Adaptee（被适配者） | Node 自带的接口，形状与 Target 不同：`Dirent` 把符号链接单独区分、要另外 `stat` 才知道目标是什么；出错时抛 Node 自己的 `ENOENT`、`ENOTDIR` 等 | Node 内置 |
 | `DirCommand` | Client | 只依赖两个 Target：取当前目录、列出子项，排序、格式化，空目录输出 `(empty directory)`，读取失败抛 `EditorError("cannot read directory: <path>")`；不 import `node:*`，不调用 `CommandContext` 的任何方法 | `src/DirCommand.ts` |
@@ -693,10 +693,10 @@ git diff f999fd1 077bd88 -- plugins/shape-box               # 无输出：两次
 
 - **状态**：已实施（S6 读回分派；box 在 S12）。
 - **背景**：box 的元素也是 `<g>`，按标签名分派分不出来；没装 box 时要自然降级为 `g`，而内核里不能出现 `data-kind`；装了 box 但元素不完整怎么办；规格要求重复 id 拒绝整个读入，不能靠降级消除。
-- **决定**：每个提供者给 `matchScore`：0 = 不认识，1 = 标签名，2 = 标签名 + 区分属性；最高分者读，最高分并列拒绝整个读入，全为 0 时跳过（F6）。box 的 `read` 先对自己的三个 id 调 `reader.requireUnique`（**无论随后是否降级都声明**），读入结束时若其中任何一个在被导入的元素中出现不止一次，拒绝整个读入。接着只看 XML 元素检查结构：不完整（缺显式 id、缺 `<id>-rect` 或 `<id>-label`、部件标签不符）→ 警告 `box <id> read as plain g: <原因>` 并交给下一个提供者（`readWithNext`，即 `g`）；都通过才构造 `BoxShape`。不完整时选择**警告并降级**，不选拒绝。
+- **决定**：每个提供者给 `matchScore`：0 = 不认识，1 = 标签名，2 = 标签名 + 区分属性；最高分者读，最高分并列拒绝整个读入，全为 0 时跳过（F6）。box 的 `read` 先对自己的三个 id 调 `reader.requireUnique`（**无论随后是否降级都声明**），读入结束时若其中任何一个在被导入的元素中出现不止一次，拒绝整个读入。接着只看 XML 元素检查结构：不完整（缺显式 id、缺 `<id>-rect` 或 `<id>-label`、部件标签不符）→ 警告 `box <id> read as plain g: <原因>` 并交给下一个提供者（`readWithNext`，即 `g`）；都通过才构造 `BoxShape`。不完整时选择**警告并降级**，不选拒绝。部件 id 固定为 `<id>-rect`、`<id>-label`（P1 规格 §4.4）；`create` 前由 `claimedIds` 对三个 id 一次查重，冲突则整条命令失败、不留下任何东西；读回时按派生 id 识别部件（决策 X7）。
 - **考虑过的其他做法**：内核先查 `data-kind` 再查标签名（内核出现插件知识，违反规格 §4 的“内核改动为 0”）；不完整时拒绝整个读入（装了插件反而打不开原来能打开的文件）。
 - **后果**：未装插件时降级是分数规则的自然结果，内核零特例；降级后的 `g` 带着 `data-kind="box"` 透传属性，保存再读结果相同；预检查只能基于 XML 元素，必须在任何副作用之前完成；两个插件同时认领一类元素时，用户得到明确的读入错误而不是随机结果。重复 id 的拒绝只针对涉及 box 的 id，其余仍按 Phase 1 F14 改名（偏差 T1）。首次读写的一个不幂等情形见[已知局限 10.1](#101-g43box-首次读写不幂等)。
-- **怎样验证**：`plugins/shape-box/tests/BoxReadBack.test.ts`（20 个：9 种不完整、重复 id 拒绝与照常读入、“without box the same file is read as plain g and written back byte for byte, data-kind included”）；`packages/kernel/tests/io/SvgImporter.test.ts`（“the highest score wins: the composite (2) over the tag-name match (1), whatever the registration order”、“a tie at the top score rejects the whole read, naming the providers in registration order”、“degradation does not exempt: the declarations made before readWithNext still hold”）；`tests/system/boxInEditor.test.ts`（“without the plugin (--bare) a box file is read as plain g and written back unchanged; with box it is a box again”）。
+- **怎样验证**：`plugins/shape-box/tests/BoxReadBack.test.ts`（20 个：9 种不完整、重复 id 拒绝与照常读入、“without box the same file is read as plain g and written back byte for byte, data-kind included”）；`packages/kernel/tests/io/SvgImporter.test.ts`（“the highest score wins: the composite (2) over the tag-name match (1), whatever the registration order”、“a tie at the top score rejects the whole read, naming the providers in registration order”、“degradation does not exempt: the declarations made before readWithNext still hold”）；`tests/system/boxInEditor.test.ts`（“without the plugin (--bare) a box file is read as plain g and written back unchanged; with box it is a box again”；`create` 时的 id 冲突：“a taken id (%s) refuses the whole box: nothing is left behind”，`it.each` 的三项，`%s` 取 `the frame id`、`the title id`、`the box id`，期望 `error: id already exists: <id>`）。
 
 ### ADR-3 `modified-star` 的 dirty 语义、祖先传播与拼接顺序
 
@@ -755,7 +755,7 @@ git diff f999fd1 077bd88 -- plugins/shape-box               # 无输出：两次
 |---|---|
 | N1 | `in` 与 `addto` 的目标可以是任何容器（`g`、box） |
 | N2 | `dir` 的名字从第 7 列对齐：`[DIR]` 后两个空格、`[FILE]` 后一个（按示例，T2） |
-| N3 | `dir` 对符号链接跟随一层：目标是目录 → `[DIR]`，其余（含断链）→ `[FILE]`；不递归 |
+| N3 | `dir` 对符号链接按 `stat` 得到的最终目标分类（链接的链会一直走到底）：最终目标是目录 → `[DIR]`，其余（含断链、循环链接）→ `[FILE]`；不列出目标里的内容；不递归 |
 | N4 | §6.1B 树的对齐按 V1：3/2/8 个空格（T3） |
 | N5 | `create box … in` 的回显：`box#n3 created (g#n3 + rect#n3-rect + text#n3-label) in box#n1` |
 | N6 | 没有文档时 `stats` 报 `no document` |
@@ -779,10 +779,12 @@ git diff f999fd1 077bd88 -- plugins/shape-box               # 无输出：两次
 
 | # | 偏离（摘要） | 使用者能看到的影响 |
 |---|---|---|
-| T1 | 只有涉及 box 的重复 id 才拒绝整个读入；其余重复 id 沿用 Phase 1 F14（保留第一个，后续改名并警告） | 不含 box 的文件里有重复 id 时照常读入，并有 `duplicate id …, reassigned to …` 警告 |
+| T1 | 只有涉及 box 的重复 id 才拒绝整个读入；其余重复 id 沿用 Phase 1 F14（保留第一个，后续改名并警告）。理由见表后 | 不含 box 的文件里有重复 id 时照常读入，并有 `duplicate id …, reassigned to …` 警告 |
 | T2 | `dir` 的 `[FILE]` 后只有一个空格（与规格示例逐字节一致，与正文“两个空格”不同） | 名字都从第 7 列开始 |
 | T3 | Phase 1 §6.1B 树的三处摘要前是 3/2/8 个空格（规格原文是 2/1/7） | 与规格原文差一列；与规格 §5 的示例一致 |
 | T4 | 加载失败的 `<reason>` 取 Node 原始消息的第一行，其中可能有绝对路径 | 同一插件在不同机器上的失败文案可能不同 |
+
+**T1 的理由**（决策 X28）：规格“重复 id 违反全局唯一性，不能仅靠降级消除，必须拒绝整个读入”这句话在 §4 `box` 的“边界”一节里，与“明确拒绝整个读入，或警告并降级为普通分组”在同一条、紧接其后，说的是不能靠把 box 降级成普通 `g` 来消除重复 id。如果改成任何重复 id 都拒绝，就会改变 Phase 1 的读入行为（F14：保留第一个、后续改名并警告），违反规格 §1“行为与输出保持不变”和基线兼容。
 
 ### 9.3 Phase 1 的 K1–K6 在 Phase 2 的去向
 
@@ -833,6 +835,18 @@ git diff f999fd1 077bd88 -- plugins/shape-box               # 无输出：两次
 
 T1–T4 见 [9.2](#92-已知偏差-t1t4对规格的偏离)。
 
+### 10.7 不合 L7 形状的包报 `plugin not found`
+
+- **现象**：一个 Node 能正常 `import` 的包，只要 `exports` 没有导出 `./package.json`，或者 `exports["."]` 不是字符串（带条件的对象、数组），或者 `exports` 本身是一个字符串，加载器都报 `error: plugin not found: <module>`，而不是更具体的原因。这是 L7 的包形状约束（`src/loader/ModuleLocator.ts` 的 `locate`；`tests/unit/host/ModuleLocator.test.ts` 把这几种情形钉住了）。
+- **为什么不改**：加载器必须先读到包的 `package.json`（经 `exports["./package.json"]`）才能拿到 `contributes` 与清单比对；入口也由加载器自己从 `exports["."]` 取，因为 `createRequire().resolve` 走 CJS 条件，只写了 `import` 条件的包会被误判（[4.4](#44-模块名先解析后导入)）。这两步做不到时，在阶段 1 统一报“找不到”。
+- **怎样绕开**：插件包按 [4.3](#43-配置文件格式与严格校验) 末尾的形状写 `exports`：恰为 `{ ".": "<入口>", "./package.json": "./package.json" }`。
+
+### 10.8 文件名含换行时 `dir` 的一项跨两行
+
+- **现象**：当前目录里某个名字含换行符（LF）时，`dir` 原样输出名字，这一项会跨成两行，第二行没有 `[DIR]` / `[FILE]` 标记。
+- **为什么不改**：规格 §2.2 没有规定名字的转义方式，自定一种转义会让输出与名字不再逐字节对应；常见文件系统里这种名字极少。
+- **怎样绕开**：不要在要用 `dir` 查看的目录里放含换行的文件名；需要辨认时用 `ls -b` 等能转义的工具。
+
 ---
 
 ## 11 第一部分：VSCode 扩展（A.3）
@@ -859,6 +873,8 @@ T1–T4 见 [9.2](#92-已知偏差-t1t4对规格的偏离)。
 
 *图 11-2（A.2）：原生 Outline 显示 `svg` › `g#flow` › `rect#start` 等层级，无 id 的元素显示 `text`；选中 `rect#start` 后定位到第 3 行源码。*
 
+大纲最多展示 256 层（VA22，避免在 VSCode 里栈溢出），更深的节点不显示：集成测试 `vscode-svg/tests/integration/suite/outline.ts` 的 “2 000 nesting levels: the outline stops at 256 instead of failing inside VSCode (VA22)”。
+
 **异常输入的证据**：[`a2-incomplete-xml.png`](../vscode-svg/doc/images/a2-incomplete-xml.png)（第 4 行删去一个引号后，大纲保留出错位置之前的部分，没有错误弹窗，补回引号后恢复）；测试 `vscode-svg/tests/unit/SvgOutlineParser.test.ts` 的 describe “spec A.2 — incomplete XML: the part before the error (VA16)”、“never throws (VA22)”，`tests/integration/suite/outline.ts` 的 “incomplete XML: the query does not fail and keeps the part before the error; repaired, the outline is back (VA16)”。CI 的 `vscode-svg` job 跑类型检查、单元测试、构建与 VSCode 1.146.0 下的集成测试。
 
 ---
@@ -880,6 +896,7 @@ T1–T4 见 [9.2](#92-已知偏差-t1t4对规格的偏离)。
 - **复现**：`npm run metrics -- ed741da712b76fc8d7e458ec15de8d7dbfd396da`，然后 `git diff --exit-code docs/metrics` 应无输出。
 - `Files in final` 一列：`final` 的 82 个文件中，内置插件一栏是 27（`Group.ts` 的 Composite 行为搬进了内核的 `ContainerShape`，按重命名相似度归到内核），“deleted since final” 的 1 个是 `ShapeFactory.ts`（改名为 `ShapeRegistry.ts` 后改动太大，按规则记作删除）。
 - **VSCode 扩展单独列出**（`metrics.md` 第 5 节：`vscode-svg/src/` 25 个文件、M = 203），不计入 CLI 的任何合计（规格 §7“VSCode 扩展单独列出、不混入 CLI 重构增量”）。
+- **职责列**：`metrics.md` 第 3、5 节的职责列取自源码的类注释（[设计 §5.3](design-phase2.md#53-决策-x18-详述圈复杂度的口径)），其中出现的 “README §n” 都指 Phase 1 方案（见本文开头）；`vscode-svg/src/extension.ts` 是函数模块、没有类注释，所以职责列是 “—”，它的职责见 [`vscode-svg/README.md` 的“结构”](../vscode-svg/README.md#结构)。两处都不改脚本或源码（否则 R 又要变）。
 
 ---
 
@@ -1140,6 +1157,13 @@ npm run plugin-diff -- 1ac5f82 plugins/tree-star --mode A
 | `1ac5f82` | `modified-star` | A | `plugin-diff: PASS` |
 
 另外 `git diff f999fd1 077bd88 -- plugins/shape-box` 无输出（两次接入的插件目录相同）。
+
+**锁文件逐项说明**（规格 §6“两种方式都允许必要的测试、文档、package.json 和锁文件变化，但须逐项说明”所要求的说明）：五个接入提交中，新插件目录以外的改动只有运行代码里的那一个装配文件（方式 A 是 `src/assembly/CompositionRoot.ts`，方式 B 是 `plugins.config.json`）与 `M package-lock.json`；新插件目录以外没有任何测试或文档改动（插件自己的测试在新插件目录里），也没有改任何 `package.json`。锁文件的改动只是新增的两段：`node_modules/@svgframe/<包>` 的软链（`"resolved": "plugins/<目录>"`、`"link": true`），以及 `plugins/<目录>` 的包条目（`name`、`version`，`dependencies` 只有 `@svgframe/kernel`）；没有删除或改动的行，没有任何第三方依赖变化。这是新 workspace 包经 `npm install` 自动生成的（4.1）。复核命令（`C` 取上表五个提交）：
+
+```bash
+git diff --name-status C^ C -- . ':(exclude)plugins/<新目录>'
+git diff C^ C -- package-lock.json
+```
 
 ### 15.6 两种装配逐字节一致
 
