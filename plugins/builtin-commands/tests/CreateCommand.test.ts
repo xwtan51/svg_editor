@@ -106,6 +106,17 @@ describe("create: contract breaches become `shape provider failed` and change no
     ],
     ["create builds an unclaimed id", { create: (id) => new FakeGroup(id) }, "shape provider failed: pair (created ids n1 differ from claimed ids n1, n1-a)"],
     [
+      "create builds a claimed id twice (as many ids as claimed)",
+      {
+        create: (id, values, kit) => {
+          const pair = new FakeGroup(id, "pair");
+          pair.insertAt(kit.build(FakeDot.typeName, id, values), 0);
+          return pair;
+        },
+      },
+      "shape provider failed: pair (created ids n1, n1 differ from claimed ids n1, n1-a)",
+    ],
+    [
       "create returns an attached shape",
       {
         create: (id) => {
