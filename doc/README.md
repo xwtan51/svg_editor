@@ -87,7 +87,7 @@ npm test
 npm run baseline
 ```
 
-`npm test` 当前是 120 个文件、1831 个测试；`npm run baseline` 的最后一行是 `baseline: 6 sessions, 0 differences (entry src/cli/main.ts; 14 runs)`。
+`npm test` 当前是 120 个文件、1834 个测试；`npm run baseline` 的最后一行是 `baseline: 6 sessions, 0 differences (entry src/cli/main.ts; 14 runs)`。
 
 **工具脚本**：
 
@@ -887,13 +887,13 @@ T1–T4 见 [9.2](#92-已知偏差-t1t4对规格的偏离)。
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | kernel | 90 | 4773 | 2961 | 480 | 792 | 51 | 470 | +322 |
 | host | 21 | 874 | 585 | 77 | 147 | 3 | 20 | +127 |
-| plugins: built-in | 30 | 1488 | 1054 | 160 | 222 | 27 | 175 | +47 |
+| plugins: built-in | 30 | 1488 | 1054 | 160 | 223 | 27 | 175 | +48 |
 | plugins: optional | 21 | 692 | 429 | 66 | 105 | 0 | 0 | +105 |
 | deleted since final | 0 | 0 | 0 | 0 | 0 | 1 | 6 | -6 |
-| **total** | 162 | 7827 | 5029 | 783 | 1266 | 82 | 671 | +595 |
+| **total** | 162 | 7827 | 5029 | 783 | 1267 | 82 | 671 | +596 |
 
-- **R** 是 `ed741da`（`ed741da712b76fc8d7e458ec15de8d7dbfd396da`）：S15 先单独提交了一个测试名与两行测试注释、一段脚本类注释的修正，再在这个提交上生成终版。之后 S15 只改文档，所以 `git diff --stat ed741da <p2> -- packages plugins src tests scripts vscode-svg/src vscode-svg/tests` 为空，**R 的数字就是 `p2` 的数字**（metrics 只统计代码、测试与脚本）。
-- **复现**：`npm run metrics -- ed741da712b76fc8d7e458ec15de8d7dbfd396da`，然后 `git diff --exit-code docs/metrics` 应无输出。
+- **R** 是 `d8fc554`（`d8fc55450b8ed2915179316ce424888327cbfa6e`），交付前修订 S18 的第 2 个提交：S18 修了 `CreateCommand` 的一处检查（G49）并补了测试（G49、G50），在这之后只改文档。所以 `git diff --stat d8fc554 <p2> -- packages plugins src tests scripts vscode-svg/src vscode-svg/tests` 为空，**R 的数字就是 `p2` 的数字**（metrics 只统计代码、测试与脚本）。
+- **复现**：`npm run metrics -- d8fc55450b8ed2915179316ce424888327cbfa6e`，然后 `git diff --exit-code docs/metrics` 应无输出。
 - `Files in final` 一列：`final` 的 82 个文件中，内置插件一栏是 27（`Group.ts` 的 Composite 行为搬进了内核的 `ContainerShape`，按重命名相似度归到内核），“deleted since final” 的 1 个是 `ShapeFactory.ts`（改名为 `ShapeRegistry.ts` 后改动太大，按规则记作删除）。
 - **VSCode 扩展单独列出**（`metrics.md` 第 5 节：`vscode-svg/src/` 25 个文件、M = 203），不计入 CLI 的任何合计（规格 §7“VSCode 扩展单独列出、不混入 CLI 重构增量”）。
 - **职责列**：`metrics.md` 第 3、5 节的职责列取自源码的类注释（[设计 §5.3](design-phase2.md#53-决策-x18-详述圈复杂度的口径)），其中出现的 “README §n” 都指 Phase 1 方案（见本文开头）；`vscode-svg/src/extension.ts` 是函数模块、没有类注释，所以职责列是 “—”，它的职责见 [`vscode-svg/README.md` 的“结构”](../vscode-svg/README.md#结构)。两处都不改脚本或源码（否则 R 又要变）。
@@ -1037,20 +1037,20 @@ p1model --> bshapes : 6 个图形类
 | ③ | 命令插件完成 | `stats`、`dir` 接入；目录访问适配器及独立测试完成 | `9e9f786` | [#25](https://github.com/xwtan51/svg_editor/pull/25) |
 | ④ | `box` 接入 | 两种装配方式各演示一次 | `94da628` | [#26](https://github.com/xwtan51/svg_editor/pull/26) |
 | ⑤ | 标签完成 | `modified-star` 与 `(box)` 并存 | `18af646` | [#27](https://github.com/xwtan51/svg_editor/pull/27) |
-| ⑥ | 收尾 | 迭代报告（本节）、终版 metrics、打 tag `p2` | 本文所在 PR 的最后一个提交 `milestone(6/6): 收尾`，见 tag `p2` | — |
+| ⑥ | 收尾 | 迭代报告（本节）、终版 metrics、打 tag `p2` | `168a37e`（`milestone(6/6): 收尾`）；其后是只改一处检查、补测试与文档的交付前修订 PR [#30](https://github.com/xwtan51/svg_editor/pull/30)（S18） | [#29](https://github.com/xwtan51/svg_editor/pull/29) |
 
 ### 14.3 结构上变了什么
 
 - **按名字分派的两处变成了注册表**：Phase 1 的 `ShapeFactory`、`CommandRegistry` 在构造函数里写死六种图形与 19 条命令（K1、K2）。Phase 2 两个注册表构造时为空，内容全部由插件经 `PluginInstaller` 注册；内核里不出现任何注册名的字面量（L6）。读回也从“按标签名分派”变成“按 `matchScore` 选提供者”。
 - **四个扩展点就位**：`ShapeProvider`、`Command`（`CommandType`）、`TreeDecorator`、`AttributeHandler` 都在内核，内置能力也用它们实现；另有文档事件与必要部件保护两个钩子。`set` 有了快照事务，`tree` 有了标签钩子。
 - **装配移到装配处**：Phase 1 的 `Editor.createDefault` 在内核的 `app` 里装配 `NodeFileSystem` 与全部能力；Phase 2 由 `src/assembly` 决定装哪些插件（方式 A 的组合根、方式 B 的加载器），平台适配器在 `src/adapters`。接入一个插件只改组合根或配置，五次接入的判据都通过。
-- **metrics 的增量**（ΔM = +595）主要来自新增的机制而不是复杂化的旧代码：内核 +322 中，`extension` 模块（安装器、暂存区、清单、选项）+159，`model` +78（属性处理器的分派与事务、容器抽象、只读视图），`io` +52（`ImportSession` 的读回分派 +87，而 `SvgImporter` 本身 −34）；装配处 +127 中加载器 +80；可选插件 +105（box 55、dir 25、star 15、stats 10）；内置插件 +47（主要是 `CreateCommand` 对提供者契约的检查）。
+- **metrics 的增量**（ΔM = +596）主要来自新增的机制而不是复杂化的旧代码：内核 +322 中，`extension` 模块（安装器、暂存区、清单、选项）+159，`model` +78（属性处理器的分派与事务、容器抽象、只读视图），`io` +52（`ImportSession` 的读回分派 +87，而 `SvgImporter` 本身 −34）；装配处 +127 中加载器 +80；可选插件 +105（box 55、dir 25、star 15、stats 10）；内置插件 +48（主要是 `CreateCommand` 对提供者契约的检查）。
 
 ---
 
 ## 15 一致性自查（Phase 2）
 
-> 依据：分支 `docs/p2-final`，R = `ed741da`（运行代码、测试与脚本与之后的提交相同）。下面每一项都给出命令与实际输出，不是凭记忆填写。发现的不一致如实列出。
+> 依据：分支 `fix/p2-delivery`，R = `d8fc554`（运行代码、测试与脚本与之后的提交相同）。下面每一项都给出命令与实际输出，不是凭记忆填写（S18 在该分支上全部重跑，输出与 S15 相同）。发现的不一致如实列出。
 
 ### 15.1 实际目录与设计一致
 
@@ -1183,7 +1183,7 @@ npm run baseline
 
 | # | 交付物 | 证据 |
 |---|---|---|
-| 1 | 远程仓库，tag `p2` | <https://github.com/xwtan51/svg_editor>；tag `p2` 指向本文所在 PR 的合并提交（S16 终验通过后打）；`final` 仍指向 `7311723` |
+| 1 | 远程仓库，tag `p2` | <https://github.com/xwtan51/svg_editor>；tag `p2` 指向交付前修订 PR [#30](https://github.com/xwtan51/svg_editor/pull/30) 的合并提交（S16 终验、S18 修订之后打）；`final` 仍指向 `7311723` |
 | 2 | 源码：VSCode 扩展及 CLI 的内核、扩展点接口、插件、宿主与装配处 | `vscode-svg/src/`；`packages/kernel/src/`（扩展点接口见第 3 节）；`plugins/*/src/`；`src/`（`cli`、`assembly`、`loader`、`adapters`） |
 | 3 | `doc/README.md`：扩展点清单、两种装配方式与配置文件格式、重构前后的模块依赖图（PlantUML）、ADR、`dir` 的目录访问接口与适配器模式说明、A.3 的说明与演示 | 本文第 [3](#3-扩展点清单)、[4](#4-两种装配方式与配置文件)、[6](#6-模块依赖图重构前后)、[8](#8-adr)、[7.2](#72-dir适配器模式)、[11](#11-第一部分vscode-扩展a3) 节 |
 | 4 | `docs/metrics/`：文件清单与职责、行数按三类拆分、圈复杂度增量，由脚本从 git 历史生成 | [`docs/metrics/metrics.md`](../docs/metrics/metrics.md)（第 3 节文件与职责、第 1–2 节行数、第 1、4 节 ΔM）、`metrics.json`；脚本 `scripts/metrics/`；复现见[第 12 节](#12-度量) |
@@ -1199,7 +1199,7 @@ npm run baseline
 | ③ 命令插件完成 | `9e9f786` `milestone(3/6): 命令插件完成` |
 | ④ `box` 接入 | `94da628` `milestone(4/6): box 接入`；C_A `f999fd1`、C_B `077bd88` |
 | ⑤ 标签完成 | `18af646` `milestone(5/6): 标签完成` |
-| ⑥ 收尾 | 本文所在 PR 的最后一个提交 `milestone(6/6): 收尾`；见 tag `p2` |
+| ⑥ 收尾 | `168a37e` `milestone(6/6): 收尾`（PR [#29](https://github.com/xwtan51/svg_editor/pull/29)）；其后是只改一处检查、补测试与文档的交付前修订 PR [#30](https://github.com/xwtan51/svg_editor/pull/30)（S18）；见 tag `p2` |
 
 ### 16.3 第二部分验收表
 
@@ -1254,19 +1254,19 @@ npm run baseline
 
 ### 17.1 测试按层统计
 
-数字取自 `npx vitest run --reporter=json`（R = `ed741da`）：**120 个文件、1831 个测试，全部通过**。
+数字取自 `npx vitest run --reporter=json`（R = `d8fc554`）：**120 个文件、1834 个测试，全部通过**。
 
 | 层 | 位置 | 文件 | 测试 | 内容 |
 |---|---|---|---|---|
 | 内核契约 | `packages/kernel/tests/` | 17 | 232 | 四个扩展点与支撑设施的契约（安装器、清单、读回分派、属性事务、标签、事件、保护钩子），只用测试替身，不依赖任何插件 |
-| 内置插件 | `plugins/builtin-commands/tests/`、`plugins/builtin-shapes/tests/` | 8 | 53 | 内置插件的清单与注册、`create` / `set` / `tree` 等对扩展点契约的使用 |
+| 内置插件 | `plugins/builtin-commands/tests/`、`plugins/builtin-shapes/tests/` | 8 | 56 | 内置插件的清单与注册、`create` / `set` / `tree` 等对扩展点契约的使用 |
 | 可选插件 | `plugins/command-stats/`、`command-dir/`、`shape-box/`、`tree-star/` 的 `tests/` | 19 | 170 | stats 21、dir 42、box 58、star 49（第 7 节） |
 | 装配处 | `tests/unit/host/`、`tests/unit/cli/` | 8 | 164 | `CliArguments`、`CompositionRoot`、`EditorAssembler`、`PluginConfig`、`ModuleLocator`、`PluginLoader`（141）；`Repl`、`main`（23，子进程跑真实 CLI，含三种启动参数与用法错误） |
 | 架构 | `tests/unit/architecture.test.ts` | 1 | 186 | 第 5 节的全部规则与合成违规用例 |
 | 系统（Phase 2） | `tests/system/` 的 `assemblyConsistency`、`assemblyContract`、`boxInEditor`、`starInEditor` | 4 | 74 | 两种装配的一致性、通用装配契约、真实命令下的 box 与 `modified-star` |
 | 工具脚本 | `tests/unit/scripts/` | 11 | 132 | 基线工具、metrics、`plugin-diff`、`GitRepository`；都在临时 git 仓库里运行，隔离 git 配置 |
 | Phase 1 回归 | `tests/unit/{model,io,view,commands,app}/`、`tests/unit/smoke.test.ts`、`tests/system/` 的 `transcripts`、`failureAtomicity` | 52 | 820 | Phase 1 的单元测试与系统测试（目录沿用，S6、S7 只在接口改名处改调用方式，并有少量新增） |
-| **合计** | | **120** | **1831** | |
+| **合计** | | **120** | **1834** | |
 
 ### 17.2 CI
 
@@ -1303,3 +1303,4 @@ Phase 1 的 v1–v5 见 [Phase 1 方案「修订记录」](phase1-architecture.m
 | 版本 | 日期 | 内容 |
 |---|---|---|
 | p2 | 2026-11-21 | Phase 2 交付说明初版（S15）：Phase 1 方案移到 `phase1-architecture.md`；本文由 S9、S11、S12 追加在旧 README 末尾的扩展点清单、`dir` 的适配器、box 的两种接入三节整理而成，其余各节按设计文档与当前代码写成 |
+| p2（S18） | 2026-11-27 | 交付前修订（S18，PR [#30](https://github.com/xwtan51/svg_editor/pull/30)），来自 S16 终验之后 S17 的两份独立交付物审计。代码：C1 `CreateCommand.checkCreated` 补上“实际 id 不能重复”（G49，只改一个条件，+1 测试）；测试：C4 失败的 `set` 保留待 redo 的单元（G50，+2 测试），共 1834 个；metrics 以提交 2 `d8fc554` 为新 R（合计 M = 1267，ΔM = +596）。文档：C2（第 3 节：`read` 抛出的 `EditorError` 原样报出）、C3（7.2、N3：符号链接按最终目标分类，不是“跟随一层”）、A1（`vscode-svg/doc/analysis.md` 两处指向 Phase 1 方案）、A2（15.5：五个接入提交的锁文件逐项说明）、B1（ADR-2：部件 id 与 `create` 查重）、B2（第 12 节：职责列的来源）、D1（9.2：T1 的理由）、D2（10.7）、D8（第 11 节：大纲 256 层）、D9（10.8），以及本行涉及的数字与提交号。不改的两条：E1（双装配的两次运行各用一个临时目录）——每次运行都从 git 跟踪的夹具新建一份副本，两次运行互不影响（一次的 `save` 不会进入另一次），会话的输出里不出现临时目录的路径，所以不影响逐字节比较；共用一个目录反而要在两次之间清理，结果依赖运行顺序。D1 不改行为——全局拒绝重复 id 会改变 Phase 1 的读入行为（F14）与基线，只在 9.2 补写理由（决策 X28） |
