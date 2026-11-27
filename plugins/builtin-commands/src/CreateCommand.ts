@@ -120,7 +120,7 @@ export class CreateCommand extends EditCommand {
       throw this.breach(provider, "create returned an attached shape");
     }
     const created = CreateCommand.subtreeIds(shape);
-    const same = created.length === claimed.length && created.every((id) => claimed.includes(id));
+    const same = created.length === claimed.length && new Set(created).size === created.length && created.every((id) => claimed.includes(id));
     if (!same) {
       throw this.breach(provider, `created ids ${created.join(", ")} differ from claimed ids ${claimed.join(", ")}`);
     }

@@ -131,6 +131,17 @@ describe("set through a failing handler: state unchanged, no whitelist fallback"
     expect(run(assembly, "undo")).toEqual(["dot#d1 updated: fill unset"]);
   });
 
+  it.each(failures)("%s after a partial change, with a redo pending: both stacks and the document stay, redo still redoes", (_name, failure, message) => {
+    const assembly = setup(new FailingPairHandler(failure));
+    run(assembly, "set d1 fill red", "set d1 stroke blue", "undo");
+    const before = state(assembly);
+    expect(before.slice(1)).toEqual([3, 1, false]);
+    expect(run(assembly, "set n1 fill green")).toEqual([message]);
+    expect(state(assembly)).toEqual(before);
+    expect(run(assembly, "redo")).toEqual(["dot#d1 updated: stroke=blue"]);
+    expect(run(assembly, "undo", "undo")).toEqual(["dot#d1 updated: stroke unset", "dot#d1 updated: fill unset"]);
+  });
+
   it("after save, a failing set does not lift the io lock and keeps the stacks empty", () => {
     const assembly = setup(new FailingPairHandler(() => { throw new Error("oops"); }));
     run(assembly, "save a.svg");
