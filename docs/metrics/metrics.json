@@ -2,8 +2,8 @@
   "generator": "npm run metrics (scripts/metrics, design §5.3)",
   "revisions": {
     "R": {
-      "commit": "ed741da712b76fc8d7e458ec15de8d7dbfd396da",
-      "subject": "chore: fix the column in a TreeRenderer test name and comments; GitRepository class comment"
+      "commit": "d8fc55450b8ed2915179316ce424888327cbfa6e",
+      "subject": "test(set): a failing set keeps a pending redo"
     },
     "final": {
       "commit": "73117232dc8f66457518bf61f388e2a4b82f2267"
@@ -38,10 +38,10 @@
       "lines": 1488,
       "codeLines": 1054,
       "functions": 160,
-      "complexity": 222,
+      "complexity": 223,
       "finalFiles": 27,
       "finalComplexity": 175,
-      "delta": 47
+      "delta": 48
     },
     {
       "category": "plugins: optional",
@@ -71,10 +71,10 @@
       "lines": 7827,
       "codeLines": 5029,
       "functions": 783,
-      "complexity": 1266,
+      "complexity": 1267,
       "finalFiles": 82,
       "finalComplexity": 671,
-      "delta": 595
+      "delta": 596
     }
   ],
   "areas": [
@@ -100,7 +100,7 @@
       "lines": 1217,
       "codeLines": 852,
       "functions": 127,
-      "complexity": 186
+      "complexity": 187
     },
     {
       "area": "plugin `plugins/builtin-shapes/src/`",
@@ -116,7 +116,7 @@
       "lines": 1488,
       "codeLines": 1054,
       "functions": 160,
-      "complexity": 222
+      "complexity": 223
     },
     {
       "area": "plugin `plugins/command-dir/src/`",
@@ -164,7 +164,7 @@
       "lines": 7827,
       "codeLines": 5029,
       "functions": 783,
-      "complexity": 1266
+      "complexity": 1267
     },
     {
       "area": "tests `packages/kernel/tests/`",
@@ -177,8 +177,8 @@
     {
       "area": "tests `plugins/builtin-commands/tests/`",
       "files": 13,
-      "lines": 931,
-      "codeLines": 742,
+      "lines": 953,
+      "codeLines": 763,
       "functions": null,
       "complexity": null
     },
@@ -233,8 +233,8 @@
     {
       "area": "tests: subtotal",
       "files": 211,
-      "lines": 19653,
-      "codeLines": 16283,
+      "lines": 19675,
+      "codeLines": 16304,
       "functions": null,
       "complexity": null
     },
@@ -249,8 +249,8 @@
     {
       "area": "**CLI total** (run code, tests, scripts)",
       "files": 398,
-      "lines": 29669,
-      "codeLines": 22953,
+      "lines": 29691,
+      "codeLines": 22974,
       "functions": null,
       "complexity": null
     }
@@ -1512,8 +1512,8 @@
       "lines": 176,
       "codeLines": 130,
       "functions": 22,
-      "complexity": 46,
-      "maxComplexity": 7,
+      "complexity": 47,
+      "maxComplexity": 8,
       "category": "plugins: built-in",
       "final": {
         "path": "src/commands/CreateCommand.ts",
